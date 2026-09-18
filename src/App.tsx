@@ -28,126 +28,115 @@ export interface EnrichedArticle {
 const SEED_ARTICLES: EnrichedArticle[] = [
   {
     id: "seed-1",
-    original_url:
-      "https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps",
+    original_url: "https://finance.yahoo.com/",
     image:
       "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1400&q=80",
     timestamp: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
-    source: "MarketWatch",
-    original_title: "Neobanks push cash-sweep yields higher",
+    source: "Yahoo Finance",
+    original_title: "Markets watch cash yields and bank competition",
     original_description:
-      "Digital banks compete for deposits with elevated savings yields across multi-bank sweep networks.",
-    ai_hook_title:
-      "Cash-sweep yields climb as digital banks fight for uninvested deposits",
+      "Digital banks and brokers continue to compete for deposits with elevated savings yields.",
+    ai_hook_title: "Cash yields stay elevated as banks compete for deposits",
     ai_summary: [
-      "Households can earn far more than legacy 0.01% savings — if they shop rates.",
-      "Liquidity and insurance structure still matter more than the headline APY alone.",
+      "Savers can still find higher yields than legacy accounts — rate-shop carefully.",
+      "Liquidity and deposit protection matter as much as the headline rate.",
     ],
-    tags: ["Banking", "Personal Finance", "Fintech"],
+    tags: ["Banking", "Markets", "Finance"],
     read_time: "3 min",
   },
   {
     id: "seed-2",
-    original_url:
-      "https://www.consumerfinance.gov/about-us/newsroom/cfpb-finalizes-personal-financial-data-rights/",
+    original_url: "https://www.finextra.com/",
     image:
       "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1400&q=80",
     timestamp: new Date(Date.now() - 40 * 60 * 1000).toISOString(),
-    source: "CFPB",
-    original_title: "Open banking data rights finalized",
+    source: "Finextra",
+    original_title: "Fintech rails reshape everyday payments",
     original_description:
-      "Rule 1033 aims to replace password scraping with secure bank-level APIs for consumer data sharing.",
-    ai_hook_title:
-      "Open banking rules aim to end password scraping for financial apps",
+      "Instant payments and open banking continue to change how consumers move money.",
+    ai_hook_title: "Fintech payment rails keep rewriting how money moves",
     ai_summary: [
-      "Regulators want signed, revocable bank tokens instead of shared logins.",
-      "Budget and lending apps become easier to connect — when banks comply.",
+      "Faster settlement changes cash flow for businesses and households.",
+      "Winners will combine speed with clear fees and strong security.",
     ],
-    tags: ["Regulation", "Fintech", "Banking"],
-    read_time: "4 min",
+    tags: ["Fintech", "Payments", "Business"],
+    read_time: "3 min",
   },
   {
     id: "seed-3",
-    original_url:
-      "https://www.finextra.com/newsarticle/realtime-payroll-earned-wage-access",
+    original_url: "https://www.coindesk.com/",
     image:
       "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1400&q=80",
     timestamp: new Date(Date.now() - 75 * 60 * 1000).toISOString(),
-    source: "Finextra",
-    original_title: "Earned wage access expands via payroll rails",
+    source: "CoinDesk",
+    original_title: "Crypto markets track macro signals",
     original_description:
-      "Workers access accrued pay between cycles through employer-integrated payroll systems.",
-    ai_hook_title:
-      "Earned wage access grows as payroll rails reach more employers",
+      "Digital assets continue to react to rates, regulation, and institutional flows.",
+    ai_hook_title: "Crypto tracks rates and regulation as institutions stay active",
     ai_summary: [
-      "Early access to earned pay can reduce overdrafts when products are transparent.",
-      "Distribution through HR systems is the real competitive edge.",
+      "Macro news often moves crypto as much as coin-specific headlines.",
+      "Treat volatility as the default — not the exception.",
     ],
-    tags: ["Payments", "Fintech", "Personal Finance"],
+    tags: ["Crypto", "Markets", "Finance"],
     read_time: "3 min",
   },
   {
     id: "seed-4",
-    original_url:
-      "https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail",
+    original_url: "https://www.cnbc.com/",
     image:
       "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1400&q=80",
-    timestamp: new Date(Date.now() - 2.5 * 60 * 60 * 1000).toISOString(),
-    source: "Yahoo Finance",
-    original_title: "Direct indexing reaches smaller portfolios",
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+    source: "CNBC",
+    original_title: "Investors weigh earnings and rate paths",
     original_description:
-      "Tax-loss harvesting and direct indexing tools expand beyond high-net-worth desks into retail accounts.",
-    ai_hook_title:
-      "Direct indexing brings tax-aware investing to smaller taxable accounts",
+      "Equity markets balance corporate results against central-bank expectations.",
+    ai_hook_title: "Stocks balance earnings season against the path of rates",
     ai_summary: [
-      "After-tax outcomes are becoming a product feature, not a private-bank luxury.",
-      "Results still depend on market moves, fees, and local tax rules.",
+      "Guidance and rates often matter more than a single quarter’s beat or miss.",
+      "Diversification remains the practical defense against surprise moves.",
     ],
-    tags: ["Investing", "Wealth", "Personal Finance"],
+    tags: ["Markets", "Investing", "Business"],
     read_time: "4 min",
   },
   {
     id: "seed-5",
-    original_url: "https://www.federalreserve.gov/paymentsystems/fednow_about.htm",
+    original_url: "https://www.marketwatch.com/",
     image:
       "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1400&q=80",
-    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
-    source: "Federal Reserve",
-    original_title: "Instant payments change merchant economics",
+    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    source: "MarketWatch",
+    original_title: "Household finance stays in focus",
     original_description:
-      "Account-to-account rails compete with card networks and change settlement timing for merchants.",
-    ai_hook_title:
-      "Instant A2A payments pressure card fees — and rewrite checkout math",
+      "Credit costs, savings rates, and job data shape everyday money decisions.",
+    ai_hook_title: "Household budgets feel rates, jobs, and credit costs together",
     ai_summary: [
-      "Faster settlement changes float, refunds, and cash flow for merchants.",
-      "Whether shoppers see savings depends on competition, not the rail alone.",
+      "Personal finance is driven by the same macro forces as markets.",
+      "Small rate differences compound — compare products before you commit.",
     ],
-    tags: ["Payments", "Banking", "Fintech"],
+    tags: ["Personal Finance", "Banking", "Markets"],
     read_time: "3 min",
   },
   {
     id: "seed-6",
-    original_url:
-      "https://techcrunch.com/fintech/cash-flow-underwriting-credit-revolution",
+    original_url: "https://techcrunch.com/",
     image:
       "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1400&q=80",
-    timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(),
     source: "TechCrunch",
-    original_title: "Cash-flow underwriting challenges FICO",
+    original_title: "Startups push new credit and banking models",
     original_description:
-      "Issuers use live bank data and cash-flow signals to underwrite thin-file borrowers.",
-    ai_hook_title:
-      "Cash-flow underwriting challenges pure FICO scores for new credit cards",
+      "Challenger products use data and mobile UX to compete with traditional banks.",
+    ai_hook_title: "Startups keep pressure on traditional credit and banking models",
     ai_summary: [
-      "Payroll and deposit patterns can open credit for gig and young workers.",
-      "Fairness, consent, and data use remain under regulatory watch.",
+      "Better data can expand access — regulation still sets the boundaries.",
+      "Watch fees and fine print as closely as the app design.",
     ],
-    tags: ["Credit", "Fintech", "Personal Finance"],
+    tags: ["Fintech", "Credit", "Business"],
     read_time: "4 min",
   },
 ];
 
-const SAVED_KEY = "finsignal_saved_v1";
+const SAVED_KEY = "rwdnews_saved_v1";
 
 function formatRelativeTime(iso: string) {
   try {
@@ -172,10 +161,10 @@ function todayLabel() {
 }
 
 function normalizeTags(tags?: string[]) {
-  return (tags || []).map((t) => t.replace(/^#/, ""));
+  return (tags || []).map((t) => String(t).replace(/^#/, ""));
 }
 
-function FinSignalApp() {
+function RwdNewsApp() {
   const [articles, setArticles] = useState<EnrichedArticle[]>(SEED_ARTICLES);
   const [sponsors, setSponsors] = useState<SponsoredOffer[]>(FALLBACK_SPONSORS);
   const [refreshing, setRefreshing] = useState(false);
@@ -190,7 +179,6 @@ function FinSignalApp() {
     }
   });
   const [active, setActive] = useState<EnrichedArticle | null>(null);
-  const [mobileNav, setMobileNav] = useState(false);
   const [email, setEmail] = useState("");
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
   const [feedSource, setFeedSource] = useState<"live" | "seed">("seed");
@@ -220,7 +208,7 @@ function FinSignalApp() {
           .from("articles")
           .select("*")
           .order("timestamp", { ascending: false })
-          .limit(40);
+          .limit(50);
         if (!error && data && data.length > 0) {
           setArticles(
             data.map((row) => ({
@@ -285,9 +273,9 @@ function FinSignalApp() {
       if (isSupabaseConfigured && supabase) {
         await supabase
           .from("newsletter_subscribers")
-          .upsert({ email: v, source: "finsignal_web" }, { onConflict: "email" });
+          .upsert({ email: v, source: "rwdnews_web" }, { onConflict: "email" });
       }
-      setEmailMsg("You're on the list.");
+      setEmailMsg("You're on the RWDNEWS list.");
       setEmail("");
     } catch {
       setEmailMsg("Thanks — we'll confirm shortly.");
@@ -304,7 +292,7 @@ function FinSignalApp() {
       email: leadEmail,
       name: leadName,
       company: leadCompany,
-      message: "Sponsorship / media kit",
+      message: "RWDNEWS sponsorship",
     });
     setLeadMsg(res.ok ? "Received. We'll send rates shortly." : "Thanks — we'll follow up.");
   };
@@ -312,10 +300,10 @@ function FinSignalApp() {
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>FinSignal — Markets, Fintech & Money</title>
+        <title>RWDNEWS — Markets, Fintech & Money</title>
         <meta
           name="description"
-          content="Modern finance and fintech news wire. Markets, banking, payments — AI-curated briefings for readers and quality advertisers."
+          content="RWDNEWS — markets, fintech, and money. AI-curated briefings you read on-site."
         />
       </Helmet>
 
@@ -323,13 +311,13 @@ function FinSignalApp() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-1.5 text-[11px] sm:px-6">
           <span className="font-medium tracking-wide text-neutral-300">{todayLabel()}</span>
           <span className="hidden text-neutral-400 sm:inline">
-            {feedSource === "live" ? "Live wire" : "Editorial wire"}
+            {feedSource === "live" ? "Live wire" : "RWDNEWS wire"}
             {isSupabaseConfigured ? " · Connected" : ""}
           </span>
           <button
             type="button"
             onClick={() => setLeadOpen(true)}
-            className="font-semibold text-amber-400 hover:text-amber-300"
+            className="font-semibold text-amber-400"
           >
             Advertise
           </button>
@@ -338,15 +326,9 @@ function FinSignalApp() {
 
       <header className="border-b border-neutral-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
-          <button
-            type="button"
-            className="grid size-10 place-items-center rounded border border-neutral-200 sm:hidden"
-            onClick={() => setMobileNav((v) => !v)}
-          >
-            {mobileNav ? <X className="size-4" /> : <Menu className="size-4" />}
-          </button>
-          <a href="/" className="text-center sm:text-left">
-            <p className="font-display text-3xl font-bold tracking-tight sm:text-4xl">FinSignal</p>
+          <div className="w-10 sm:hidden" />
+          <a href="/" className="text-center">
+            <p className="font-display text-3xl font-bold tracking-tight sm:text-4xl">RWDNEWS</p>
             <p className="mt-0.5 text-[10px] font-semibold tracking-[0.2em] text-neutral-500 uppercase">
               Markets · Fintech · Money
             </p>
@@ -387,9 +369,7 @@ function FinSignalApp() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
-        <div className="ad-slot ad-slot-leader" id="ad-leaderboard">
-          Advertisement
-        </div>
+        <div className="ad-slot ad-slot-leader">Advertisement</div>
       </div>
 
       <main className="mx-auto grid max-w-6xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-[1fr_300px]">
@@ -414,7 +394,7 @@ function FinSignalApp() {
                   <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
                     {hero.ai_summary?.[0] || hero.original_description}
                   </p>
-                  <p className="mt-2 text-xs font-bold text-teal-800">Tap to read briefing →</p>
+                  <p className="mt-2 text-xs font-bold text-teal-800">Read full briefing on RWDNEWS →</p>
                 </article>
                 <div className="flex flex-col divide-y divide-neutral-200 lg:col-span-5">
                   {secondary.map((a) => (
@@ -426,7 +406,7 @@ function FinSignalApp() {
                       <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
                         {a.source} · {formatRelativeTime(a.timestamp)}
                       </p>
-                      <h2 className="story-title font-display mt-1 text-lg leading-snug font-semibold transition">
+                      <h2 className="story-title font-display mt-1 text-lg font-semibold leading-snug">
                         {a.ai_hook_title || a.original_title}
                       </h2>
                       <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{a.ai_summary?.[0]}</p>
@@ -438,9 +418,7 @@ function FinSignalApp() {
           ) : null}
 
           <div className="py-5">
-            <div className="ad-slot ad-slot-infeed" id="ad-infeed">
-              Advertisement
-            </div>
+            <div className="ad-slot ad-slot-infeed">Advertisement</div>
           </div>
 
           <section>
@@ -459,7 +437,7 @@ function FinSignalApp() {
                       <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
                         {a.source} · {formatRelativeTime(a.timestamp)}
                       </p>
-                      <h3 className="story-title font-display mt-1 text-xl leading-snug font-semibold transition">
+                      <h3 className="story-title font-display mt-1 text-xl font-semibold leading-snug">
                         {a.ai_hook_title || a.original_title}
                       </h3>
                       <p className="mt-1 line-clamp-2 text-sm text-neutral-600">
@@ -473,7 +451,7 @@ function FinSignalApp() {
                         )}
                       </button>
                     </div>
-                    <div className="hidden w-28 shrink-0 overflow-hidden bg-neutral-100 sm:block sm:w-36">
+                    <div className="hidden w-28 shrink-0 bg-neutral-100 sm:block sm:w-36">
                       <img src={a.image} alt="" className="aspect-[4/3] h-full w-full object-cover" />
                     </div>
                   </article>
@@ -487,13 +465,11 @@ function FinSignalApp() {
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="ad-slot ad-slot-sidebar" id="ad-sidebar-top">
-            Advertisement
-          </div>
+          <div className="ad-slot ad-slot-sidebar">Advertisement</div>
           <div className="border border-neutral-200 bg-neutral-950 p-5 text-white">
             <p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Newsletter</p>
-            <h3 className="font-display mt-2 text-xl font-semibold">The FinSignal Brief</h3>
-            <p className="mt-1 text-sm text-neutral-400">Markets and fintech worth knowing — weekly.</p>
+            <h3 className="font-display mt-2 text-xl font-semibold">RWDNEWS Brief</h3>
+            <p className="mt-1 text-sm text-neutral-400">Markets & fintech — weekly.</p>
             <form onSubmit={submitNewsletter} className="mt-4 space-y-2">
               <input
                 type="email"
@@ -513,7 +489,7 @@ function FinSignalApp() {
           ))}
           <div className="border border-neutral-200 p-4">
             <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">For brands</p>
-            <p className="mt-1 text-sm font-semibold">Reach money-focused readers</p>
+            <p className="mt-1 text-sm font-semibold">Advertise on RWDNEWS</p>
             <button
               type="button"
               onClick={() => setLeadOpen(true)}
@@ -522,17 +498,15 @@ function FinSignalApp() {
               Request media kit →
             </button>
           </div>
-          <div className="ad-slot ad-slot-sidebar" id="ad-sidebar-mid">
-            Advertisement
-          </div>
+          <div className="ad-slot ad-slot-sidebar">Advertisement</div>
         </aside>
       </main>
 
       <footer className="border-t border-neutral-200 bg-neutral-50 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <p className="font-display text-xl font-bold">FinSignal</p>
+          <p className="font-display text-xl font-bold">RWDNEWS</p>
           <p className="mt-1 text-sm text-neutral-500">
-            AI-assisted wire · Sources credited · Built for readers and advertisers
+            Read on-site briefings · Sources credited · Built for readers & advertisers
           </p>
         </div>
       </footer>
@@ -551,9 +525,9 @@ function FinSignalApp() {
           <button type="button" className="absolute inset-0 bg-black/45" onClick={() => setLeadOpen(false)} />
           <form
             onSubmit={onLeadSubmit}
-            className="relative z-10 w-full max-w-md space-y-3 border border-neutral-200 bg-white p-6 shadow-xl"
+            className="relative z-10 w-full max-w-md space-y-3 border bg-white p-6 shadow-xl"
           >
-            <h3 className="font-display text-xl font-semibold">Advertise on FinSignal</h3>
+            <h3 className="font-display text-xl font-semibold">Advertise on RWDNEWS</h3>
             <input className="h-11 w-full border px-3 text-sm" placeholder="Name" value={leadName} onChange={(e) => setLeadName(e.target.value)} />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Work email" value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} required />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Company" value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} />
@@ -583,21 +557,16 @@ function PartnerCard({
         {offer.disclosure || "Sponsored"}
       </p>
       <p className="mt-1 text-xs font-semibold text-neutral-500">{offer.sponsorName}</p>
-      <h4 className="mt-1 text-base font-bold leading-snug">{offer.headline}</h4>
-      <div className="mt-3 flex items-center justify-between gap-2">
-        <span className="bg-white px-2 py-0.5 text-[11px] font-bold ring-1 ring-neutral-200">
-          {offer.rateHighlight}
-        </span>
-        <a
-          href={offer.ctaUrl}
-          target="_blank"
-          rel="noopener noreferrer sponsored"
-          className="text-xs font-bold underline-offset-2 hover:underline"
-          onClick={() => void logSponsorClick(offer, placement)}
-        >
-          {offer.ctaText} →
-        </a>
-      </div>
+      <h4 className="mt-1 text-base font-bold">{offer.headline}</h4>
+      <a
+        href={offer.ctaUrl}
+        target="_blank"
+        rel="noopener noreferrer sponsored"
+        className="mt-3 inline-block text-xs font-bold underline-offset-2 hover:underline"
+        onClick={() => void logSponsorClick(offer, placement)}
+      >
+        {offer.ctaText} →
+      </a>
     </div>
   );
 }
@@ -605,7 +574,7 @@ function PartnerCard({
 export default function App() {
   return (
     <HelmetProvider>
-      <FinSignalApp />
+      <RwdNewsApp />
     </HelmetProvider>
   );
 }
