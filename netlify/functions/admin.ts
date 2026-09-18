@@ -163,7 +163,7 @@ export default async (req: Request) => {
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
     database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").order("created_at", { ascending: false }).limit(20000),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,amount_naira,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(200),
+    database.from("sponsor_payments").select("id,reference,package_code,package_name,amount_naira,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
