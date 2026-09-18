@@ -42,7 +42,6 @@ export default function StoryPage() {
           if (found) foundArticle = found;
         }
         if (foundArticle && !cancelled) setArticle(foundArticle);
-        }
       } finally {
         if (!cancelled) setLoading(false);
       }
