@@ -186,7 +186,7 @@ async function aiBrief(title: string, desc: string) {
     ],
     tags: ["#World"],
   };
-  const key = process.env.GEMINI_API_KEY;
+  const key = Netlify.env.get("GEMINI_API_KEY");
   if (!key) return fallback;
   try {
     const ai = new GoogleGenAI({ apiKey: key });
@@ -285,8 +285,8 @@ async function buildArticles(): Promise<NewsArticle[]> {
 }
 
 async function persist(articles: NewsArticle[]) {
-  const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = Netlify.env.get("SUPABASE_URL") || Netlify.env.get("VITE_SUPABASE_URL");
+  const key = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) return 0;
   const db = createClient(url, key);
   let saved = 0;
@@ -318,7 +318,7 @@ export async function runIngest() {
 export default async (req: Request) => {
   const url = new URL(req.url);
   if (url.pathname.includes("/cron-ingest")) {
-    const secret = process.env.CRON_SECRET || "";
+    const secret = Netlify.env.get("CRON_SECRET") || "";
     const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || url.searchParams.get("secret") || "";
     if (!secret || supplied !== secret) {
       return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { status: 401 });
