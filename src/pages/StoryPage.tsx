@@ -56,8 +56,9 @@ export default function StoryPage() {
   if (!article) return <div className="grid min-h-dvh place-items-center p-6 text-center"><div><h1 className="font-display text-3xl font-semibold">Story not found</h1><p className="mt-2 text-sm text-neutral-500">This story may have expired from the live wire.</p><a href="/" className="mt-5 inline-block font-semibold text-teal-800">Return to RWDNEWS →</a></div></div>;
 
   const share = (network: string) => {
-    const encoded = encodeURIComponent(canonical);
     const text = encodeURIComponent(title);
+    const shareUrl = (network: string) => canonical + (canonical.includes("?") ? "&" : "?") + "utm_source=" + network + "&utm_medium=social&utm_campaign=rwdnews_share";
+    const encoded = encodeURIComponent(shareUrl(network));
     const urls: Record<string, string> = {
       whatsapp: "https://wa.me/?text=" + text + "%20" + encoded,
       telegram: "https://t.me/share/url?url=" + encoded + "&text=" + text,
