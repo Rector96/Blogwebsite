@@ -53,11 +53,12 @@ export function ArticleReader({
     const url =
       typeof window !== "undefined" ? window.location.href : article.original_url;
     try {
-      void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: "native_share" });
       if (navigator.share) {
         await navigator.share({ title, url, text: title });
+        void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: "native_share" });
       } else if (navigator.clipboard) {
         await navigator.clipboard.writeText(title + " — " + url);
+        void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: "clipboard" });
       }
     } catch {
       /* ignore */
