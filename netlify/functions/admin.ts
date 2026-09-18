@@ -67,7 +67,7 @@ export default async (req: Request) => {
       const { data, error } = await database.from("sponsors").insert({
         slug, sponsor_name: sponsorName, headline, why_matters: [], cta_text: clean(body.cta_text || "Learn more", 80),
         cta_url: ctaUrl, rate_highlight: "", disclosure: clean(body.disclosure || "Sponsored · Paid placement", 160),
-        placement: clean(body.placement || "sidebar", 30), priority: Number(body.priority || 100),
+        placement, priority: Number(body.priority || 100),
         currency, monthly_fee_usd: currency === "USD" ? amount || null : null, monthly_fee_naira: currency === "NGN" ? amount || null : null,
         active: false, starts_at: body.starts_at || null, ends_at: body.ends_at || null,
       }).select("id").single();
