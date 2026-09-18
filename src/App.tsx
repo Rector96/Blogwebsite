@@ -155,8 +155,8 @@ function RwdNewsApp() {
   };
 
   const openAdvertiserForm = () => {
-    setLeadOpen(true);
     void logRwdNewsEvent({ event: "advertise_open", placement: "media_kit" });
+    window.location.assign("/advertise");
   };
 
   const tags = useMemo(() => {
@@ -539,7 +539,7 @@ function RwdNewsApp() {
             <p className="mt-1 text-sm font-semibold">Advertise on RWDNEWS</p>
             <button
               type="button"
-              onClick={() => setLeadOpen(true)}
+              onClick={() => { void logRwdNewsEvent({ event: "advertise_open", placement: "sidebar" }); window.location.assign("/advertise"); }}
               className="mt-3 text-xs font-bold text-teal-800 underline-offset-2 hover:underline"
             >
               Request media kit →
