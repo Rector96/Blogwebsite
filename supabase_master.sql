@@ -1,6 +1,6 @@
 -- ==============================================================================
--- FINSIGNAL MASTER SQL — paste ALL of this into Supabase → SQL Editor → RUN
--- Covers: articles (news), newsletter, sponsors (ads), click tracking, sales leads
+-- RWDNEWS MASTER SQL — paste ALL of this into Supabase → SQL Editor → RUN
+-- Covers: source-backed articles, newsletter, sponsors, click tracking, sales leads and product analytics
 -- Goal infrastructure: content + list + monetization measurement toward ~$1k/mo
 -- ==============================================================================
 
@@ -35,52 +35,6 @@ create policy "Allow public read access to articles"
   on public.articles for select using (true);
 
 -- Service role / dashboard can write; anon cannot insert/update from browser
-
--- Seed (idempotent)
-insert into public.articles (
-  id, original_url, original_title, original_description, ai_hook_title,
-  ai_summary, tags, source, image, read_time, timestamp
-) values
-(
-  'supa-art-1',
-  'https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps',
-  'Treasury Yield Inversion Normalizes as Neobanks Shift Savings Sweep Yields to 5.15%',
-  'Digital banking platforms leverage multi-bank custodial networks to deliver elevated cash yields.',
-  'High-yield cash sweeps hit 5.15% as fintechs compete for uninvested deposits',
-  '["Cash yields have detached from near-zero legacy savings rates.", "Multi-bank sweeps can extend deposit insurance while keeping liquidity."]'::jsonb,
-  array['#Fintech','#Banking','#PersonalFinance'],
-  'MarketWatch',
-  'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80',
-  '3 min read',
-  now() - interval '15 minutes'
-),
-(
-  'supa-art-2',
-  'https://www.consumerfinance.gov/about-us/newsroom/cfpb-finalizes-personal-financial-data-rights/',
-  'CFPB Rule 1033 Mandates Consumer Financial Data Portability Across Brokerages and Banks',
-  'Open banking rules phase out screen-scraping in favor of secure bank-level APIs.',
-  'Open banking Rule 1033: secure API portability aims to end password scraping',
-  '["Regulators prefer signed bank tokens over shared credentials.", "Budget apps connect accounts with less friction when banks comply."]'::jsonb,
-  array['#Fintech','#Regulation','#Banking'],
-  'CFPB',
-  'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80',
-  '4 min read',
-  now() - interval '45 minutes'
-),
-(
-  'supa-art-3',
-  'https://www.finextra.com/newsarticle/realtime-payroll-earned-wage-access',
-  'Real-Time Payroll Integrations Displace Traditional Payday Lending with Earned Wage Access',
-  'Payroll API bridges allow workers to draw accrued income between pay cycles.',
-  'Earned wage access expands as employers plug into real-time payroll rails',
-  '["Workers can access earned pay early when products are well designed.", "Employer integration is the distribution channel pure apps often lack."]'::jsonb,
-  array['#Fintech','#Payments','#PersonalFinance'],
-  'Finextra',
-  'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80',
-  '3 min read',
-  now() - interval '90 minutes'
-)
-on conflict (original_url) do nothing;
 
 -- -----------------------------------------------------------------------------
 -- 2) NEWSLETTER — list growth (sell sponsorships later)
@@ -147,41 +101,6 @@ create policy "Public read active sponsors"
     and (starts_at is null or starts_at <= now())
     and (ends_at is null or ends_at >= now())
   );
-
--- Example sponsor rows (replace URLs with real affiliate / paid links)
-insert into public.sponsors (
-  slug, sponsor_name, headline, why_matters, cta_text, cta_url,
-  rate_highlight, disclosure, placement, active, priority, monthly_fee_usd
-) values
-(
-  'partner-cash-demo',
-  'Partner · Cash',
-  'Institutional-style cash yields for everyday balances',
-  '["Compare APY, liquidity, and insurance before parking large cash.", "Rates move — confirm live terms on the partner site."]'::jsonb,
-  'View offer',
-  'https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps',
-  'High-yield cash',
-  'Sponsored · We may earn a commission',
-  'both',
-  true,
-  10,
-  250.00
-),
-(
-  'partner-invest-demo',
-  'Partner · Investing',
-  'Tax-aware investing tools for taxable accounts',
-  '["Direct indexing features are not return guarantees.", "Suitability depends on tax residency and risk tolerance."]'::jsonb,
-  'Learn more',
-  'https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail',
-  'Tax tools',
-  'Sponsored · We may earn a commission',
-  'sidebar',
-  true,
-  20,
-  200.00
-)
-on conflict (slug) do nothing;
 
 -- -----------------------------------------------------------------------------
 -- 4) CLICK EVENTS — measure which offers convert (for $1k optimization)
