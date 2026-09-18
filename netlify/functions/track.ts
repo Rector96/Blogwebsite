@@ -72,7 +72,4 @@ export default async (req: Request, context: Context) => {
   return json({ ok: !error });
 };
 
-export const config: Config = {
-  path: "/api/track",
-  rateLimit: { action: "rate_limit", aggregateBy: "ip", windowSize: 60, windowLimit: 120 },
-};
+export const config: Config = { path: "/api/track" };
