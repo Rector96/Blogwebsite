@@ -623,6 +623,18 @@ function RwdNewsApp() {
             className="relative z-10 w-full max-w-md space-y-3 border bg-white p-6 shadow-xl"
           >
             <h3 className="font-display text-xl font-semibold">Advertise on RWDNEWS</h3>
+            <p className="text-sm leading-relaxed text-neutral-600">
+              Put your brand in front of readers through sponsored stories, newsletter
+              placements, or premium homepage inventory. We will send the current media kit
+              and availability after your inquiry.
+            </p>
+            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+              {["Sponsored stories", "Newsletter", "Homepage"].map((item) => (
+                <div key={item} className="border border-neutral-200 px-3 py-2 font-semibold text-neutral-700">
+                  {item}
+                </div>
+              ))}
+            </div>
             <input className="h-11 w-full border px-3 text-sm" placeholder="Name" value={leadName} onChange={(e) => setLeadName(e.target.value)} />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Work email" value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} required />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Company" value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} />
