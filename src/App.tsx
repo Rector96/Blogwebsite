@@ -29,7 +29,7 @@ export interface EnrichedArticle {
   read_time?: string;
   category?: string;
   trend_score?: number;
-  trend_label?: "Trending" | "Developing" | "Fresh";
+  trend_label?: "Breaking" | "Trending" | "Developing" | "Fresh";
   image_credit?: string;
   image_license?: string;
   image_source_url?: string;
@@ -205,7 +205,7 @@ function RwdNewsApp() {
   const [active, setActive] = useState<EnrichedArticle | null>(null);
   const [email, setEmail] = useState("");
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
-  const [feedSource, setFeedSource] = useState<"live" | "seed">("seed");
+  const [feedSource, setFeedSource] = useState<"live" | "unavailable">("live");
   const [leadOpen, setLeadOpen] = useState(false);
   const [leadEmail, setLeadEmail] = useState("");
   const [leadName, setLeadName] = useState("");
@@ -236,11 +236,11 @@ function RwdNewsApp() {
       };
       const liveArticles = Array.isArray(payload.articles) ? payload.articles : [];
       setArticles(liveArticles);
-      setFeedSource(liveArticles.length ? "live" : "seed");
+      setFeedSource(liveArticles.length ? "live" : "unavailable");
     } catch {
       // The site must not silently turn old/fabricated seed content into "real news".
       setArticles([]);
-      setFeedSource("seed");
+      setFeedSource("unavailable");
     } finally {
       setRefreshing(false);
     }
@@ -248,6 +248,10 @@ function RwdNewsApp() {
 
   useEffect(() => {
     void fetchNews();
+    const timer = window.setInterval(() => {
+      void fetchNews();
+    }, 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const openArticle = (article: EnrichedArticle) => {
@@ -270,7 +274,8 @@ function RwdNewsApp() {
     articles.forEach((a) => {
       if (a.category) categories.add(a.category);
     });
-    return ["All", ...Array.from(categories)];
+    const preferred = ["Breaking", "World", "Europe", "Middle East", "Asia", "Africa", "Sports", "Business", "Tech", "Crypto", "Entertainment"];
+    return ["All", ...preferred.filter((name) => categories.has(name)), ...Array.from(categories).filter((name) => !preferred.includes(name)).sort()];
   }, [articles]);
 
   const filtered = useMemo(() => {
@@ -292,6 +297,7 @@ function RwdNewsApp() {
   const hero = filtered[0];
   const secondary = filtered.slice(1, 4);
   const rest = filtered.slice(4);
+  const sports = selectedTag === "All" ? articles.filter((a) => a.category === "Sports").slice(0, 4) : [];
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -359,7 +365,7 @@ function RwdNewsApp() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-1.5 text-[11px] sm:px-6">
           <span className="font-medium tracking-wide text-neutral-300">{todayLabel()}</span>
           <span className="hidden text-neutral-400 sm:inline">
-            {feedSource === "live" ? "Live wire" : "RWDNEWS wire"}
+            {feedSource === "live" ? "Live global wire" : "Live wire reconnecting"}
             {isSupabaseConfigured ? " · Connected" : ""}
           </span>
           <button
@@ -510,6 +516,29 @@ function RwdNewsApp() {
                 ))}
             </div>
           </section>
+
+          {sports.length ? (
+            <section className="mb-8">
+              <div className="mb-3 flex items-center justify-between border-b border-neutral-900 pb-2">
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-teal-800 uppercase">Global sports</p>
+                  <h2 className="font-display text-xl font-semibold">Sports pulse</h2>
+                </div>
+                <button type="button" onClick={() => setSelectedTag("Sports")} className="text-[11px] font-semibold text-neutral-500">See all →</button>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {sports.map((a) => (
+                  <button key={"sports-" + a.id} type="button" onClick={() => openArticle(a)} className="group overflow-hidden border border-neutral-200 bg-white text-left">
+                    <img src={a.image} alt="" className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <div className="p-3">
+                      <p className="text-[10px] font-bold tracking-wider text-teal-800 uppercase">{a.source} · {formatRelativeTime(a.timestamp)}</p>
+                      <p className="font-display mt-1 line-clamp-3 text-base font-semibold leading-snug">{a.ai_hook_title || a.original_title}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           <section>
             {recentlyViewed.length > 0 && !searchQuery && selectedTag === "All" ? (
