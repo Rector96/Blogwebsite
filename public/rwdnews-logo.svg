@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">RWDNEWS</title>
+  <desc id="desc">RWDNEWS — Markets, Fintech, Money</desc>
+  <defs>
+    <linearGradient id="navy" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#071a2d"/>
+      <stop offset="1" stop-color="#0b5268"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" x2="1">
+      <stop offset="0" stop-color="#0b8794"/>
+      <stop offset="1" stop-color="#18b8c7"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" x2="1">
+      <stop offset="0" stop-color="#f59e0b"/>
+      <stop offset="1" stop-color="#fbbf24"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 34)">
+    <path d="M0 196h28v-58h28v58h20V102h28v94h20V62h28v134h20V24h28v172h20v18H0z" fill="url(#navy)"/>
+    <path d="M12 198c77-74 132-92 211-76 30 6 55 20 79 37-28 3-54 13-76 28-48-29-104-38-214 27z" fill="url(#navy)"/>
+    <path d="M16 183c65-66 128-91 199-76 29 6 55 18 80 37" fill="none" stroke="url(#gold)" stroke-width="10" stroke-linecap="round"/>
+    <path d="M264 141l35 4-23 26z" fill="#f59e0b"/>
+    <path d="M86 40c0-25 20-40 46-40h64c31 0 55 20 55 51v36c0 31-24 51-55 51h-35v51h-30V40zm75 71c20 0 31-10 31-27V53c0-16-11-26-31-26h-40v84z" fill="url(#navy)"/>
+    <circle cx="159" cy="77" r="38" fill="none" stroke="#17b6c7" stroke-width="5"/>
+    <path d="M121 77h76M159 39c-12 13-18 25-18 38s6 25 18 38M159 39c12 13 18 25 18 38s-6 25-18 38" fill="none" stroke="#17b6c7" stroke-width="2" opacity=".9"/>
+    <path d="M127 56c19 11 45 11 64 0M127 98c19-11 45-11 64 0" fill="none" stroke="#17b6c7" stroke-width="2" opacity=".8"/>
+  </g>
+  <text x="350" y="168" font-family="Inter, Arial, sans-serif" font-size="112" font-weight="800" letter-spacing="-5" fill="#071a2d">RWD</text>
+  <path d="M580 88v82h22l-22-82z" fill="url(#gold)"/>
+  <text x="620" y="168" font-family="Inter, Arial, sans-serif" font-size="112" font-weight="800" letter-spacing="-5" fill="url(#teal)">NEWS</text>
+  <line x1="352" y1="211" x2="418" y2="211" stroke="#071a2d" stroke-width="3"/>
+  <text x="432" y="220" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="7" fill="#071a2d">MARKETS</text>
+  <circle cx="642" cy="211" r="6" fill="#f59e0b"/>
+  <text x="665" y="220" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="7" fill="#071a2d">FINTECH</text>
+  <circle cx="872" cy="211" r="6" fill="#f59e0b"/>
+  <text x="895" y="220" font-family="Inter, Arial, sans-serif" font-size="25" font-weight="700" letter-spacing="7" fill="#071a2d">MONEY</text>
+  <line x1="1050" y1="211" x2="1170" y2="211" stroke="#071a2d" stroke-width="3"/>
+</svg>
