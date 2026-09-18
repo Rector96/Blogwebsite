@@ -18,7 +18,7 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
   const [data, setData] = useState<Dashboard | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState("");\n  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     try {
@@ -85,12 +85,12 @@ export default function AdminPage() {
       <header className="border-b bg-neutral-950 text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
           <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Private dashboard</p><h1 className="font-display text-2xl font-semibold">RWDNEWS Admin</h1></div>
-          <a href="/" className="text-sm font-semibold text-amber-400">Open site →</a>
+          <div className="flex items-center gap-2"><a href="/" className="border border-neutral-700 px-3 py-2 text-xs font-semibold text-amber-400">Open site</a><button onClick={() => void logout()} disabled={busy} className="border border-neutral-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Log out</button></div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8 sm:px-6">
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
         {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
-        <section className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <section><div className="mb-3 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Overview</p><h2 className="font-display text-2xl font-semibold">Performance</h2></div><p className="text-xs text-neutral-500">Recorded product events</p></div><div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {["article_open","article_share","article_save","newsletter_signup","sponsor_click","advertise_open"].map(k => (
             <div key={k} className="border bg-white p-4"><p className="text-[10px] font-bold uppercase text-neutral-500">{k.replace("_"," ")}</p><p className="mt-2 text-2xl font-bold">{totals[k] || 0}</p></div>
           ))}
@@ -102,7 +102,7 @@ export default function AdminPage() {
               <div key={s.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
                 <div><p className="text-xs font-bold text-amber-800">{s.sponsor_name}</p><p className="font-semibold">{s.headline}</p><p className="mt-1 text-xs text-neutral-500">{s.placement} · {s.monthly_fee_usd ? "$" + s.monthly_fee_usd + "/mo" : "direct deal"}</p></div>
                 <span className={s.active ? "text-xs font-bold text-teal-800" : "text-xs font-bold text-neutral-400"}>{s.active ? "ACTIVE" : "OFF"}</span>
-                <button onClick={() => void updateSponsor(s.id, !s.active)} className="h-9 border px-3 text-xs font-semibold">{s.active ? "Pause" : "Activate"}</button>
+                <button disabled={busy} onClick={() => void updateSponsor(s.id, !s.active)} className="h-9 border px-3 text-xs font-semibold disabled:opacity-50">{s.active ? "Pause" : "Activate"}</button>
               </div>
             )) : <p className="p-4 text-sm text-neutral-500">No sponsor inventory yet. Add real sponsors from Supabase or your ad network.</p>}
           </div>
@@ -113,7 +113,7 @@ export default function AdminPage() {
             {data.leads.length ? data.leads.map(l => (
               <div key={l.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center">
                 <div><p className="font-semibold">{l.company || l.name || "Unnamed lead"}</p><p className="text-sm">{l.email}</p><p className="mt-1 text-xs text-neutral-500">{l.message || "Sponsorship inquiry"} · {new Date(l.created_at).toLocaleString()}</p></div>
-                <select value={l.status} onChange={e => void updateLead(l.id, e.target.value)} className="h-9 border px-2 text-xs"><option>new</option><option>contacted</option><option>won</option><option>lost</option></select>
+                <select value={l.status} disabled={busy} onChange={e => void updateLead(l.id, e.target.value)} className="h-9 border px-2 text-xs disabled:opacity-50"><option>new</option><option>contacted</option><option>won</option><option>lost</option></select>
               </div>
             )) : <p className="p-4 text-sm text-neutral-500">No advertiser leads yet.</p>}
           </div>
