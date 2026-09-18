@@ -186,7 +186,7 @@ function RwdNewsApp() {
   const [leadEmail, setLeadEmail] = useState("");
   const [leadName, setLeadName] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
-  const [leadMsg, setLeadMsg] = useState<string | null>(null);
+  const [leadMsg, setLeadMsg] = useState<string | null>(null);\n  const [showLoader, setShowLoader] = useState(true);
 
   useEffect(() => {
     try {
@@ -327,11 +327,12 @@ function RwdNewsApp() {
       <header className="border-b border-neutral-200">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
           <div className="w-10 sm:hidden" />
-          <a href="/" className="text-center">
-            <p className="font-display text-3xl font-bold tracking-tight sm:text-4xl">RWDNEWS</p>
-            <p className="mt-0.5 text-[10px] font-semibold tracking-[0.2em] text-neutral-500 uppercase">
-              Markets · Fintech · Money
-            </p>
+          <a href="/" className="block shrink-0" aria-label="RWDNEWS home">
+            <img
+              src="/rwdnews-logo.svg"
+              alt="RWDNEWS — Markets, Fintech & Money"
+              className="h-auto w-[205px] sm:w-[275px]"
+            />
           </a>
           <div className="flex items-center gap-2">
             <div className="relative hidden md:block">
@@ -504,8 +505,8 @@ function RwdNewsApp() {
 
       <footer className="border-t border-neutral-200 bg-neutral-50 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <p className="font-display text-xl font-bold">RWDNEWS</p>
-          <p className="mt-1 text-sm text-neutral-500">
+          <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[190px]" />
+          <p className="mt-2 text-sm text-neutral-500">
             Read on-site briefings · Sources credited · Built for readers & advertisers
           </p>
         </div>
