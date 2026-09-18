@@ -59,15 +59,17 @@ export default async (req: Request) => {
       const ctaUrl = clean(body.cta_url, 500);
       if (!sponsorName || !headline || !/^https?:\/\//i.test(ctaUrl)) return json({ error: "Sponsor name, headline and a valid website URL are required." }, 400);
       const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
-      const amount = Number(body.monthly_fee_naira || 0);
+      const currency = String(body.currency || "USD").toUpperCase() === "NGN" ? "NGN" : "USD";
+      const amount = Number(body.amount || 0);
       const { data, error } = await database.from("sponsors").insert({
         slug, sponsor_name: sponsorName, headline, why_matters: [], cta_text: clean(body.cta_text || "Learn more", 80),
         cta_url: ctaUrl, rate_highlight: "", disclosure: clean(body.disclosure || "Sponsored · Paid placement", 160),
-        placement: clean(body.placement || "sidebar", 30), priority: Number(body.priority || 100), monthly_fee_naira: amount || null,
+        placement: clean(body.placement || "sidebar", 30), priority: Number(body.priority || 100),
+        currency, monthly_fee_usd: currency === "USD" ? amount || null : null, monthly_fee_naira: currency === "NGN" ? amount || null : null,
         active: false, starts_at: body.starts_at || null, ends_at: body.ends_at || null,
       }).select("id").single();
       if (error) return json({ error: error.message }, 400);
-      await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, amount_naira: amount });
+      await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, amount, currency });
       return json({ ok: true });
     }
 
@@ -119,16 +121,16 @@ export default async (req: Request) => {
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
           why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rwdnews.netlify.app", 500),
           rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement === "newsletter" ? "sidebar" : (payment.placement || "sidebar"),
-          active: true, priority: 50, monthly_fee_naira: payment.amount_naira, starts_at: starts, ends_at: ends,
+          active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, starts_at: starts, ends_at: ends,
         }).select("id").single();
         if (error) return json({ error: error.message }, 400);
         sponsorId = sponsor?.id || null;
       } else {
-        await database.from("sponsors").update({ active: true, starts_at: starts, ends_at: ends, monthly_fee_naira: payment.amount_naira, updated_at: new Date().toISOString() }).eq("id", sponsorId);
+        await database.from("sponsors").update({ active: true, starts_at: starts, ends_at: ends, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, updated_at: new Date().toISOString() }).eq("id", sponsorId);
       }
 
       await database.from("sponsor_payments").update({ sponsor_id: sponsorId, starts_at: starts, ends_at: ends, updated_at: new Date().toISOString() }).eq("reference", reference);
-      await audit(database, "payment_activated", "sponsor_payment", reference, { sponsor_id: sponsorId, amount_naira: payment.amount_naira });
+      await audit(database, "payment_activated", "sponsor_payment", reference, { sponsor_id: sponsorId, amount: payment.amount, currency: payment.currency });
       return json({ ok: true });
     }
 
@@ -160,10 +162,10 @@ export default async (req: Request) => {
   if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
 
   const [sponsors, leads, events, payments, clicks, articles, newsletter] = await Promise.all([
-    database.from("sponsors").select("id,sponsor_name,headline,placement,active,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
+    database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
     database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").order("created_at", { ascending: false }).limit(20000),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,amount_naira,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
+    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
