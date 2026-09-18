@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { env, json, SPONSOR_PACKAGES, paystackRequest } from "./_paystack";
+import { env, json, SPONSOR_PACKAGES, paystackRequest } from "../../src/lib/paystack-server";
 
 function db() {
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
