@@ -10,6 +10,10 @@ import {
   type SponsoredOffer,
 } from "./lib/sponsors";
 import { ArticleReader } from "./components/ArticleReader";
+import { AdSlot } from "./components/AdSlot";
+import AdminPage from "./pages/AdminPage";
+import { InfoPage } from "./pages/InfoPage";
+import StoryPage from "./pages/StoryPage";
 import { logRwdNewsEvent } from "./lib/analytics";
 
 export interface EnrichedArticle {
@@ -168,6 +172,11 @@ function todayLabel() {
   });
 }
 
+function storyPath(article: EnrichedArticle) {
+  const title = (article.ai_hook_title || article.original_title).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
+  return "/news/" + title + "--" + encodeURIComponent(article.id);
+}
+
 function normalizeTags(tags?: string[]) {
   return (tags || []).map((t) => String(t).replace(/^#/, ""));
 }
@@ -243,17 +252,13 @@ function RwdNewsApp() {
   }, []);
 
   const openArticle = (article: EnrichedArticle) => {
-    setActive(article);
     setRecentlyViewed((prev) => {
       const next = [article.id, ...prev.filter((id) => id !== article.id)].slice(0, 8);
-      try { localStorage.setItem("rwdnews_recent_v1", JSON.stringify(next)); } catch { /* ignore */ }
+      try { localStorage.setItem("rwdnews_recent_v1", JSON.stringify(next)); } catch {}
       return next;
     });
-    void logRwdNewsEvent({
-      event: "article_open",
-      articleId: article.id,
-      articleUrl: article.original_url,
-    });
+    void logRwdNewsEvent({ event: "article_open", articleId: article.id, articleUrl: article.original_url });
+    window.location.assign(storyPath(article));
   };
 
   const openAdvertiserForm = () => {
@@ -414,7 +419,7 @@ function RwdNewsApp() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
-        <div className="ad-slot ad-slot-leader">Advertisement</div>
+        <AdSlot slot={import.meta.env.VITE_ADSENSE_LEADER_SLOT} className="ad-slot-leader" />
       </div>
 
       <main className="mx-auto grid max-w-6xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-[1fr_300px]">
@@ -471,7 +476,7 @@ function RwdNewsApp() {
           ) : null}
 
           <div className="py-5">
-            <div className="ad-slot ad-slot-infeed">Advertisement</div>
+            <AdSlot slot={import.meta.env.VITE_ADSENSE_INFEED_SLOT} className="ad-slot-infeed" />
           </div>
 
           <section className="mb-8">
@@ -582,7 +587,7 @@ function RwdNewsApp() {
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="ad-slot ad-slot-sidebar">Advertisement</div>
+          <AdSlot slot={import.meta.env.VITE_ADSENSE_SIDEBAR_SLOT} className="ad-slot-sidebar" />
           <div className="border border-neutral-200 bg-neutral-50 p-4">
             <p className="text-[10px] font-bold tracking-[0.16em] text-teal-800 uppercase">RWDNEWS standard</p>
             <p className="mt-1 text-sm font-semibold">Source-backed first. AI-assisted second.</p>
@@ -622,7 +627,7 @@ function RwdNewsApp() {
               Request media kit →
             </button>
           </div>
-          <div className="ad-slot ad-slot-sidebar">Advertisement</div>
+          <AdSlot slot={import.meta.env.VITE_ADSENSE_SIDEBAR_SLOT} className="ad-slot-sidebar" />
         </aside>
       </main>
 
@@ -632,6 +637,9 @@ function RwdNewsApp() {
           <p className="mt-2 text-sm text-neutral-500">
             Read on-site briefings · Sources credited · Built for readers & advertisers
           </p>
+          <nav className="mt-4 flex flex-wrap gap-4 text-xs font-semibold text-neutral-600" aria-label="RWDNEWS information">
+            <a href="/about">About</a><a href="/editorial">Editorial</a><a href="/advertise">Advertise</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+          </nav>
         </div>
       </footer>
 
@@ -708,9 +716,10 @@ function PartnerCard({
 }
 
 export default function App() {
-  return (
-    <HelmetProvider>
-      <RwdNewsApp />
-    </HelmetProvider>
-  );
+  const path = typeof window !== "undefined" ? window.location.pathname : "/";
+  let page: React.ReactNode = <RwdNewsApp />;
+  if (path === "/admin" || path.startsWith("/admin/")) page = <AdminPage />;
+  else if (path.startsWith("/news/")) page = <StoryPage />;
+  else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path)) page = <InfoPage path={path} />;
+  return <HelmetProvider>{page}</HelmetProvider>;
 }
