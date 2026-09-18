@@ -61,7 +61,7 @@ export default function AdminPage() {
   if (!authed || !data) {
     return (
       <div className="grid min-h-dvh place-items-center bg-neutral-950 p-4">
-        <Helmet><title>RWDNEWS Admin</title></Helmet>
+        <Helmet><title>RWDNEWS Admin</title><meta name="robots" content="noindex,nofollow,noarchive" /></Helmet>
         <form onSubmit={login} className="w-full max-w-sm border border-neutral-800 bg-white p-6">
           <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">Private</p>
           <h1 className="font-display mt-2 text-3xl font-semibold">RWDNEWS Admin</h1>
