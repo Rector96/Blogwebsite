@@ -1,12 +1,30 @@
 import type { Config, Context } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
+/** Expanded free RSS sources — no paid API key required */
 const RSS_FEEDS = [
   { url: "https://finance.yahoo.com/news/rssindex", source: "Yahoo Finance" },
   { url: "https://www.finextra.com/rss/headlines.aspx", source: "Finextra" },
   {
     url: "https://feeds.content.dowjones.io/public/rss/mw_topstories",
     source: "MarketWatch",
+  },
+  {
+    url: "https://feeds.content.dowjones.io/public/rss/mw_realtimeheadlines",
+    source: "MarketWatch Live",
+  },
+  { url: "https://www.coindesk.com/arc/outboundfeeds/rss/", source: "CoinDesk" },
+  {
+    url: "https://www.reutersagency.com/feed/?taxonomy=best-topics&post_type=best",
+    source: "Reuters",
+  },
+  {
+    url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",
+    source: "CNBC",
+  },
+  {
+    url: "https://www.techmeme.com/feed.xml",
+    source: "Techmeme",
   },
 ];
 
@@ -17,6 +35,8 @@ const IMAGES = [
   "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
   "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1200&q=80",
   "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1642790103194-0b4c1b8b0b0b?auto=format&fit=crop&w=1200&q=80",
+  "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?auto=format&fit=crop&w=1200&q=80",
 ];
 
 function stripTags(s: string) {
@@ -24,10 +44,14 @@ function stripTags(s: string) {
 }
 
 function parseRssItems(xml: string, source: string) {
-  const items: { title: string; link: string; description: string; pubDate?: string }[] =
-    [];
+  const items: {
+    title: string;
+    link: string;
+    description: string;
+    pubDate?: string;
+  }[] = [];
   const blocks = xml.split(/<item[\s>]/i).slice(1);
-  for (const block of blocks.slice(0, 4)) {
+  for (const block of blocks.slice(0, 5)) {
     const title =
       block.match(/<title[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/title>/i)?.[1] ||
       block.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ||
@@ -35,21 +59,23 @@ function parseRssItems(xml: string, source: string) {
     const link =
       block.match(/<link[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/link>/i)?.[1] ||
       block.match(/<link[^>]*>([\s\S]*?)<\/link>/i)?.[1] ||
+      block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/i)?.[1] ||
       "";
     const description =
       block.match(
         /<description[^>]*><!\[CDATA\[([\s\S]*?)\]\]><\/description>/i,
       )?.[1] ||
       block.match(/<description[^>]*>([\s\S]*?)<\/description>/i)?.[1] ||
+      block.match(/<content:encoded[^>]*><!\[CDATA\[([\s\S]*?)\]\]>/i)?.[1] ||
       "";
     const pubDate = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)?.[1];
     const t = stripTags(title);
     const l = stripTags(link);
-    if (t && l) {
+    if (t && l && l.startsWith("http")) {
       items.push({
         title: t,
         link: l,
-        description: stripTags(description).slice(0, 280),
+        description: stripTags(description).slice(0, 500),
         pubDate: pubDate ? stripTags(pubDate) : undefined,
       });
     }
@@ -69,35 +95,51 @@ async function fetchFeeds() {
     RSS_FEEDS.map(async (feed) => {
       try {
         const res = await fetch(feed.url, {
-          headers: { "User-Agent": "FinSignalBot/1.0" },
-          signal: AbortSignal.timeout(4000),
+          headers: {
+            "User-Agent": "RWDNEWS/1.0 (+https://rwdnews.netlify.app)",
+            Accept: "application/rss+xml, application/xml, text/xml, */*",
+          },
+          signal: AbortSignal.timeout(5000),
         });
         if (!res.ok) return;
         const xml = await res.text();
         out.push(...parseRssItems(xml, feed.source));
       } catch {
-        /* skip feed */
+        /* skip broken feed */
       }
     }),
   );
-  return out.slice(0, 12);
+  // Dedupe by link
+  const seen = new Set<string>();
+  const unique = out.filter((i) => {
+    if (seen.has(i.link)) return false;
+    seen.add(i.link);
+    return true;
+  });
+  return unique.slice(0, 40);
 }
 
 function heuristic(title: string, desc: string) {
   const lower = `${title} ${desc}`.toLowerCase();
   const tags: string[] = [];
-  if (lower.includes("bank")) tags.push("#Banking");
-  if (lower.includes("invest") || lower.includes("yield")) tags.push("#Investing");
-  if (lower.includes("fintech")) tags.push("#Fintech");
-  if (lower.includes("pay")) tags.push("#Payments");
-  if (tags.length < 2) tags.push("#PersonalFinance", "#Fintech");
+  if (lower.includes("bank") || lower.includes("fed")) tags.push("Banking");
+  if (lower.includes("invest") || lower.includes("stock") || lower.includes("market"))
+    tags.push("Markets");
+  if (lower.includes("fintech") || lower.includes("startup")) tags.push("Fintech");
+  if (lower.includes("crypto") || lower.includes("bitcoin")) tags.push("Crypto");
+  if (lower.includes("pay") || lower.includes("payment")) tags.push("Payments");
+  if (tags.length < 2) tags.push("Business", "Finance");
+  const first =
+    desc.split(".")[0] && desc.length > 20
+      ? `${desc.split(".")[0].trim()}.`
+      : "A market development with implications for investors and consumers.";
   return {
-    ai_hook_title: title.slice(0, 160),
+    ai_hook_title: title.slice(0, 180),
     ai_summary: [
-      desc.split(".")[0] ? `${desc.split(".")[0].trim()}.` : "Market development worth tracking.",
-      "Verify details on the original publisher before acting.",
+      first,
+      "Read the full briefing on RWDNEWS; open the publisher for the complete original report.",
     ],
-    tags: tags.slice(0, 3),
+    tags: tags.slice(0, 4),
   };
 }
 
@@ -117,10 +159,7 @@ export default async function handler(req: Request, _context: Context) {
 
   if (!supabaseUrl || !serviceKey) {
     return Response.json(
-      {
-        ok: false,
-        error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY",
-      },
+      { ok: false, error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" },
       { status: 500 },
     );
   }
@@ -137,7 +176,7 @@ export default async function handler(req: Request, _context: Context) {
     const item = raw[i];
     const ai = heuristic(item.title, item.description);
     const row = {
-      id: `netlify-${Date.now().toString(36)}-${i}`,
+      id: `rwd-${Date.now().toString(36)}-${i}`,
       original_url: item.link,
       original_title: item.title,
       original_description: item.description || "",
@@ -149,7 +188,7 @@ export default async function handler(req: Request, _context: Context) {
       read_time: "3 min read",
       timestamp: item.pubDate
         ? new Date(item.pubDate).toISOString()
-        : new Date(Date.now() - i * 15 * 60 * 1000).toISOString(),
+        : new Date(Date.now() - i * 10 * 60 * 1000).toISOString(),
     };
     const { error } = await sb.from("articles").upsert(row, {
       onConflict: "original_url",
@@ -159,6 +198,7 @@ export default async function handler(req: Request, _context: Context) {
 
   return Response.json({
     ok: true,
+    brand: "RWDNEWS",
     fetched: raw.length,
     saved,
     at: new Date().toISOString(),
