@@ -56,7 +56,7 @@ export default function StoryPage() {
   }, [article]);
 
   const title = article?.ai_hook_title || article?.original_title || "RWDNEWS story";
-  const canonical = typeof window !== "undefined" ? window.location.href : "https://rwdnews.netlify.app/";
+  const canonical = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "https://rwdnews.netlify.app/";
   const description = article?.ai_summary?.[0] || article?.original_description || "Source-backed global news briefing from RWDNEWS.";
   const jsonLd = useMemo(() => article ? {
     "@context": "https://schema.org",
