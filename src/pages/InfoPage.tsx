@@ -30,6 +30,7 @@ const content: Record<string, { title: string; intro: string; sections: Array<[s
 const packages = [
   { code: "sidebar", name: "Sidebar Sponsor", usd: 75, ngn: 75000, detail: "30 days · sidebar placement" },
   { code: "in_feed", name: "In-feed Sponsor", usd: 100, ngn: 100000, detail: "30 days · inside the news feed" },
+  { code: "newsletter", name: "Newsletter Sponsor", usd: 75, ngn: 75000, detail: "Per issue · newsletter placement" },
   { code: "homepage", name: "Homepage Featured", usd: 150, ngn: 150000, detail: "30 days · premium homepage placement" },
   { code: "homepage_sidebar", name: "Homepage + Sidebar", usd: 200, ngn: 200000, detail: "30 days · homepage + sidebar" },
   { code: "sponsored_story", name: "Sponsored Article / Briefing", usd: 150, ngn: 150000, detail: "Sponsored content · clearly labeled" },
@@ -44,7 +45,7 @@ function money(value: number, currency: "USD" | "NGN") {
 
 function AdvertisePage() {
   const [selected, setSelected] = useState(packages[0].code);
-  const [currency, setCurrency] = useState<"USD" | "NGN">("USD");
+  const [currency, setCurrency] = useState<"USD" | "NGN">("NGN");
   const [form, setForm] = useState({ email: "", name: "", company: "", headline: "", cta_url: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
