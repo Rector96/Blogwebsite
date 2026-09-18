@@ -1,6 +1,6 @@
 import type { Config, Context } from "@netlify/functions";
 import { createHash } from "node:crypto";
-import { database, json } from "./_paystack";
+import { database, json } from "../../src/lib/paystack-server";
 
 function classifyDevice(ua: string) {
   if (/tablet|ipad/i.test(ua)) return "tablet";
