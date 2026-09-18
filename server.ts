@@ -24,81 +24,57 @@ export interface EnrichedArticle {
   ai_summary: string[];
   tags: string[];
   read_time: string;
+  category?: string;
+  trend_score?: number;
+  trend_label?: "Trending" | "Developing" | "Fresh";
+  image_credit?: string;
+  image_license?: string;
+  image_source_url?: string;
+  discovered_via?: string[];
 }
 
 const rssParser = new Parser({
   headers: {
     "User-Agent":
-      "Mozilla/5.0 (compatible; FinSignal/1.0; +https://finsignal.news)",
+      "Mozilla/5.0 (compatible; RWDNEWS/1.0; +https://rwdnews.netlify.app)",
     Accept: "application/rss+xml, application/xml, text/xml, */*",
   },
-  timeout: 2500,
+  timeout: 3500,
 });
 
 const RSS_FEED_URLS = [
   { url: "https://finance.yahoo.com/news/rssindex", source: "Yahoo Finance" },
   { url: "https://www.finextra.com/rss/headlines.aspx", source: "Finextra" },
-  {
-    url: "https://feeds.content.dowjones.io/public/rss/mw_topstories",
-    source: "MarketWatch",
-  },
+  { url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", source: "MarketWatch" },
+  { url: "https://www.aljazeera.com/xml/rss/all.xml", source: "Al Jazeera" },
+  { url: "https://techcrunch.com/feed/", source: "TechCrunch" },
+  { url: "https://www.coindesk.com/arc/outboundfeeds/rss/", source: "CoinDesk" },
 ];
 
-const EDITORIAL_FINANCE_IMAGES = [
-  "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1200&q=80",
-  "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80",
+const GDELT_QUERIES = [
+  { query: "(finance OR markets OR banking OR economy OR companies)", category: "Business" },
+  { query: '("artificial intelligence" OR AI OR technology OR cybersecurity OR chips)', category: "Tech" },
+  { query: "(geopolitics OR diplomacy OR conflict OR election OR government)", category: "World" },
+  { query: "(Africa OR Nigeria OR Kenya OR Ghana OR SouthAfrica OR Egypt)", category: "Africa" },
 ];
 
-const INITIAL_SEED_ARTICLES: EnrichedArticle[] = [
-  {
-    id: "news-seed-1",
-    original_url:
-      "https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps",
-    image: EDITORIAL_FINANCE_IMAGES[0],
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    source: "MarketWatch",
-    original_title:
-      "Treasury Yield Inversion Normalizes as Neobanks Shift Savings Sweep Yields to 5.15%",
-    original_description:
-      "Digital banking platforms leverage multi-bank custodial networks to deliver elevated cash yields.",
-    ai_hook_title:
-      "High-yield cash sweeps hit 5.15% as fintechs compete for uninvested deposits",
-    ai_summary: [
-      "Cash yields have detached from near-zero legacy savings rates.",
-      "Multi-bank sweeps can extend deposit insurance while keeping liquidity.",
-    ],
-    tags: ["#Banking", "#PersonalFinance", "#Fintech"],
-    read_time: "3 min read",
-  },
-  {
-    id: "news-seed-2",
-    original_url:
-      "https://www.consumerfinance.gov/about-us/newsroom/cfpb-finalizes-personal-financial-data-rights/",
-    image: EDITORIAL_FINANCE_IMAGES[1],
-    timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    source: "CFPB",
-    original_title:
-      "CFPB Rule 1033 Mandates Consumer Financial Data Portability",
-    original_description:
-      "Open banking rules phase out screen-scraping in favor of secure APIs.",
-    ai_hook_title:
-      "Open banking Rule 1033: secure API portability aims to end password scraping",
-    ai_summary: [
-      "Regulators prefer signed bank tokens over shared credentials.",
-      "Budget apps can connect accounts with less friction when banks comply.",
-    ],
-    tags: ["#Regulation", "#Fintech", "#Banking"],
-    read_time: "4 min read",
-  },
-];
+const STOP_WORDS = new Set([
+  "the","and","for","with","from","that","this","after","before","into","over","under",
+  "about","will","would","could","should","says","said","have","has","been","are","was",
+  "were","their","they","them","than","then","what","when","where","while","which","who",
+  "how","why","new","latest","news","report","reports","according","amid","more","most",
+]);
 
-let cachedArticles: EnrichedArticle[] = [...INITIAL_SEED_ARTICLES];
+let cachedArticles: EnrichedArticle[] = [];
 let lastFetchTimestamp = 0;
 const CACHE_TTL_MS = 10 * 60 * 1000;
+
+const imageCache = new Map<string, {
+  image: string;
+  credit: string;
+  license: string;
+  sourceUrl: string;
+}>();
 
 function adminSupabase() {
   const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -107,66 +83,208 @@ function adminSupabase() {
   return createClient(url, key);
 }
 
+function cleanText(value: unknown): string {
+  return String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractRssImage(item: any): string {
+  const candidates = [
+    item?.enclosure?.url,
+    item?.["media:content"]?.url,
+    item?.["media:thumbnail"]?.url,
+    item?.["media:group"]?.["media:content"]?.url,
+    item?.image?.url,
+  ];
+  return candidates.find((v) => typeof v === "string" && /^https?:\/\//i.test(v)) || "";
+}
+
+function normalizeWords(text: string): string[] {
+  return cleanText(text)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, " ")
+    .split(/\s+/)
+    .map((word) => word.replace(/^-+|-+$/g, ""))
+    .filter((word) => word.length >= 4 && !STOP_WORDS.has(word));
+}
+
+function categoryForText(text: string, hint?: string): string {
+  if (hint) return hint;
+  const lower = text.toLowerCase();
+  if (/\b(ai|artificial intelligence|chip|semiconductor|software|cyber|robot|technology|tech)\b/.test(lower)) return "Tech";
+  if (/\b(africa|nigeria|kenya|ghana|south africa|egypt|lagos|abuja)\b/.test(lower)) return "Africa";
+  if (/\b(election|president|government|minister|parliament|diplomacy|war|conflict|sanction)\b/.test(lower)) return "World";
+  if (/\b(bitcoin|crypto|ethereum|blockchain)\b/.test(lower)) return "Crypto";
+  if (/\b(bank|fintech|payment|credit|loan|money|inflation|rate|market|stock|economy|company|earnings)\b/.test(lower)) return "Business";
+  return "World";
+}
+
+function fallbackEditorialImage(title: string, category: string) {
+  const safeTitle = cleanText(title).slice(0, 74).replace(/&/g, "and");
+  const svg =
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'>" +
+    "<defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='#071a2d'/><stop offset='1' stop-color='#0f766e'/></linearGradient></defs>" +
+    "<rect width='1600' height='900' fill='url(#g)'/>" +
+    "<text x='90' y='120' fill='#f59e0b' font-family='Arial' font-size='30' font-weight='700'>RWDNEWS · " +
+    category.toUpperCase() +
+    "</text><text x='90' y='760' fill='white' font-family='Arial' font-size='58' font-weight='700'>" +
+    safeTitle +
+    "</text></svg>";
+  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
+}
+
 async function fetchRawRssItems() {
-  const collected: {
+  const collected: Array<{
     title: string;
     link: string;
     contentSnippet: string;
     pubDate?: string;
     source: string;
-  }[] = [];
+    image?: string;
+    category: string;
+  }> = [];
 
-  const feedPromises = RSS_FEED_URLS.map(async (feedConfig) => {
-    try {
-      const feed = await Promise.race([
-        rssParser.parseURL(feedConfig.url),
-        new Promise<null>((_, reject) =>
-          setTimeout(() => reject(new Error("timeout")), 2000),
-        ),
-      ]);
-      if (feed?.items?.length) {
-        return feed.items.slice(0, 4).map((item) => ({
-          title: (item.title || "").trim(),
-          link: item.link || item.guid || "https://finance.yahoo.com",
-          contentSnippet: (item.contentSnippet || item.content || "")
-            .slice(0, 280)
-            .trim(),
-          pubDate: item.pubDate,
+  const results = await Promise.allSettled(
+    RSS_FEED_URLS.map(async (feedConfig) => {
+      try {
+        const feed = await Promise.race([
+          rssParser.parseURL(feedConfig.url),
+          new Promise<null>((_, reject) => setTimeout(() => reject(new Error("RSS timeout")), 3200)),
+        ]);
+        if (!feed?.items?.length) return [];
+        return feed.items.slice(0, 8).map((item: any) => ({
+          title: cleanText(item.title),
+          link: item.link || item.guid || "",
+          contentSnippet: cleanText(item.contentSnippet || item.content || item.summary).slice(0, 500),
+          pubDate: item.pubDate || item.isoDate,
           source: feedConfig.source,
+          image: extractRssImage(item),
+          category: categoryForText((item.title || "") + " " + (item.contentSnippet || item.content || "")),
         }));
+      } catch {
+        return [];
       }
+    }),
+  );
+
+  for (const result of results) {
+    if (result.status === "fulfilled") collected.push(...result.value);
+  }
+  return collected;
+}
+
+async function fetchGdeltItems() {
+  const results = await Promise.allSettled(
+    GDELT_QUERIES.map(async ({ query, category }) => {
+      const url = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
+      url.searchParams.set("query", query);
+      url.searchParams.set("mode", "artlist");
+      url.searchParams.set("maxrecords", "20");
+      url.searchParams.set("timespan", "3h");
+      url.searchParams.set("sort", "datedesc");
+      url.searchParams.set("format", "json");
+
+      const response = await fetch(url, {
+        headers: { "User-Agent": "RWDNEWS/1.0 news-discovery" },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!response.ok) return [];
+      const payload = (await response.json()) as any;
+      const rows = Array.isArray(payload?.articles) ? payload.articles : [];
+      return rows.map((row: any) => ({
+        title: cleanText(row.title),
+        link: String(row.url || ""),
+        contentSnippet: cleanText(row.seendate ? "Published/seen " + row.seendate : ""),
+        pubDate: row.seendate,
+        source: cleanText(row.domain || "GDELT source"),
+        image: String(row.socialimage || row.urlsocialimage || row.image || ""),
+        category,
+      }));
+    }),
+  );
+
+  const collected: any[] = [];
+  for (const result of results) {
+    if (result.status === "fulfilled") collected.push(...result.value);
+  }
+  return collected;
+}
+
+function dedupeItems(items: any[]) {
+  const byUrl = new Map<string, any>();
+  for (const item of items) {
+    if (!item.title || !item.link) continue;
+    try {
+      const url = new URL(item.link);
+      url.hash = "";
+      const key = url.toString().replace(/\/$/, "");
+      if (!byUrl.has(key)) byUrl.set(key, item);
     } catch {
-      /* resilient */
+      /* ignore malformed URLs */
     }
-    return [];
-  });
+  }
+  return Array.from(byUrl.values());
+}
 
-  const results = await Promise.allSettled(feedPromises);
-  results.forEach((res) => {
-    if (res.status === "fulfilled") collected.push(...res.value);
-  });
+function titleSimilarity(a: string, b: string) {
+  const aa = new Set(normalizeWords(a));
+  const bb = new Set(normalizeWords(b));
+  if (!aa.size || !bb.size) return 0;
+  let overlap = 0;
+  for (const word of aa) if (bb.has(word)) overlap += 1;
+  return overlap / Math.max(1, Math.min(aa.size, bb.size));
+}
 
-  return collected.slice(0, 12);
+function applyTrendSignals(items: any[]) {
+  const now = Date.now();
+  return items.map((item) => {
+    const cluster = items.filter((other) => titleSimilarity(item.title, other.title) >= 0.42);
+    const domains = new Set(
+      cluster.map((x) => {
+        try {
+          return new URL(x.link).hostname.replace(/^www\./, "");
+        } catch {
+          return x.source;
+        }
+      }),
+    );
+    const parsedTime = new Date(item.pubDate || now).getTime();
+    const ageHours = Number.isNaN(parsedTime) ? 0 : Math.max(0, (now - parsedTime) / 3600000);
+    const freshness = Math.max(0, 36 - ageHours * 4);
+    const sourceSignal = Math.min(28, domains.size * 7);
+    const clusterSignal = Math.min(35, cluster.length * 7);
+    const score = Math.round(Math.min(100, freshness + sourceSignal + clusterSignal));
+    const trendLabel =
+      cluster.length >= 3 || score >= 70
+        ? "Trending"
+        : cluster.length >= 2 || score >= 48
+          ? "Developing"
+          : "Fresh";
+    return {
+      ...item,
+      trend_score: score,
+      trend_label: trendLabel,
+      discovered_via: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 5),
+    };
+  });
 }
 
 function heuristicAI(title: string, desc: string) {
-  const lower = `${title} ${desc}`.toLowerCase();
+  const firstSentence = cleanText(desc).split(/(?<=[.!?])\s+/)[0];
   const tags: string[] = [];
-  if (lower.includes("bank")) tags.push("#Banking");
-  if (lower.includes("invest") || lower.includes("yield")) tags.push("#Investing");
-  if (lower.includes("fintech") || lower.includes("app")) tags.push("#Fintech");
-  if (lower.includes("pay")) tags.push("#Payments");
-  if (lower.includes("credit") || lower.includes("loan")) tags.push("#Credit");
-  if (tags.length < 2) tags.push("#PersonalFinance", "#Fintech");
+  const lower = title + " " + desc;
+  if (/\b(ai|technology|tech|chip|cyber)\b/i.test(lower)) tags.push("#Tech");
+  if (/\b(bank|fintech|payment|credit|money)\b/i.test(lower)) tags.push("#Fintech");
+  if (/\b(bitcoin|crypto|ethereum)\b/i.test(lower)) tags.push("#Crypto");
+  if (/\b(africa|nigeria|kenya|ghana)\b/i.test(lower)) tags.push("#Africa");
+  if (/\b(market|stock|economy|rate|inflation|company)\b/i.test(lower)) tags.push("#Markets");
+  if (!tags.length) tags.push("#World");
   return {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
     ai_summary: [
-      desc?.split(".")[0]
-        ? `${desc.split(".")[0].trim()}.`
-        : "Material for household cash, credit, or investment decisions.",
-      "Verify details on the original publisher before acting.",
-    ] as [string, string],
-    tags: tags.slice(0, 3),
+      firstSentence || "RWDNEWS is tracking this developing story from published sources.",
+      "Read the linked source for the full report; RWDNEWS does not treat an unverified claim as established fact.",
+    ],
+    tags: Array.from(new Set(tags)).slice(0, 4),
   };
 }
 
@@ -176,7 +294,13 @@ async function processArticleWithAI(title: string, description: string) {
 
   try {
     const ai = new GoogleGenAI({ apiKey });
-    const prompt = `Finance news. Title: "${title}". Description: "${description}". Return JSON: {"ai_hook_title":"...","ai_summary":["why it matters 1","why it matters 2"],"tags":["#Tag1","#Tag2"]}`;
+    const prompt =
+      "You are an editorial assistant for RWDNEWS. " +
+      "Use ONLY the supplied title and description. Do not invent facts, quotes, numbers, people, dates, causes, or outcomes. " +
+      "Rewrite the headline to be clear and compelling without clickbait. " +
+      "Create exactly two short bullet summaries. If the supplied description is insufficient, explicitly say that more reporting is needed. " +
+      "Return JSON. TITLE: " + title + " DESCRIPTION: " + description;
+
     const aiCall = ai.models.generateContent({
       model: "gemini-2.0-flash",
       contents: prompt,
@@ -193,12 +317,12 @@ async function processArticleWithAI(title: string, description: string) {
         },
       },
     });
+
     const response = await Promise.race([
       aiCall,
-      new Promise<null>((_, reject) =>
-        setTimeout(() => reject(new Error("AI timeout")), 2500),
-      ),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("AI timeout")), 3500)),
     ]);
+
     if (response && (response as { text?: string }).text) {
       const parsed = JSON.parse((response as { text: string }).text);
       if (parsed.ai_hook_title && Array.isArray(parsed.ai_summary)) {
@@ -206,52 +330,145 @@ async function processArticleWithAI(title: string, description: string) {
           ai_hook_title: String(parsed.ai_hook_title).trim(),
           ai_summary: [
             String(parsed.ai_summary[0] || "").trim(),
-            String(parsed.ai_summary[1] || "See original source for full context.").trim(),
-          ] as [string, string],
-          tags: (parsed.tags || ["#Fintech"])
-            .map((t: string) => (t.startsWith("#") ? t : `#${t}`))
-            .slice(0, 3),
+            String(parsed.ai_summary[1] || "More reporting is needed for additional context.").trim(),
+          ],
+          tags: (parsed.tags || ["#World"])
+            .map((t: string) => (t.startsWith("#") ? t : "#" + t))
+            .slice(0, 4),
         };
       }
     }
   } catch {
-    /* fallback */
+    /* safe heuristic fallback */
   }
   return heuristicAI(title, description);
 }
 
-async function aggregateAndEnrichNews(): Promise<EnrichedArticle[]> {
-  const rawItems = await fetchRawRssItems();
-  if (!rawItems.length) return cachedArticles.length ? cachedArticles : INITIAL_SEED_ARTICLES;
+async function findWikimediaImage(title: string, category: string) {
+  const words = normalizeWords(title).slice(0, 5);
+  const key = category + ":" + words.join("-");
+  const cached = imageCache.get(key);
+  if (cached) return cached;
 
-  const enriched: EnrichedArticle[] = [];
-  for (let i = 0; i < rawItems.length; i++) {
-    const raw = rawItems[i];
-    if (!raw.title || !raw.link) continue;
-    const aiData = await processArticleWithAI(raw.title, raw.contentSnippet);
-    const words = `${raw.title} ${raw.contentSnippet}`.split(/\s+/).length;
-    enriched.push({
-      id: `news-${Date.now().toString(36)}-${i}`,
-      original_url: raw.link,
-      image: EDITORIAL_FINANCE_IMAGES[i % EDITORIAL_FINANCE_IMAGES.length],
-      timestamp: raw.pubDate
-        ? new Date(raw.pubDate).toISOString()
-        : new Date(Date.now() - i * 20 * 60 * 1000).toISOString(),
-      source: raw.source,
-      original_title: raw.title,
-      original_description: raw.contentSnippet,
+  const queries = [words.join(" "), category].filter(Boolean);
+
+  for (const query of queries) {
+    try {
+      const url = new URL("https://commons.wikimedia.org/w/api.php");
+      url.searchParams.set("action", "query");
+      url.searchParams.set("generator", "search");
+      url.searchParams.set("gsrsearch", query);
+      url.searchParams.set("gsrnamespace", "6");
+      url.searchParams.set("gsrlimit", "5");
+      url.searchParams.set("prop", "imageinfo");
+      url.searchParams.set("iiprop", "url|extmetadata");
+      url.searchParams.set("iiurlwidth", "1400");
+      url.searchParams.set("format", "json");
+      url.searchParams.set("origin", "*");
+
+      const response = await fetch(url, {
+        headers: { "User-Agent": "RWDNEWS/1.0 image-discovery" },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (!response.ok) continue;
+
+      const payload = (await response.json()) as any;
+      const pages = Object.values(payload?.query?.pages || {}) as any[];
+      const allowed = pages.find((page) => {
+        const license = cleanText(
+          page?.imageinfo?.[0]?.extmetadata?.LicenseShortName?.value,
+        ).toLowerCase();
+        return /cc0|cc by|cc-by|public domain|pdm/.test(license) && !/non.?commercial/.test(license);
+      });
+      if (!allowed?.imageinfo?.[0]) continue;
+
+      const info = allowed.imageinfo[0];
+      const meta = info.extmetadata || {};
+      const result = {
+        image: String(info.thumburl || info.url || ""),
+        credit: cleanText(meta.Artist?.value || meta.Credit?.value || "Wikimedia Commons"),
+        license: cleanText(meta.LicenseShortName?.value || "Open license"),
+        sourceUrl: String(info.descriptionurl || info.url || ""),
+      };
+      if (result.image) {
+        imageCache.set(key, result);
+        return result;
+      }
+    } catch {
+      /* image discovery is non-blocking */
+    }
+  }
+
+  const fallback = {
+    image: fallbackEditorialImage(title, category),
+    credit: "RWDNEWS editorial graphic",
+    license: "RWDNEWS generated",
+    sourceUrl: "",
+  };
+  imageCache.set(key, fallback);
+  return fallback;
+}
+
+async function enrichImages(items: any[]) {
+  const results: EnrichedArticle[] = [];
+  for (const item of items.slice(0, 24)) {
+    const category = categoryForText(item.title + " " + item.contentSnippet, item.category);
+    const image =
+      item.image && /^https?:\/\//i.test(item.image)
+        ? {
+            image: item.image,
+            credit: item.source,
+            license: "Publisher feed image — verify rights before commercial reuse",
+            sourceUrl: item.link,
+          }
+        : await findWikimediaImage(item.title, category);
+
+    const aiData = await processArticleWithAI(item.title, item.contentSnippet);
+    const words = (item.title + " " + item.contentSnippet).split(/\s+/).length;
+
+    results.push({
+      id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
+      original_url: item.link,
+      image: image.image,
+      timestamp:
+        item.pubDate && !Number.isNaN(new Date(item.pubDate).getTime())
+          ? new Date(item.pubDate).toISOString()
+          : new Date().toISOString(),
+      source: item.source,
+      original_title: item.title,
+      original_description: item.contentSnippet,
       ai_hook_title: aiData.ai_hook_title,
       ai_summary: aiData.ai_summary,
       tags: aiData.tags,
-      read_time: `${Math.max(2, Math.ceil(words / 200))} min read`,
+      read_time: Math.max(2, Math.ceil(words / 180)) + " min read",
+      category,
+      trend_score: item.trend_score,
+      trend_label: item.trend_label,
+      image_credit: image.credit,
+      image_license: image.license,
+      image_source_url: image.sourceUrl,
+      discovered_via: item.discovered_via,
     });
   }
-  return enriched.length ? enriched : cachedArticles;
+  return results;
+}
+
+async function aggregateAndEnrichNews(): Promise<EnrichedArticle[]> {
+  const [rssItems, gdeltItems] = await Promise.all([fetchRawRssItems(), fetchGdeltItems()]);
+  const items = dedupeItems([...rssItems, ...gdeltItems]);
+  if (!items.length) return [];
+
+  const trended = applyTrendSignals(items)
+    .sort((a, b) => (b.trend_score || 0) - (a.trend_score || 0))
+    .slice(0, 24);
+
+  return enrichImages(trended);
 }
 
 async function persistToSupabase(articles: EnrichedArticle[]) {
   const sb = adminSupabase();
   if (!sb) return { saved: 0, skipped: true as const };
+
   let saved = 0;
   for (const a of articles) {
     const { error } = await sb.from("articles").upsert(
@@ -288,10 +505,11 @@ async function runIngest(force = false) {
   if (!force && now - lastFetchTimestamp < CACHE_TTL_MS && cachedArticles.length) {
     return { articles: cachedArticles, cached: true, persist: null };
   }
+
   const articles = await aggregateAndEnrichNews();
   cachedArticles = articles;
   lastFetchTimestamp = now;
-  const persist = await persistToSupabase(articles);
+  const persist = articles.length ? await persistToSupabase(articles) : null;
   return { articles, cached: false, persist };
 }
 
@@ -299,14 +517,23 @@ app.get("/api/news", async (req: Request, res: Response) => {
   try {
     const force = String(req.query.refresh || "") === "true";
     const result = await runIngest(force);
-    res.json({ articles: result.articles, cached: result.cached });
+    res.json({
+      articles: result.articles,
+      cached: result.cached,
+      sourceCount: new Set(result.articles.flatMap((a) => a.discovered_via || [a.source])).size,
+      generatedAt: new Date().toISOString(),
+    });
   } catch (e) {
-    console.error(e);
-    res.json({ articles: cachedArticles.length ? cachedArticles : INITIAL_SEED_ARTICLES });
+    console.error("[RWDNEWS] news ingest failed", e);
+    res.status(503).json({
+      articles: cachedArticles,
+      cached: true,
+      error: "Live news sources are temporarily unavailable.",
+      generatedAt: new Date().toISOString(),
+    });
   }
 });
 
-/** cron-job.org → every 30–60 min */
 app.get("/api/cron/ingest", async (req: Request, res: Response) => {
   if (!assertCronAuth(req)) {
     res.status(401).json({ ok: false, error: "Unauthorized" });
@@ -314,17 +541,9 @@ app.get("/api/cron/ingest", async (req: Request, res: Response) => {
   }
   try {
     const result = await runIngest(true);
-    res.json({
-      ok: true,
-      count: result.articles.length,
-      persist: result.persist,
-      at: new Date().toISOString(),
-    });
+    res.json({ ok: true, count: result.articles.length, persist: result.persist, at: new Date().toISOString() });
   } catch (e) {
-    res.status(500).json({
-      ok: false,
-      error: e instanceof Error ? e.message : "Ingest failed",
-    });
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : "Ingest failed" });
   }
 });
 
@@ -335,17 +554,9 @@ app.post("/api/cron/ingest", async (req: Request, res: Response) => {
   }
   try {
     const result = await runIngest(true);
-    res.json({
-      ok: true,
-      count: result.articles.length,
-      persist: result.persist,
-      at: new Date().toISOString(),
-    });
+    res.json({ ok: true, count: result.articles.length, persist: result.persist, at: new Date().toISOString() });
   } catch (e) {
-    res.status(500).json({
-      ok: false,
-      error: e instanceof Error ? e.message : "Ingest failed",
-    });
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : "Ingest failed" });
   }
 });
 
@@ -359,12 +570,9 @@ async function start() {
     app.use("*", async (req, res, next) => {
       try {
         const url = req.originalUrl;
-        let template = await vite.transformIndexHtml(
+        const template = await vite.transformIndexHtml(
           url,
-          await (await import("fs")).promises.readFile(
-            path.resolve("index.html"),
-            "utf-8",
-          ),
+          await (await import("fs")).promises.readFile(path.resolve("index.html"), "utf-8"),
         );
         res.status(200).set({ "Content-Type": "text/html" }).end(template);
       } catch (e) {
@@ -380,7 +588,7 @@ async function start() {
   }
 
   app.listen(PORT, () => {
-    console.log(`FinSignal on http://localhost:${PORT}`);
+    console.log("RWDNEWS on http://localhost:" + PORT);
   });
 }
 
