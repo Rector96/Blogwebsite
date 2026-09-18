@@ -111,17 +111,17 @@ async function generateAiImage(title: string, section: string, link: string) {
   const path = `generated/${imageKey(link)}.png`;
 
   try {
-    const existing = await db.storage.from("article-images").createSignedUrl(path, 60 * 60 * 24 * 30);
-    if (!existing.error && existing.data?.signedUrl) {
+    await db.storage.createBucket("article-images", { public: true }).catch(() => undefined);
+    const existing = db.storage.from("article-images").getPublicUrl(path).data.publicUrl;
+    const head = await fetch(existing, { method: "HEAD", signal: AbortSignal.timeout(2500) }).catch(() => null);
+    if (head?.ok) {
       return {
-        image: existing.data.signedUrl,
+        image: existing,
         credit: "RWDNEWS AI",
         license: "AI-generated with Google Gemini",
         sourceUrl: "",
       };
     }
-
-    await db.storage.createBucket("article-images", { public: true }).catch(() => undefined);
 
     const ai = new GoogleGenAI({ apiKey });
     const response = await Promise.race([
@@ -133,8 +133,12 @@ async function generateAiImage(title: string, section: string, link: string) {
           "No text, no captions, no logos, no watermarks added by the prompt, no charts with text. " +
           "Use a professional newspaper/magazine photography style, natural lighting, realistic people or places when appropriate, 16:9 composition. " +
           "Do not invent a recognizable real person's identity. Headline: " + title + " Category: " + section,
+        config: {
+          responseModalities: ["IMAGE"],
+          imageConfig: { aspectRatio: "16:9" },
+        },
       }),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("AI image timeout")), 9000)),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("AI image timeout")), 18000)),
     ]);
 
     const parts = (response as any)?.candidates?.[0]?.content?.parts || [];
@@ -339,7 +343,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
     return {
       id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
       original_url: item.link,
-      image,
+      image: image.image,
       timestamp: item.date && !Number.isNaN(new Date(item.date).getTime())
         ? new Date(item.date).toISOString()
         : new Date().toISOString(),
