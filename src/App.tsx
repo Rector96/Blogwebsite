@@ -110,7 +110,7 @@ function RwdNewsApp() {
   }, [saved]);
 
   useEffect(() => {
-    void fetchSponsors().then(setSponsors);
+    void fetchSponsors().then((items) => setSponsors(items.filter((item) => item.placement === "in_feed" || item.placement === "both")));
     void logRwdNewsEvent({ event: "page_view" });
   }, []);
 
