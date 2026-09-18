@@ -23,6 +23,13 @@ export interface EnrichedArticle {
   ai_summary: string[];
   tags: string[];
   read_time?: string;
+  category?: string;
+  trend_score?: number;
+  trend_label?: "Trending" | "Developing" | "Fresh";
+  image_credit?: string;
+  image_license?: string;
+  image_source_url?: string;
+  discovered_via?: string[];
 }
 
 const SEED_ARTICLES: EnrichedArticle[] = [
@@ -165,7 +172,7 @@ function normalizeTags(tags?: string[]) {
 }
 
 function RwdNewsApp() {
-  const [articles, setArticles] = useState<EnrichedArticle[]>(SEED_ARTICLES);
+  const [articles, setArticles] = useState<EnrichedArticle[]>([]);
   const [sponsors, setSponsors] = useState<SponsoredOffer[]>(FALLBACK_SPONSORS);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTag, setSelectedTag] = useState("All");
@@ -203,27 +210,19 @@ function RwdNewsApp() {
   const fetchNews = async () => {
     setRefreshing(true);
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from("articles")
-          .select("*")
-          .order("timestamp", { ascending: false })
-          .limit(50);
-        if (!error && data && data.length > 0) {
-          setArticles(
-            data.map((row) => ({
-              ...(row as EnrichedArticle),
-              tags: normalizeTags((row as EnrichedArticle).tags),
-            })),
-          );
-          setFeedSource("live");
-          return;
-        }
-      }
-      setArticles(SEED_ARTICLES);
-      setFeedSource("seed");
+      const response = await fetch("/api/news?refresh=true", {
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) throw new Error("Live news API unavailable");
+      const payload = (await response.json()) as {
+        articles?: EnrichedArticle[];
+      };
+      const liveArticles = Array.isArray(payload.articles) ? payload.articles : [];
+      setArticles(liveArticles);
+      setFeedSource(liveArticles.length ? "live" : "seed");
     } catch {
-      setArticles(SEED_ARTICLES);
+      // The site must not silently turn old/fabricated seed content into "real news".
+      setArticles([]);
       setFeedSource("seed");
     } finally {
       setRefreshing(false);
@@ -235,15 +234,20 @@ function RwdNewsApp() {
   }, []);
 
   const tags = useMemo(() => {
-    const s = new Set<string>();
-    articles.forEach((a) => normalizeTags(a.tags).forEach((t) => s.add(t)));
-    return ["All", ...Array.from(s)];
+    const categories = new Set<string>();
+    articles.forEach((a) => {
+      if (a.category) categories.add(a.category);
+    });
+    return ["All", ...Array.from(categories)];
   }, [articles]);
 
   const filtered = useMemo(() => {
     return articles.filter((a) => {
       const t = normalizeTags(a.tags);
-      const tagOk = selectedTag === "All" || t.includes(selectedTag);
+      const tagOk =
+        selectedTag === "All" ||
+        a.category === selectedTag ||
+        t.includes(selectedTag);
       const q = searchQuery.trim().toLowerCase();
       if (!q) return tagOk;
       const blob = [a.ai_hook_title, a.original_title, a.source, ...(a.ai_summary || []), ...t]
@@ -386,9 +390,14 @@ function RwdNewsApp() {
                       className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
                     />
                   </div>
-                  <p className="mt-3 text-[11px] font-bold tracking-[0.14em] text-amber-800 uppercase">
-                    {hero.source} · {formatRelativeTime(hero.timestamp)}
-                  </p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-[0.14em] uppercase">
+                    <span className="text-amber-800">{hero.source}</span>
+                    {hero.category ? <span className="text-neutral-400">· {hero.category}</span> : null}
+                    <span className="text-neutral-400">· {formatRelativeTime(hero.timestamp)}</span>
+                    {hero.trend_label && hero.trend_label !== "Fresh" ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-900">{hero.trend_label}</span>
+                    ) : null}
+                  </div>
                   <h1 className="font-display mt-1 text-2xl leading-[1.15] font-semibold sm:text-3xl lg:text-[2.15rem]">
                     {hero.ai_hook_title || hero.original_title}
                   </h1>
@@ -404,6 +413,9 @@ function RwdNewsApp() {
                       className="story-row cursor-pointer py-4 first:pt-0"
                       onClick={() => setActive(a)}
                     >
+                      <div className="mb-3 overflow-hidden bg-neutral-100">
+                        <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                      </div>
                       <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
                         {a.source} · {formatRelativeTime(a.timestamp)}
                       </p>
@@ -421,6 +433,39 @@ function RwdNewsApp() {
           <div className="py-5">
             <div className="ad-slot ad-slot-infeed">Advertisement</div>
           </div>
+
+          <section className="mb-8">
+            <div className="mb-3 flex items-center justify-between border-b border-neutral-900 pb-2">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-800 uppercase">Live signal</p>
+                <h2 className="font-display text-xl font-semibold">Trending now</h2>
+              </div>
+              <span className="text-[11px] text-neutral-400">Source-backed</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {filtered
+                .filter((a) => a.trend_label === "Trending" || (a.trend_score || 0) >= 55)
+                .slice(0, 3)
+                .map((a) => (
+                  <button
+                    key={"trend-" + a.id}
+                    type="button"
+                    onClick={() => setActive(a)}
+                    className="group overflow-hidden border border-neutral-200 bg-white text-left"
+                  >
+                    <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <div className="p-3">
+                      <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
+                        {a.category || "World"} · {a.trend_label || "Fresh"}
+                      </p>
+                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold leading-snug">
+                        {a.ai_hook_title || a.original_title}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+            </div>
+          </section>
 
           <section>
             <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
@@ -462,11 +507,33 @@ function RwdNewsApp() {
                 </React.Fragment>
               ))}
             </div>
+            {filtered.length === 0 ? (
+              <div className="border border-neutral-200 bg-neutral-50 p-8 text-center">
+                <p className="font-display text-xl font-semibold">Live stories are loading.</p>
+                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-neutral-500">
+                  RWDNEWS only displays source-backed stories. If the live wire is temporarily unavailable, we will not fill the feed with fabricated headlines.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void fetchNews()}
+                  className="press mt-4 h-10 rounded-full bg-neutral-950 px-5 text-xs font-bold text-white"
+                >
+                  Retry live wire
+                </button>
+              </div>
+            ) : null}
           </section>
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
           <div className="ad-slot ad-slot-sidebar">Advertisement</div>
+          <div className="border border-neutral-200 bg-neutral-50 p-4">
+            <p className="text-[10px] font-bold tracking-[0.16em] text-teal-800 uppercase">RWDNEWS standard</p>
+            <p className="mt-1 text-sm font-semibold">Source-backed first. AI-assisted second.</p>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+              Headlines and briefings are generated from discovered publisher reports; the original source stays one tap away.
+            </p>
+          </div>
           <div className="border border-neutral-200 bg-neutral-950 p-5 text-white">
             <p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Newsletter</p>
             <h3 className="font-display mt-2 text-xl font-semibold">RWDNEWS Brief</h3>
