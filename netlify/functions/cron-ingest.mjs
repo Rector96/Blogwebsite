@@ -34,11 +34,47 @@ const IMAGES = [
   "https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1200&q=80",
 ];
 
-function stripTags(s) {
+function decodeEntities(s) {
   return String(s || "")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) =>
+      String.fromCodePoint(parseInt(h, 16)),
+    )
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(parseInt(n, 10)))
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&ldquo;|&rdquo;|&lsquo;|&rsquo;/g, (m) =>
+      ({
+        "&ldquo;": "\u201c",
+        "&rdquo;": "\u201d",
+        "&lsquo;": "\u2018",
+        "&rsquo;": "\u2019",
+      })[m],
+    );
+}
+
+function stripTags(s) {
+  return decodeEntities(
+    String(s || "")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  );
+}
+
+function extractImage(block) {
+  const media =
+    block.match(
+      /<media:content[^>]+url=["']([^"']+)["']/i,
+    )?.[1] ||
+    block.match(/<media:thumbnail[^>]+url=["']([^"']+)["']/i)?.[1] ||
+    block.match(/<enclosure[^>]+url=["']([^"']+)["'][^>]*type=["']image/i)?.[1] ||
+    block.match(/<img[^>]+src=["']([^"']+)["']/i)?.[1];
+  if (media && media.startsWith("http")) return media;
+  return null;
 }
 
 function parseRssItems(xml, source) {
@@ -70,6 +106,7 @@ function parseRssItems(xml, source) {
         description: stripTags(description).slice(0, 500),
         pubDate: pubDate ? stripTags(pubDate) : undefined,
         source,
+        image: extractImage(block),
       });
     }
   }
@@ -184,7 +221,7 @@ export async function handler(event) {
         ai_summary: ai.ai_summary,
         tags: ai.tags,
         source: item.source,
-        image: IMAGES[i % IMAGES.length],
+        image: item.image || IMAGES[i % IMAGES.length],
         read_time: "3 min read",
         timestamp: item.pubDate
           ? new Date(item.pubDate).toISOString()
