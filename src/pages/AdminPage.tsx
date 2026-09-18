@@ -16,6 +16,7 @@ async function api(path: string, options?: RequestInit) {
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
@@ -36,6 +37,7 @@ export default function AdminPage() {
 
   const login = async (e: FormEvent) => {
     e.preventDefault();
+    setError("");
     try {
       await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "login", password }) });
       setPassword("");
@@ -80,8 +82,26 @@ export default function AdminPage() {
           <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">Private</p>
           <h1 className="font-display mt-2 text-3xl font-semibold">RWDNEWS Admin</h1>
           <p className="mt-2 text-sm text-neutral-500">Sponsors, advertiser leads and engagement reporting.</p>
-          <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-5 h-11 w-full border px-3" placeholder="Admin password" required />
-          <button className="mt-3 h-11 w-full bg-neutral-950 text-sm font-bold text-white">Sign in</button>
+          <div className="relative mt-5">
+            <input
+              type={showPassword ? "text" : "password"}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="h-11 w-full border px-3 pr-20"
+              placeholder="Admin password"
+              autoComplete="current-password"
+              required
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(value => !value)}
+              className="absolute top-1/2 right-2 -translate-y-1/2 px-2 py-1 text-xs font-semibold text-neutral-500"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
+          <button disabled={busy} className="mt-3 h-11 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50">Sign in</button>
           {error ? <p className="mt-3 text-xs text-red-700">{error}</p> : null}
         </form>
       </div>
