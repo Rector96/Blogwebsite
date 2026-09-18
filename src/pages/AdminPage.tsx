@@ -59,6 +59,19 @@ export default function AdminPage() {
     } catch (e) { setError(e instanceof Error ? e.message : "Update failed"); }
   };
 
+  const logout = async () => {
+    setBusy(true);
+    try {
+      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "logout" }) });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Logout failed");
+    } finally {
+      setBusy(false);
+      setAuthed(false);
+      setData(null);
+    }
+  };
+
   if (!authed || !data) {
     return (
       <div className="grid min-h-dvh place-items-center bg-neutral-950 p-4">
