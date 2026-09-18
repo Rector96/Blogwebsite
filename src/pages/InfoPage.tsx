@@ -48,7 +48,7 @@ function AdvertisePage() {
     const reference = params.get("reference");
     if (!reference || params.get("payment") !== "callback") return;
     setBusy(true);
-    fetch("/.netlify/functions/paystack-verify?reference=" + encodeURIComponent(reference))
+    fetch("/api/paystack/verify?reference=" + encodeURIComponent(reference))
       .then(r => r.json())
       .then(result => setMessage(result.ok ? "Payment received. Your campaign is now awaiting admin approval." : "We could not confirm this payment yet. Please contact RWDNEWS with your payment reference."))
       .catch(() => setMessage("We could not confirm the payment yet. Please contact RWDNEWS with your payment reference."))
