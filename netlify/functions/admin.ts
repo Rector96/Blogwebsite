@@ -149,7 +149,11 @@ export default async (req: Request) => {
       const response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload?.status) return json({ error: payload?.message || "Paystack verification failed." }, 502);
-      const amountOk = Number(payload.data?.amount) === Number((await database.from("sponsor_payments").select("amount_kobo").eq("reference", reference).maybeSingle()).data?.amount_kobo);
+      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,currency").eq("reference", reference).maybeSingle()).data;
+      const expectedCurrency = String(paymentRow?.currency || "NGN").toUpperCase();
+      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? 0);
+      const amountOk = String(payload.data?.currency || "").toUpperCase() === expectedCurrency
+        && Number(payload.data?.amount) === expectedAmount;
       const status = payload.data?.status === "success" && amountOk ? "paid" : (payload.data?.status === "failed" ? "failed" : "pending");
       await database.from("sponsor_payments").update({ status, paystack_status: String(payload.data?.status || ""), paystack_transaction_id: payload.data?.id ? String(payload.data.id) : null, paid_at: status === "paid" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq("reference", reference);
       await audit(database, "payment_verified", "sponsor_payment", reference, { status });
