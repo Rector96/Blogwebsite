@@ -8,9 +8,12 @@ function db() {
   return url && key ? createClient(url, key) : null;
 }
 function signature(payload: string) {
-  return createHmac("sha256", env("ADMIN_SESSION_SECRET") || env("CRON_SECRET")).update(payload).digest("hex");
+  const secret = env("ADMIN_SESSION_SECRET");
+  if (!secret) throw new Error("ADMIN_SESSION_SECRET is not configured.");
+  return createHmac("sha256", secret).update(payload).digest("hex");
 }
 function sessionCookie() {
+  if (!env("ADMIN_SESSION_SECRET")) throw new Error("ADMIN_SESSION_SECRET is not configured.");
   const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 1000 * 60 * 60 * 12 })).toString("base64url");
   return "rwdnews_admin=" + payload + "." + signature(payload) + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=43200";
 }
@@ -38,7 +41,7 @@ export default async (req: Request) => {
     const body = await req.json().catch(() => ({}));
     if (body.action === "login") {
       const password = env("ADMIN_PASSWORD");
-      if (!password || String(body.password || "") !== password) {
+      if (!password || !env("ADMIN_SESSION_SECRET") || String(body.password || "") !== password) {
         return new Response(JSON.stringify({ error: "Invalid password." }), { status: 401, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json", "set-cookie": sessionCookie() } });
