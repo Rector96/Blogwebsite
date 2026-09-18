@@ -165,7 +165,7 @@ export default async (req: Request) => {
     database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").order("created_at", { ascending: false }).limit(20000),
     database.from("sponsor_payments").select("id,reference,package_code,package_name,amount_naira,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(200),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("articles").select("id,original_title,ai_hook_title,source,category,timestamp,editorial_status,featured,pinned").order("timestamp", { ascending: false }).limit(100),
+    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
   ]);
 
