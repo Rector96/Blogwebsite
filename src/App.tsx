@@ -111,6 +111,7 @@ function RwdNewsApp() {
 
   useEffect(() => {
     void fetchSponsors().then(setSponsors);
+    void logRwdNewsEvent({ event: "page_view" });
   }, []);
 
   const fetchNews = async () => {
