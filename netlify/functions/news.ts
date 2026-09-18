@@ -97,6 +97,70 @@ function rssImage(item: any) {
   ].find((x) => typeof x === "string" && /^https?:\/\//i.test(x)) || "";
 }
 
+function imageKey(link: string) {
+  return Buffer.from(link).toString("base64url").slice(0, 48);
+}
+
+async function generateAiImage(title: string, section: string, link: string) {
+  const apiKey = Netlify.env.get("GEMINI_API_KEY");
+  const supabaseUrl = Netlify.env.get("SUPABASE_URL") || Netlify.env.get("VITE_SUPABASE_URL");
+  const serviceKey = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!apiKey || !supabaseUrl || !serviceKey) return null;
+
+  const db = createClient(supabaseUrl, serviceKey);
+  const path = `generated/${imageKey(link)}.png`;
+
+  try {
+    const existing = await db.storage.from("article-images").createSignedUrl(path, 60 * 60 * 24 * 30);
+    if (!existing.error && existing.data?.signedUrl) {
+      return {
+        image: existing.data.signedUrl,
+        credit: "RWDNEWS AI",
+        license: "AI-generated with Google Gemini",
+        sourceUrl: "",
+      };
+    }
+
+    await db.storage.createBucket("article-images", { public: true }).catch(() => undefined);
+
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents:
+          "Create a photorealistic editorial news photograph for RWDNEWS. " +
+          "The image must visually represent the subject of the supplied headline and category. " +
+          "No text, no captions, no logos, no watermarks added by the prompt, no charts with text. " +
+          "Use a professional newspaper/magazine photography style, natural lighting, realistic people or places when appropriate, 16:9 composition. " +
+          "Do not invent a recognizable real person's identity. Headline: " + title + " Category: " + section,
+      }),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("AI image timeout")), 9000)),
+    ]);
+
+    const parts = (response as any)?.candidates?.[0]?.content?.parts || [];
+    const imagePart = parts.find((part: any) => part?.inlineData?.data);
+    if (!imagePart?.inlineData?.data) return null;
+
+    const buffer = Buffer.from(imagePart.inlineData.data, "base64");
+    const mimeType = imagePart.inlineData.mimeType || "image/png";
+    const upload = await db.storage.from("article-images").upload(path, buffer, {
+      contentType: mimeType,
+      upsert: true,
+    });
+    if (upload.error) return null;
+
+    const publicUrl = db.storage.from("article-images").getPublicUrl(path).data.publicUrl;
+    return {
+      image: publicUrl,
+      credit: "RWDNEWS AI",
+      license: "AI-generated with Google Gemini",
+      sourceUrl: "",
+    };
+  } catch {
+    return null;
+  }
+}
+
 async function getRss() {
   const results = await Promise.allSettled(
     feeds.map(async ([url, source]) => {
@@ -257,7 +321,21 @@ async function buildArticles(): Promise<NewsArticle[]> {
   const results = await Promise.all(items.map(async (item) => {
     const section = category(item.title + " " + item.desc, item.category);
     const brief = await aiBrief(item.title, item.desc);
-    const image = item.image && /^https?:\/\//i.test(item.image) ? item.image : svgImage(item.title, section);
+    const sourceImage = item.image && /^https?:\/\//i.test(item.image)
+      ? {
+          image: item.image,
+          credit: item.source,
+          license: "Publisher feed image — verify rights before commercial reuse",
+          sourceUrl: item.link,
+        }
+      : null;
+    const aiImage = sourceImage ? null : await generateAiImage(item.title, section, item.link);
+    const image = sourceImage || aiImage || {
+      image: svgImage(item.title, section),
+      credit: "RWDNEWS editorial fallback",
+      license: "RWDNEWS generated",
+      sourceUrl: "",
+    };
     return {
       id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
       original_url: item.link,
@@ -275,9 +353,9 @@ async function buildArticles(): Promise<NewsArticle[]> {
       category: section,
       trend_score: item.trendScore,
       trend_label: item.trendLabel,
-      image_credit: item.image ? item.source : "RWDNEWS editorial graphic",
-      image_license: item.image ? "Publisher feed image — verify rights before commercial reuse" : "RWDNEWS generated",
-      image_source_url: item.image ? item.link : "",
+      image_credit: image.credit,
+      image_license: image.license,
+      image_source_url: image.sourceUrl,
       discovered_via: item.sources,
     } satisfies NewsArticle;
   }));
