@@ -10,7 +10,7 @@ export default async () => {
 
   if (url && key) {
     const db = createClient(url, key);
-    const { data } = await db.from("articles").select("id,original_title,ai_hook_title").order("timestamp", { ascending: false }).limit(500);
+    const { data } = await db.from("articles").select("id,original_title,ai_hook_title,timestamp").order("timestamp", { ascending: false }).limit(500);
     storyUrls = (data || []).map((a: any) => {
       const title = String(a.ai_hook_title || a.original_title || "").toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
       return site.replace(/\/$/, "") + "/news/" + title + "--" + encodeURIComponent(String(a.id));
@@ -19,9 +19,10 @@ export default async () => {
 
   const staticPaths = ["/", "/about", "/editorial", "/advertise", "/privacy", "/terms"];
   const urls = [...staticPaths.map(p => site.replace(/\/$/, "") + p), ...storyUrls];
-  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
-    urls.map(u => "<url><loc>" + escapeXml(u) + "</loc></url>").join("") +
-    "</urlset>";
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+    urls.map(u => '<url><loc>' + escapeXml(u) + '</loc></url>').join("") +
+    '</urlset>';
 
   return new Response(xml, { headers: { "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=900, stale-while-revalidate=3600" } });
 };
