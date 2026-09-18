@@ -17,6 +17,7 @@ export default function StoryPage() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    void logRwdNewsEvent({ event: "page_view", placement: "story_page" });
     const id = currentStoryId();
     let cancelled = false;
     async function load() {
