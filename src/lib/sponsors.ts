@@ -49,7 +49,7 @@ export const FALLBACK_SPONSORS: SponsoredOffer[] = [
 ];
 
 export async function fetchSponsors(): Promise<SponsoredOffer[]> {
-  if (!isSupabaseConfigured || !supabase) return FALLBACK_SPONSORS;
+  if (!isSupabaseConfigured || !supabase) return [];
   const { data, error } = await supabase
     .from("sponsors")
     .select(
@@ -58,7 +58,7 @@ export async function fetchSponsors(): Promise<SponsoredOffer[]> {
     .eq("active", true)
     .order("priority", { ascending: true });
 
-  if (error || !data?.length) return FALLBACK_SPONSORS;
+  if (error || !data?.length) return [];
 
   return data.map((row) => ({
     id: String(row.id),
