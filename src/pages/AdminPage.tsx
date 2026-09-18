@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Helmet } from "react-helmet-async";
 
 type Dashboard = {
@@ -33,7 +33,7 @@ export default function AdminPage() {
 
   useEffect(() => { void load(); }, []);
 
-  const login = async (e: React.FormEvent) => {
+  const login = async (e: FormEvent) => {
     e.preventDefault();
     try {
       await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "login", password }) });
