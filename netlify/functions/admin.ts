@@ -48,7 +48,10 @@ export default async (req: Request) => {
     }
     if (!authorized(req)) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
 
-    if (body.action === "logout") {\n      return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json", "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" } });\n    }\n    if (body.action === "sponsor_status") {
+    if (body.action === "logout") {
+      return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json", "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" } });
+    }
+    if (body.action === "sponsor_status") {
       const { error } = await database.from("sponsors").update({ active: Boolean(body.active), updated_at: new Date().toISOString() }).eq("id", String(body.id));
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { "content-type": "application/json" } });
       return Response.json({ ok: true });
