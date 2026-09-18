@@ -9,6 +9,12 @@
 
 # Function first — must be above SPA fallback
 [[redirects]]
+  from = "/api/news"
+  to = "/.netlify/functions/news"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/cron/ingest"
   to = "/.netlify/functions/cron-ingest"
   status = 200
