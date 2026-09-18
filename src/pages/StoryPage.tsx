@@ -24,21 +24,24 @@ export default function StoryPage() {
     let cancelled = false;
     async function load() {
       try {
+        let foundArticle: EnrichedArticle | null = null;
         if (supabase && id) {
           const { data } = await supabase.from("articles").select("*").eq("id", id).maybeSingle();
-          if (data && !cancelled) {
-            setArticle({
+          if (data) {
+            foundArticle = {
               ...data,
               ai_summary: Array.isArray(data.ai_summary) ? data.ai_summary : [],
               tags: Array.isArray(data.tags) ? data.tags : [],
-            } as EnrichedArticle);
+            } as EnrichedArticle;
           }
         }
-        if (!article && id) {
+        if (!foundArticle && id) {
           const response = await fetch("/api/news");
           const payload = await response.json();
           const found = Array.isArray(payload.articles) ? payload.articles.find((x: EnrichedArticle) => x.id === id) : null;
-          if (found && !cancelled) setArticle(found);
+          if (found) foundArticle = found;
+        }
+        if (foundArticle && !cancelled) setArticle(foundArticle);
         }
       } finally {
         if (!cancelled) setLoading(false);
