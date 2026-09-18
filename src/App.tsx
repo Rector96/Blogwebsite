@@ -564,7 +564,7 @@ function RwdNewsApp() {
           <div className="border border-neutral-200 bg-neutral-950 p-5 text-white">
             <p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Newsletter</p>
             <h3 className="font-display mt-2 text-xl font-semibold">RWDNEWS Brief</h3>
-            <p className="mt-1 text-sm text-neutral-400">Markets & fintech — weekly.</p>
+            <p className="mt-1 text-sm text-neutral-400">Global news & trends — weekly.</p>
             <form onSubmit={submitNewsletter} className="mt-4 space-y-2">
               <input
                 type="email"
