@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { applyPayment, database, env, json } from "./paystack-verify";
+import { applyPayment } from "./paystack-verify";
+import { database, env, json } from "../../src/lib/paystack-server";
 
 export default async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
