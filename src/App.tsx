@@ -477,7 +477,7 @@ function RwdNewsApp() {
                   <button
                     key={"trend-" + a.id}
                     type="button"
-                    onClick={() => setActive(a)}
+                    onClick={() => openArticle(a)}
                     className="group overflow-hidden border border-neutral-200 bg-white text-left"
                   >
                     <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
@@ -504,7 +504,7 @@ function RwdNewsApp() {
                 <React.Fragment key={a.id}>
                   <article
                     className="story-row flex cursor-pointer gap-4 py-5"
-                    onClick={() => setActive(a)}
+                    onClick={() => openArticle(a)}
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
