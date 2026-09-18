@@ -1,4 +1,4 @@
-import { database, SPONSOR_PACKAGES, cleanText, env, json, makeReference, paystackRequest, type SponsorPackageCode } from "./_paystack";
+import { database, SPONSOR_PACKAGES, cleanText, env, json, makeReference, paystackRequest, type SponsorPackageCode } from "../../src/lib/paystack-server";
 
 export default async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
