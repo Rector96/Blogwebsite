@@ -52,6 +52,20 @@ export default async (req: Request) => {
     }
     if (!authorized(req)) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { "content-type": "application/json" } });
     if (body.action === "logout") return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json", "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" } });
+    if (body.action === "sponsor_create") {
+      const sponsorName = String(body.sponsor_name || "").trim();
+      const headline = String(body.headline || "").trim();
+      const ctaUrl = String(body.cta_url || "").trim();
+      if (!sponsorName || !headline || !/^https?:\/\//i.test(ctaUrl)) {
+        return new Response(JSON.stringify({ error: "Sponsor name, headline and a valid http(s) URL are required." }), { status: 400, headers: { "content-type": "application/json" } });
+      }
+      const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
+      const { error } = await database.from("sponsors").insert({
+        slug, sponsor_name: sponsorName, headline, why_matters: [], cta_text: String(body.cta_text || "Learn more"), cta_url: ctaUrl, rate_highlight: "", disclosure: String(body.disclosure || "Sponsored · Paid placement"), placement: String(body.placement || "sidebar"), priority: 100, monthly_fee_usd: body.monthly_fee_usd === null ? null : Number(body.monthly_fee_usd || 0), active: true,
+      });
+      if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { "content-type": "application/json" } });
+      return Response.json({ ok: true });
+    }
     if (body.action === "sponsor_status") {
       const { error } = await database.from("sponsors").update({ active: Boolean(body.active), updated_at: new Date().toISOString() }).eq("id", String(body.id));
       if (error) return new Response(JSON.stringify({ error: error.message }), { status: 400, headers: { "content-type": "application/json" } });
