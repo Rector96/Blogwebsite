@@ -1,24 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Helmet, HelmetProvider } from 'react-helmet-async';
-import { 
-  ExternalLink, 
-  Search, 
-  Bookmark, 
-  BookmarkCheck, 
-  RotateCw, 
-  Clock, 
-  Sparkles,
-  Shield,
-  ShieldAlert,
+import React, { useEffect, useMemo, useState } from "react";
+import { Helmet, HelmetProvider } from "react-helmet-async";
+import {
+  Bookmark,
+  BookmarkCheck,
+  ExternalLink,
+  Menu,
+  RefreshCw,
+  Search,
   X,
-  FileText,
-  CheckCircle2,
-  TrendingUp,
-  Star,
-  Award,
-  Database
-} from 'lucide-react';
-import { supabase, isSupabaseConfigured } from './lib/supabase';
+  Zap,
+} from "lucide-react";
+import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 export interface EnrichedArticle {
   id: string;
@@ -37,8 +29,6 @@ export interface EnrichedArticle {
 export interface SponsoredOffer {
   id: string;
   sponsorName: string;
-  sponsorBadge: string;
-  tags: string[];
   headline: string;
   whyMatters: string[];
   ctaText: string;
@@ -47,1685 +37,708 @@ export interface SponsoredOffer {
   disclosure: string;
 }
 
-// Initial default articles ensure zero flash of empty content
 const INITIAL_ARTICLES: EnrichedArticle[] = [
   {
-    id: 'news-init-1',
-    original_url: 'https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps',
-    image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=800&q=80',
+    id: "news-init-1",
+    original_url:
+      "https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps",
+    image:
+      "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=1200&q=80",
     timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    source: 'MarketWatch',
-    original_title: 'Treasury Yield Inversion Normalizes as Neobanks Shift Savings Sweep Yields to 5.15%',
-    original_description: 'Digital banking platforms leverage multi-bank custodial networks to deliver elevated cash yields directly to consumer transaction accounts while maintaining immediate withdrawal access.',
-    ai_hook_title: 'High-Yield Cash Sweeps Reach 5.15% APY as Fintechs Compete for Uninvested Deposits',
+    source: "MarketWatch",
+    original_title:
+      "Treasury Yield Inversion Normalizes as Neobanks Shift Savings Sweep Yields to 5.15%",
+    original_description:
+      "Digital banking platforms leverage multi-bank custodial networks to deliver elevated cash yields.",
+    ai_hook_title:
+      "High-yield cash sweeps hit 5.15% as fintechs compete for uninvested deposits",
     ai_summary: [
-      'Cash yields have detached from legacy 0.01% savings rates, granting disciplined households hundreds in passive interest income without risk.',
-      'Multi-bank sweep syndicates insure retail balances up to $5M, transforming personal cash savings into institutional-grade reserves.'
+      "Cash yields have detached from near-zero legacy savings rates for households that actively shop banks.",
+      "Multi-bank sweeps can extend deposit insurance coverage while keeping liquidity.",
     ],
-    tags: ['#Fintech', '#Banking', '#PersonalFinance'],
-    read_time: '3 min read'
+    tags: ["#Banking", "#PersonalFinance", "#Fintech"],
+    read_time: "3 min read",
   },
   {
-    id: 'news-init-2',
-    original_url: 'https://www.consumerfinance.gov/about-us/newsroom/cfpb-finalizes-personal-financial-data-rights/',
-    image: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=800&q=80',
+    id: "news-init-2",
+    original_url:
+      "https://www.consumerfinance.gov/about-us/newsroom/cfpb-finalizes-personal-financial-data-rights/",
+    image:
+      "https://images.unsplash.com/photo-1559526324-4b87b5e36e44?auto=format&fit=crop&w=1200&q=80",
     timestamp: new Date(Date.now() - 45 * 60 * 1000).toISOString(),
-    source: 'CFPB Wire',
-    original_title: 'CFPB Rule 1033 Mandates Consumer Financial Data Portability Across Brokerages and Banks',
-    original_description: 'The final open banking rules phase out screen-scraping authentication in favor of secure bank-level APIs, granting account holders instant ownership of loan and transaction records.',
-    ai_hook_title: 'Open Banking Rule 1033 Finalized: Secure API Portability Eliminates Password Scraping',
+    source: "CFPB",
+    original_title:
+      "CFPB Rule 1033 Mandates Consumer Financial Data Portability Across Brokerages and Banks",
+    original_description:
+      "Open banking rules phase out screen-scraping in favor of secure bank-level APIs.",
+    ai_hook_title:
+      "Open banking Rule 1033: secure API portability aims to end password scraping",
     ai_summary: [
-      'Prohibits opaque credential scraping, replacing password sharing with cryptographically signed, revocable bank tokens.',
-      'Empowers budget aggregators and debt refi engines to pinpoint lower interest options automatically with zero manual friction.'
+      "Regulators want signed, revocable bank tokens instead of shared credentials.",
+      "Budget and refinancing apps can connect accounts with less friction — when banks comply.",
     ],
-    tags: ['#Fintech', '#Regulation', '#Banking'],
-    read_time: '4 min read'
+    tags: ["#Regulation", "#Fintech", "#Banking"],
+    read_time: "4 min read",
   },
   {
-    id: 'news-init-3',
-    original_url: 'https://www.finextra.com/newsarticle/realtime-payroll-earned-wage-access',
-    image: 'https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=800&q=80',
+    id: "news-init-3",
+    original_url:
+      "https://www.finextra.com/newsarticle/realtime-payroll-earned-wage-access",
+    image:
+      "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?auto=format&fit=crop&w=1200&q=80",
     timestamp: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
-    source: 'Finextra',
-    original_title: 'Real-Time Payroll Integrations Displace Traditional Payday Lending with Earned Wage Access',
-    original_description: 'Direct payroll API bridges allow hourly wage earners to draw accrued income on demand, avoiding predatory overdraft penalties and triple-digit APR payday cycles.',
-    ai_hook_title: 'Real-Time Payroll Rails Expand Earned Wage Access to Curtail Payday Loan Debt',
+    source: "Finextra",
+    original_title:
+      "Real-Time Payroll Integrations Displace Traditional Payday Lending with Earned Wage Access",
+    original_description:
+      "Payroll API bridges let workers draw accrued income between pay cycles.",
+    ai_hook_title:
+      "Earned wage access expands as employers plug into real-time payroll rails",
     ai_summary: [
-      'Hourly workers access earned income instantaneously between payroll cycles, shielding bank accounts from overdraft fines.',
-      'Bypasses predatory triple-digit short-term debt traps with zero-fee employer-integrated liquidity rails.'
+      "Workers can access earned pay early — reducing overdraft and payday-loan pressure when products are well designed.",
+      "Employer integration is the distribution channel that pure consumer apps often lack.",
     ],
-    tags: ['#Fintech', '#Payments', '#PersonalFinance'],
-    read_time: '3 min read'
+    tags: ["#Payments", "#Fintech", "#PersonalFinance"],
+    read_time: "3 min read",
   },
   {
-    id: 'news-init-4',
-    original_url: 'https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail',
-    image: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=800&q=80',
+    id: "news-init-4",
+    original_url:
+      "https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail",
+    image:
+      "https://images.unsplash.com/photo-1563986768609-322da13575f3?auto=format&fit=crop&w=1200&q=80",
     timestamp: new Date(Date.now() - 140 * 60 * 1000).toISOString(),
-    source: 'Yahoo Finance',
-    original_title: 'Robo-Advisors Integrate Direct Indexing to Harvest Micro-Cap Tax Losses Year-Round',
-    original_description: 'Retail wealth platforms replace standard ETF baskets with fractional bespoke stock indexes, generating continuous tax alpha for portfolios under ten thousand dollars.',
-    ai_hook_title: 'Direct Indexing & Algorithmic Tax Harvesting Expand to Sub-$10K Retail Portfolios',
+    source: "Yahoo Finance",
+    original_title:
+      "Robo-Advisors Integrate Direct Indexing to Harvest Micro-Cap Tax Losses Year-Round",
+    original_description:
+      "Retail platforms replace ETF baskets with fractional stock indexes for tax alpha.",
+    ai_hook_title:
+      "Direct indexing brings tax-loss harvesting to smaller taxable accounts",
     ai_summary: [
-      'Continuous daily tax-alpha scanning once reserved for private banking clients with $1M+ AUM is now available to small savers.',
-      'Systematically creates tax deductions to offset wage income while maintaining balanced market sector allocations.'
+      "Tools once limited to high-net-worth desks are packaging for mass-affluent investors.",
+      "After-tax outcomes — not just headline returns — are the product story.",
     ],
-    tags: ['#Investing', '#WealthTech', '#PersonalFinance'],
-    read_time: '4 min read'
+    tags: ["#Investing", "#WealthTech", "#PersonalFinance"],
+    read_time: "4 min read",
   },
   {
-    id: 'news-init-5',
-    original_url: 'https://www.federalreserve.gov/paymentsystems/fednow_about.htm',
-    image: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=800&q=80',
+    id: "news-init-5",
+    original_url: "https://www.federalreserve.gov/paymentsystems/fednow_about.htm",
+    image:
+      "https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?auto=format&fit=crop&w=1200&q=80",
     timestamp: new Date(Date.now() - 210 * 60 * 1000).toISOString(),
-    source: 'FedNow Clearing',
-    original_title: 'Instant Account-to-Account Settlement Disables Legacy Debit Interchange Surcharges',
-    original_description: 'Merchants and consumer fintechs partner on direct bank-rail payments via FedNow, offering consumers instant 2% cash rebates by bypassing card network clearing fees.',
-    ai_hook_title: 'FedNow Instant A2A Payments Bypass Card Surcharges with Direct Consumer Cash Rebates',
+    source: "Federal Reserve",
+    original_title:
+      "Instant Account-to-Account Settlement Disables Legacy Debit Interchange Surcharges",
+    original_description:
+      "Fintechs and merchants experiment with FedNow for instant A2A payments.",
+    ai_hook_title:
+      "Instant A2A rails pressure card interchange — and change checkout economics",
     ai_summary: [
-      'Eliminates legacy 3-day ACH settlement friction, unlocking instant dividend reinvestment and real-time bank transfers.',
-      'Direct account-to-account checkout allows digital merchants to pass card interchange savings back to shoppers.'
+      "Faster settlement changes float, refunds, and cash-flow for merchants and consumers.",
+      "Whether savings reach shoppers depends on competition, not the rail alone.",
     ],
-    tags: ['#Payments', '#Fintech', '#Banking'],
-    read_time: '3 min read'
+    tags: ["#Payments", "#Fintech", "#Banking"],
+    read_time: "3 min read",
   },
   {
-    id: 'news-init-6',
-    original_url: 'https://techcrunch.com/fintech/cash-flow-underwriting-credit-revolution',
-    image: 'https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=800&q=80',
+    id: "news-init-6",
+    original_url:
+      "https://techcrunch.com/fintech/cash-flow-underwriting-credit-revolution",
+    image:
+      "https://images.unsplash.com/photo-1551836022-d5d88e9218df?auto=format&fit=crop&w=1200&q=80",
     timestamp: new Date(Date.now() - 320 * 60 * 1000).toISOString(),
-    source: 'TechCrunch',
-    original_title: 'Subprime Credit Scoring Upgraded with Cash-Flow Analytics Over Rigid Bureau Ratings',
-    original_description: 'Challenger credit card issuers harness live bank statement verification to approve prime rate revolvers for gig workers and young professionals without traditional FICO depth.',
-    ai_hook_title: 'Cash-Flow Underwriting Replaces Rigid FICO Bureau Ratings for Next-Gen Credit Cards',
+    source: "TechCrunch",
+    original_title:
+      "Subprime Credit Scoring Upgraded with Cash-Flow Analytics Over Rigid Bureau Ratings",
+    original_description:
+      "Issuers use live bank data to underwrite thin-file borrowers.",
+    ai_hook_title:
+      "Cash-flow underwriting challenges pure FICO for next-gen credit cards",
     ai_summary: [
-      'Neobanks evaluate payroll velocity and real-time cash balance health instead of penalizing thin credit histories.',
-      'Opens access to lower interest credit building lines for independent contractors and gig-economy workers.'
+      "Payroll velocity and deposit health can unlock credit for gig and young workers.",
+      "Regulators still watch fairness, consent, and data use closely.",
     ],
-    tags: ['#Credit', '#Fintech', '#PersonalFinance'],
-    read_time: '4 min read'
-  }
+    tags: ["#Credit", "#Fintech", "#PersonalFinance"],
+    read_time: "4 min read",
+  },
 ];
 
-// Requirement 1 & 4: In-feed native sponsored placements styled cohesively
+/** Replace ctaUrl with your real affiliate / sponsor links when live */
 const SPONSORED_OFFERS: SponsoredOffer[] = [
   {
-    id: 'ad-apex-cash',
-    sponsorName: 'Apex Prime Cash Management',
-    sponsorBadge: 'SPONSORED / ADVERTISEMENT',
-    tags: ['#FeaturedPick', '#HighYield', '#Banking'],
-    headline: 'Apex Prime Cash Reserves: 5.25% Liquid APY with $5M Aggregate FDIC Insurance',
+    id: "ad-apex",
+    sponsorName: "Partner · Cash",
+    headline: "Institutional-style cash yields for everyday balances",
     whyMatters: [
-      'Automated multi-bank sweep distribution provides 20x standard $250K coverage for cash while maintaining same-day liquidity.',
-      'Zero account maintenance fees or minimum deposit requirements, paired with instant FedNow payment clearing.'
+      "Compare APY, liquidity, and insurance structure before parking large cash.",
+      "Rates move — always confirm live terms on the partner site.",
     ],
-    ctaText: 'Claim 5.25% APY Rate',
-    ctaUrl: 'https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps',
-    rateHighlight: '5.25% APY',
-    disclosure: 'Partner Offer • Member FDIC • Rate variable'
+    ctaText: "View offer",
+    ctaUrl: "https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps",
+    rateHighlight: "High-yield cash",
+    disclosure: "Sponsored · We may earn a commission",
   },
   {
-    id: 'ad-titan-indexing',
-    sponsorName: 'Titan Algorithmic Wealth',
-    sponsorBadge: 'SPONSORED / ADVERTISEMENT',
-    tags: ['#WealthTech', '#DirectIndexing', '#TaxAlpha'],
-    headline: 'Automated 365-Day Tax-Loss Harvesting for Portfolios Over $5,000',
+    id: "ad-titan",
+    sponsorName: "Partner · Investing",
+    headline: "Tax-aware investing tools for taxable accounts",
     whyMatters: [
-      'Direct-indexing technology replaces static ETF shares with bespoke stock baskets, continuously converting volatility into tax deductions.',
-      'Delivered an audited +1.38% average annual after-tax alpha boost across retail taxable accounts in 2025.'
+      "Direct indexing and harvest rules are product features — not guarantees.",
+      "Suitability depends on account size, tax residency, and risk tolerance.",
     ],
-    ctaText: 'Explore Tax Alpha Engine',
-    ctaUrl: 'https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail',
-    rateHighlight: '+1.38% Tax Alpha',
-    disclosure: 'Partner Offer • SEC Registered Advisor'
+    ctaText: "Learn more",
+    ctaUrl: "https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail",
+    rateHighlight: "Tax tools",
+    disclosure: "Sponsored · We may earn a commission",
   },
-  {
-    id: 'ad-earnflow-liquidity',
-    sponsorName: 'EarnFlow Payroll Network',
-    sponsorBadge: 'SPONSORED / ADVERTISEMENT',
-    tags: ['#Fintech', '#EarnedWage', '#Liquidity'],
-    headline: '0% APR Real-Time Payroll Rails: End Predatory Payday Loan Cycles',
-    whyMatters: [
-      'Direct employer HRIS integration allows workers to stream already-earned wages instantaneously to avert $35 overdraft fines.',
-      'Instant FedNow account-to-account disbursements bypass triple-digit interest short-term lenders with zero hidden fees.'
-    ],
-    ctaText: 'Check Free Eligibility',
-    ctaUrl: 'https://www.finextra.com/newsarticle/realtime-payroll-earned-wage-access',
-    rateHighlight: '0% APR Rails',
-    disclosure: 'Partner Offer • Employer Integrated'
-  }
 ];
 
-function NewsHubContent() {
+const SAVED_KEY = "finsignal_saved_v1";
+
+function formatRelativeTime(iso: string) {
+  try {
+    const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+    if (mins < 1) return "Just now";
+    if (mins < 60) return `${mins}m ago`;
+    const h = Math.floor(mins / 60);
+    if (h < 24) return `${h}h ago`;
+    return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  } catch {
+    return "Recently";
+  }
+}
+
+function FinSignalApp() {
   const [articles, setArticles] = useState<EnrichedArticle[]>(INITIAL_ARTICLES);
-  const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [selectedTag, setSelectedTag] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [savedStories, setSavedStories] = useState<string[]>([]);
-  const [activeStory, setActiveStory] = useState<EnrichedArticle | null>(null);
-  
-  // Rule 3: Robots Noindex - Allows protecting the core brand domain from automated indexing
-  const [isNoIndexActive, setIsNoIndexActive] = useState<boolean>(false);
-
-  // Requirement 2: Mobile dismissible floating affiliate banner state
-  const [isMobileBannerDismissed, setIsMobileBannerDismissed] = useState<boolean>(false);
-
-  // Fetch news from Supabase (if keys provided) or /api/news with automatic fallback to seed data
-  const fetchNews = async (forceRefresh = false) => {
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedTag, setSelectedTag] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [saved, setSaved] = useState<string[]>(() => {
     try {
-      setRefreshing(true);
+      const raw = localStorage.getItem(SAVED_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [active, setActive] = useState<EnrichedArticle | null>(null);
+  const [mobileNav, setMobileNav] = useState(false);
+  const [email, setEmail] = useState("");
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
 
-      // Check if user has connected Supabase
+  useEffect(() => {
+    try {
+      localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
+    } catch {
+      /* ignore */
+    }
+  }, [saved]);
+
+  const fetchNews = async (force = false) => {
+    setRefreshing(true);
+    try {
       if (isSupabaseConfigured && supabase) {
         const { data, error } = await supabase
-          .from('articles')
-          .select('*')
-          .order('timestamp', { ascending: false })
-          .limit(30);
-
+          .from("articles")
+          .select("*")
+          .order("timestamp", { ascending: false })
+          .limit(40);
         if (!error && data && data.length > 0) {
           setArticles(data as EnrichedArticle[]);
           return;
         }
       }
-
-      const url = forceRefresh ? '/api/news?refresh=true' : '/api/news';
+      const url = force ? "/api/news?refresh=true" : "/api/news";
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
-        const list = Array.isArray(data) ? data : (data.articles || []);
-        if (list.length > 0) {
-          setArticles(list);
-        }
+        const list = Array.isArray(data) ? data : data.articles || [];
+        if (list.length) setArticles(list);
       }
-    } catch (err) {
-      console.warn('Using seeded article cache:', err);
+    } catch (e) {
+      console.warn("Feed fallback to seed", e);
     } finally {
       setRefreshing(false);
     }
   };
 
   useEffect(() => {
-    fetchNews(false);
+    void fetchNews(false);
   }, []);
 
-  // Compute unique tag categories dynamically
-  const allTags = useMemo(() => {
-    const set = new Set<string>();
-    articles.forEach(a => {
-      if (Array.isArray(a.tags)) {
-        a.tags.forEach(t => set.add(t));
-      }
-    });
-    return ['All', ...Array.from(set)];
+  const tags = useMemo(() => {
+    const s = new Set<string>();
+    articles.forEach((a) => a.tags?.forEach((t) => s.add(t)));
+    return ["All", ...Array.from(s)];
   }, [articles]);
 
-  // Client-side instant filter and search
-  const filteredArticles = useMemo(() => {
-    return articles.filter(article => {
-      const matchesTag = selectedTag === 'All' || (article.tags && article.tags.includes(selectedTag));
+  const filtered = useMemo(() => {
+    return articles.filter((a) => {
+      if (showSavedOnly && !saved.includes(a.id)) return false;
+      const tagOk = selectedTag === "All" || a.tags?.includes(selectedTag);
       const q = searchQuery.trim().toLowerCase();
-      if (!q) return matchesTag;
-
-      const headlineMatch = (article.ai_hook_title || article.original_title || '').toLowerCase().includes(q);
-      const tagMatch = article.tags && article.tags.some(t => t.toLowerCase().includes(q));
-      const summaryMatch = article.ai_summary && article.ai_summary.some(s => s.toLowerCase().includes(q));
-      const sourceMatch = (article.source || '').toLowerCase().includes(q);
-
-      return matchesTag && (headlineMatch || tagMatch || summaryMatch || sourceMatch);
+      if (!q) return tagOk;
+      const blob = [
+        a.ai_hook_title,
+        a.original_title,
+        a.source,
+        ...(a.ai_summary || []),
+        ...(a.tags || []),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return tagOk && blob.includes(q);
     });
-  }, [articles, selectedTag, searchQuery]);
+  }, [articles, selectedTag, searchQuery, showSavedOnly, saved]);
 
-  const toggleBookmark = (id: string, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    setSavedStories(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
+  const hero = filtered[0] ?? articles[0];
+  const rest = filtered.slice(1);
+
+  const toggleSave = (id: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const formatRelativeTime = (isoString: string) => {
+  const submitNewsletter = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = email.trim().toLowerCase();
+    if (!v.includes("@")) {
+      setEmailMsg("Enter a valid email.");
+      return;
+    }
     try {
-      const diffMs = Date.now() - new Date(isoString).getTime();
-      const diffMins = Math.floor(diffMs / 60000);
-      if (diffMins < 1) return 'Just now';
-      if (diffMins < 60) return `${diffMins}m ago`;
-      const diffHours = Math.floor(diffMins / 60);
-      if (diffHours < 24) return `${diffHours}h ago`;
-      return new Date(isoString).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from("newsletter_subscribers").upsert(
+          { email: v, source: "finsignal_web" },
+          { onConflict: "email" },
+        );
+      }
+      setEmailMsg("You're on the list. Weekly brief coming soon.");
+      setEmail("");
     } catch {
-      return 'Recently';
+      setEmailMsg("Saved locally — connect Supabase newsletter table for storage.");
     }
   };
 
-  // Rule 1: Dynamic SEO canonical calculation
-  const currentCanonicalUrl = activeStory 
-    ? activeStory.original_url 
-    : (typeof window !== 'undefined' ? window.location.href.split('?')[0] : 'https://fintechnewshub.app');
-
-  const pageTitle = activeStory 
-    ? `${activeStory.ai_hook_title || activeStory.original_title} | Personal Finance News Hub`
-    : 'Personal Finance & Fintech News Hub – Market Catalysts & Wealth Tech';
-
-  const metaDescription = activeStory
-    ? (activeStory.ai_summary && activeStory.ai_summary[0]) || activeStory.original_description.slice(0, 150)
-    : 'Curated intelligence on high-yield cash accounts, neobanking, open banking APIs, and retail wealth rails.';
+  const pageTitle = active
+    ? `${active.ai_hook_title} · FinSignal`
+    : "FinSignal — Markets, Fintech & Personal Finance";
+  const pageDesc = active
+    ? active.ai_summary?.[0] || active.original_description
+    : "Global market and fintech wire. Real sources, sharp headlines, clear partner offers.";
 
   return (
-    <div 
-      id="fintech-hub-app"
-      style={{
-        backgroundColor: '#ffffff',
-        minHeight: '100vh',
-        color: '#0f172a',
-        fontFamily: 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-        WebkitFontSmoothing: 'antialiased'
-      }}
-    >
-      {/* 
-        Rule 1 & Rule 3: SEO CANONICALS & ROBOTS NOINDEX via react-helmet-async 
-        - Injects <link rel="canonical" href={article.original_url} /> pointing to original source for modal/story view.
-        - Injects conditional <meta name="robots" content="noindex, nofollow" /> when bot protection is active.
-      */}
+    <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
         <title>{pageTitle}</title>
-        <meta name="description" content={metaDescription} />
-        
-        {/* Dynamic Canonical pointing strictly to original publisher source */}
-        <link rel="canonical" href={currentCanonicalUrl} />
-
-        {/* Dynamic Robots Meta Tag: conditionally protect domain from automated crawling */}
-        {isNoIndexActive ? (
-          <meta name="robots" content="noindex, nofollow" />
-        ) : (
-          <meta name="robots" content="index, follow" />
-        )}
-
+        <meta name="description" content={pageDesc} />
+        <link
+          rel="canonical"
+          href={active?.original_url || (typeof window !== "undefined" ? window.location.href : "")}
+        />
         <meta property="og:title" content={pageTitle} />
-        <meta property="og:description" content={metaDescription} />
-        <meta property="og:url" content={currentCanonicalUrl} />
-        <meta property="og:type" content="website" />
+        <meta property="og:description" content={pageDesc} />
       </Helmet>
 
-      {/* Pure CSS Styles for responsive layout, ad injection, and sticky widget */}
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        /* Responsive Layout Container with Sticky Sidebar on Desktop */
-        .layout-container {
-          display: flex;
-          flex-direction: column;
-          gap: 2rem;
-          width: 100%;
-        }
-
-        @media (min-width: 1024px) {
-          .layout-container {
-            flex-direction: row;
-            align-items: flex-start;
-            gap: 2.25rem;
-          }
-          .main-feed-column {
-            flex: 1;
-            min-width: 0;
-          }
-          .sticky-affiliate-sidebar {
-            width: 320px;
-            flex-shrink: 0;
-            position: sticky;
-            top: 5.5rem;
-            display: block;
-          }
-        }
-
-        @media (max-width: 1023px) {
-          .sticky-affiliate-sidebar {
-            display: none;
-          }
-        }
-
-        /* Desktop 3-column grid & mobile single-column list stack */
-        .news-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 1.75rem;
-          width: 100%;
-        }
-
-        @media (min-width: 768px) and (max-width: 1279px) {
-          .news-grid {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 1.75rem;
-          }
-        }
-
-        @media (min-width: 1280px) {
-          .news-grid {
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 2rem;
-          }
-        }
-
-        /* Article Card styling: Pure white with subtle light gray border (#e2e8f0) */
-        .article-card {
-          background-color: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          overflow: hidden;
-          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease;
-        }
-
-        .article-card:hover {
-          transform: translateY(-3px);
-          border-color: #cbd5e1;
-          box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.05), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
-        }
-
-        /* In-feed Sponsored Ad Card: Cohesive pure white styling with subtle emerald accent */
-        .sponsored-card {
-          border: 1px solid #e2e8f0;
-          background-color: #ffffff;
-          position: relative;
-        }
-
-        .sponsored-card:hover {
-          border-color: #10b981;
-          box-shadow: 0 12px 28px -6px rgba(16, 185, 129, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.03);
-        }
-
-        /* Secure Link Action Buttons */
-        .read-story-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          width: 100%;
-          padding: 0.75rem 1.25rem;
-          border-radius: 0.5rem;
-          font-weight: 600;
-          font-size: 0.9375rem;
-          color: #ffffff;
-          background-color: #3b82f6;
-          border: 1px solid #3b82f6;
-          cursor: pointer;
-          transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-          text-decoration: none;
-        }
-
-        .read-story-btn:hover {
-          background-color: #2563eb;
-          border-color: #2563eb;
-          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
-        }
-
-        .read-story-btn:active {
-          transform: scale(0.99);
-        }
-
-        /* Emerald CTA for Monetization / Sponsored / Affiliate Links */
-        .emerald-cta-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.5rem;
-          width: 100%;
-          padding: 0.75rem 1.25rem;
-          border-radius: 0.5rem;
-          font-weight: 700;
-          font-size: 0.9375rem;
-          color: #ffffff;
-          background-color: #10b981;
-          border: 1px solid #10b981;
-          cursor: pointer;
-          transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
-          text-decoration: none;
-        }
-
-        .emerald-cta-btn:hover {
-          background-color: #059669;
-          border-color: #059669;
-          box-shadow: 0 4px 14px rgba(16, 185, 129, 0.3);
-        }
-
-        .emerald-cta-btn:active {
-          transform: scale(0.99);
-        }
-
-        /* Secondary briefing trigger button */
-        .briefing-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 0.375rem;
-          width: 100%;
-          padding: 0.45rem 1rem;
-          border-radius: 0.375rem;
-          font-weight: 500;
-          font-size: 0.8125rem;
-          color: #64748b;
-          background-color: #ffffff;
-          border: 1px solid #e2e8f0;
-          cursor: pointer;
-          margin-top: 0.5rem;
-          transition: background-color 0.15s ease, color 0.15s ease;
-        }
-
-        .briefing-btn:hover {
-          background-color: #f8fafc;
-          color: #0f172a;
-          border-color: #cbd5e1;
-        }
-
-        /* Tag pill styling */
-        .tag-pill {
-          display: inline-flex;
-          align-items: center;
-          font-size: 0.75rem;
-          font-weight: 600;
-          padding: 0.2rem 0.55rem;
-          border-radius: 9999px;
-          background-color: #eff6ff;
-          color: #3b82f6;
-          border: 1px solid #dbeafe;
-          text-decoration: none;
-        }
-
-        .tag-pill.emerald {
-          background-color: #ecfdf5;
-          color: #10b981;
-          border-color: #d1fae5;
-        }
-
-        /* Tiny, elegant Sponsored / Advertisement label */
-        .sponsored-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 0.25rem;
-          font-size: 0.6875rem;
-          font-weight: 700;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-          padding: 0.2rem 0.5rem;
-          border-radius: 0.25rem;
-          background-color: #f8fafc;
-          color: #64748b;
-          border: 1px solid #e2e8f0;
-        }
-
-        .filter-btn {
-          padding: 0.35rem 0.8rem;
-          border-radius: 9999px;
-          font-size: 0.8125rem;
-          font-weight: 500;
-          cursor: pointer;
-          border: 1px solid #e2e8f0;
-          background-color: #ffffff;
-          color: #64748b;
-          transition: all 0.15s ease;
-          white-space: nowrap;
-        }
-
-        .filter-btn:hover {
-          border-color: #cbd5e1;
-          color: #0f172a;
-        }
-
-        .filter-btn.active {
-          background-color: #0f172a;
-          color: #ffffff;
-          border-color: #0f172a;
-        }
-
-        /* Bulleted "Why This Matters" Section */
-        .why-matters-list {
-          list-style: none;
-          padding: 0;
-          margin: 0;
-        }
-
-        .why-matters-item {
-          position: relative;
-          padding-left: 1.25rem;
-          margin-bottom: 0.625rem;
-          font-size: 0.875rem;
-          line-height: 1.55;
-          color: #64748b;
-        }
-
-        .why-matters-item:last-child {
-          margin-bottom: 0;
-        }
-
-        .why-matters-item::before {
-          content: "";
-          position: absolute;
-          left: 0;
-          top: 0.5rem;
-          width: 0.375rem;
-          height: 0.375rem;
-          border-radius: 50%;
-          background-color: #10b981;
-        }
-
-        /* Mobile Bottom-Floating Banner */
-        .mobile-floating-banner {
-          position: fixed;
-          bottom: 1.25rem;
-          left: 1rem;
-          right: 1rem;
-          z-index: 40;
-          background-color: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 0.75rem;
-          box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.15), 0 8px 10px -6px rgba(15, 23, 42, 0.1);
-          padding: 1rem 1.25rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.75rem;
-          animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        @keyframes slideUp {
-          from {
-            transform: translateY(100%);
-            opacity: 0;
-          }
-          to {
-            transform: translateY(0);
-            opacity: 1;
-          }
-        }
-
-        /* Modal Backdrop */
-        .modal-backdrop {
-          position: fixed;
-          inset: 0;
-          background-color: rgba(15, 23, 42, 0.45);
-          backdrop-filter: blur(4px);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 1.25rem;
-          z-index: 50;
-        }
-
-        .modal-box {
-          background-color: #ffffff;
-          border: 1px solid #e2e8f0;
-          border-radius: 1rem;
-          max-width: 44rem;
-          width: 100%;
-          max-height: 90vh;
-          overflow-y: auto;
-          padding: 2rem;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-        }
-      `}</style>
-
-      {/* SIMPLE & MODERN HEADER */}
-      <header 
-        id="simple-header"
-        style={{
-          borderBottom: '1px solid #e2e8f0',
-          backgroundColor: '#ffffff',
-          position: 'sticky',
-          top: 0,
-          zIndex: 30
-        }}
-      >
-        <div 
-          style={{
-            maxWidth: '86rem',
-            margin: '0 auto',
-            padding: '1.25rem 1.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            flexWrap: 'wrap'
-          }}
-        >
-          {/* Simple Clean Title & Subtitle */}
-          <div>
-            <h1 
-              style={{
-                fontSize: '1.375rem',
-                fontWeight: 700,
-                color: '#0f172a',
-                margin: 0,
-                letterSpacing: '-0.025em',
-                lineHeight: 1.2
-              }}
+      {/* Top bar */}
+      <header className="sticky top-0 z-40 border-b border-neutral-200 bg-white/95 backdrop-blur-md">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4 sm:h-16 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              className="press grid size-9 place-items-center rounded-lg border border-neutral-200 sm:hidden"
+              onClick={() => setMobileNav((v) => !v)}
+              aria-label="Menu"
             >
-              Personal Finance & Fintech News Hub
-            </h1>
-            <p 
-              style={{
-                fontSize: '0.875rem',
-                color: '#64748b',
-                margin: '0.25rem 0 0 0'
-              }}
-            >
-              Curated market catalysts, neobanking shifts, and retail wealth intelligence.
-            </p>
+              {mobileNav ? <X className="size-4" /> : <Menu className="size-4" />}
+            </button>
+            <a href="/" className="flex items-center gap-2">
+              <span className="grid size-8 place-items-center rounded-md bg-neutral-950 text-white">
+                <Zap className="size-4" />
+              </span>
+              <div>
+                <p className="text-sm font-extrabold tracking-tight sm:text-base">FinSignal</p>
+                <p className="hidden text-[10px] font-medium tracking-wide text-neutral-500 uppercase sm:block">
+                  Markets · Fintech · Money
+                </p>
+              </div>
+            </a>
           </div>
 
-          {/* Simple Actions & Rule 3: Robots Noindex Toggle */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            {/* Database & Backend Status Badge */}
-            <div
-              id="backend-status-badge"
-              title={isSupabaseConfigured ? "Connected to Supabase PostgreSQL" : "Connected to Express RSS Aggregator"}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-                padding: '0.375rem 0.65rem',
-                borderRadius: '0.5rem',
-                border: isSupabaseConfigured ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
-                backgroundColor: isSupabaseConfigured ? '#ecfdf5' : '#f8fafc',
-                color: isSupabaseConfigured ? '#047857' : '#64748b',
-                fontSize: '0.75rem',
-                fontWeight: 600
-              }}
-            >
-              <Database size={13} color={isSupabaseConfigured ? '#059669' : '#64748b'} />
-              <span>{isSupabaseConfigured ? 'Supabase Live' : 'Express / Cloud API'}</span>
-            </div>
+          <div className="relative hidden max-w-md flex-1 md:block">
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-neutral-400" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search markets, banks, fintech…"
+              className="h-10 w-full rounded-full border border-neutral-200 bg-neutral-50 pr-4 pl-10 text-sm outline-none focus:border-teal-700 focus:ring-2 focus:ring-teal-700/15"
+            />
+          </div>
 
-            {/* Rule 3: Robots Noindex Control Toggle */}
+          <div className="flex items-center gap-2">
             <button
-              id="toggle-noindex-btn"
-              onClick={() => setIsNoIndexActive(prev => !prev)}
-              title={isNoIndexActive ? "Currently: NOINDEX active (Domain Protected)" : "Currently: INDEXABLE by search engines"}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-                padding: '0.375rem 0.75rem',
-                borderRadius: '0.5rem',
-                border: isNoIndexActive ? '1px solid #fca5a5' : '1px solid #e2e8f0',
-                backgroundColor: isNoIndexActive ? '#fef2f2' : '#ffffff',
-                color: isNoIndexActive ? '#b91c1c' : '#64748b',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
+              type="button"
+              onClick={() => setShowSavedOnly((v) => !v)}
+              className={`press hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold sm:inline-flex ${
+                showSavedOnly
+                  ? "border-teal-800 bg-teal-50 text-teal-900"
+                  : "border-neutral-200 text-neutral-700"
+              }`}
             >
-              {isNoIndexActive ? <ShieldAlert size={14} /> : <Shield size={14} />}
-              <span>{isNoIndexActive ? 'Robots: Noindex Active' : 'Robots: Indexable'}</span>
+              <Bookmark className="size-3.5" />
+              Saved ({saved.length})
             </button>
-
-            {/* Refresh Button */}
             <button
-              id="refresh-feed-btn"
-              onClick={() => fetchNews(true)}
-              disabled={refreshing}
-              title="Refresh from aggregator backend"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-                padding: '0.4rem 0.85rem',
-                borderRadius: '0.5rem',
-                border: '1px solid #e2e8f0',
-                backgroundColor: '#ffffff',
-                color: '#0f172a',
-                fontSize: '0.8125rem',
-                fontWeight: 500,
-                cursor: refreshing ? 'not-allowed' : 'pointer'
-              }}
+              type="button"
+              onClick={() => void fetchNews(true)}
+              className="press inline-flex h-9 items-center gap-1.5 rounded-full bg-neutral-950 px-3 text-xs font-semibold text-white"
             >
-              <RotateCw size={14} style={{ animation: refreshing ? 'spin 1s linear infinite' : 'none' }} />
-              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+              <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
+              <span className="hidden sm:inline">Refresh</span>
             </button>
           </div>
         </div>
 
-        {/* Minimal Category Filter & Search Bar */}
-        <div 
-          style={{
-            maxWidth: '86rem',
-            margin: '0 auto',
-            padding: '0.625rem 1.5rem',
-            borderTop: '1px solid #f8fafc',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem',
-            flexWrap: 'wrap'
-          }}
-        >
-          {/* Category Filter Pills */}
-          <div 
-            id="category-pills"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              overflowX: 'auto',
-              maxWidth: '100%',
-              paddingBottom: '0.2rem'
-            }}
-          >
-            {allTags.map(tag => (
-              <button
-                key={tag}
-                id={`filter-${tag.replace('#', '').toLowerCase()}`}
-                className={`filter-btn ${selectedTag === tag ? 'active' : ''}`}
-                onClick={() => setSelectedTag(tag)}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-
-          {/* Simple Search Input */}
-          <div style={{ position: 'relative', width: '100%', maxWidth: '18rem' }}>
-            <Search 
-              size={15} 
-              color="#94a3b8" 
-              style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)' }} 
-            />
+        {mobileNav ? (
+          <div className="border-t border-neutral-100 px-4 py-3 sm:hidden">
             <input
-              id="search-input"
-              type="text"
-              placeholder="Search news or source..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '0.4rem 0.75rem 0.4rem 2.25rem',
-                fontSize: '0.8125rem',
-                border: '1px solid #e2e8f0',
-                borderRadius: '0.5rem',
-                outline: 'none',
-                color: '#0f172a',
-                backgroundColor: '#ffffff'
-              }}
+              placeholder="Search…"
+              className="mb-2 h-10 w-full rounded-xl border border-neutral-200 px-3 text-sm"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                style={{
-                  position: 'absolute',
-                  right: '0.5rem',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                  background: 'none',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer'
-                }}
-              >
-                <X size={14} />
-              </button>
-            )}
+            <button
+              type="button"
+              className="text-xs font-semibold text-teal-800"
+              onClick={() => {
+                setShowSavedOnly((v) => !v);
+                setMobileNav(false);
+              }}
+            >
+              {showSavedOnly ? "Show all stories" : `Saved (${saved.length})`}
+            </button>
           </div>
+        ) : null}
+
+        {/* Tag rail */}
+        <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-4 pb-3 sm:px-6">
+          {tags.map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setSelectedTag(t)}
+              className={`press shrink-0 rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ${
+                selectedTag === t
+                  ? "bg-neutral-950 text-white"
+                  : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+              }`}
+            >
+              {t === "All" ? "Top stories" : t.replace("#", "")}
+            </button>
+          ))}
         </div>
       </header>
 
-      {/* MAIN VIEWPORT WITH OPEN SPACING AND RESPONSIVE LAYOUT */}
-      <main 
-        id="main-content"
-        style={{
-          maxWidth: '86rem',
-          margin: '0 auto',
-          padding: '2.5rem 1.5rem 5rem 1.5rem'
-        }}
-      >
-        {/* SEO & Canonical Notice Banner (when Noindex is active) */}
-        {isNoIndexActive && (
-          <div 
-            id="noindex-notice"
-            style={{
-              padding: '0.75rem 1rem',
-              backgroundColor: '#fffbeb',
-              border: '1px solid #fef3c7',
-              borderRadius: '0.5rem',
-              color: '#92400e',
-              fontSize: '0.8125rem',
-              marginBottom: '1.75rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem'
-            }}
-          >
-            <ShieldAlert size={16} color="#d97706" />
-            <span>
-              <strong>Robots Noindex Active:</strong> Automated search bots are instructed not to index this aggregation feed, protecting brand authority and preventing duplicate content penalties.
-            </span>
-          </div>
-        )}
-
-        {/* Empty state if search returns nothing */}
-        {filteredArticles.length === 0 && (
-          <div 
-            id="empty-state"
-            style={{
-              padding: '4rem 1.5rem',
-              textAlign: 'center',
-              border: '1px dashed #cbd5e1',
-              borderRadius: '0.75rem',
-              backgroundColor: '#ffffff'
-            }}
-          >
-            <p style={{ margin: 0, fontSize: '1.125rem', fontWeight: 600, color: '#0f172a' }}>
-              No stories match your criteria
-            </p>
-            <p style={{ margin: '0.5rem 0 1.25rem 0', fontSize: '0.875rem', color: '#64748b' }}>
-              Try searching for a different keyword or resetting your filters.
-            </p>
-            <button
-              onClick={() => { setSelectedTag('All'); setSearchQuery(''); }}
-              className="filter-btn active"
-              style={{ padding: '0.5rem 1.25rem' }}
+      <main className="mx-auto grid max-w-6xl gap-8 px-4 py-6 sm:px-6 lg:grid-cols-[1fr_300px] lg:py-8">
+        <div className="min-w-0 space-y-8">
+          {/* Hero */}
+          {hero ? (
+            <article
+              className="group cursor-pointer border-b border-neutral-200 pb-8"
+              onClick={() => setActive(hero)}
             >
-              Reset Filters
-            </button>
-          </div>
-        )}
-
-        {/* 
-          Requirement 2: Responsive Two-Column Layout on Desktop
-          Left: Articles with conditional in-feed ad injection after every 3rd story
-          Right: Sticky Affiliate Widget ("Top Financial Pick" promoting 5.15% APY Savings)
-        */}
-        <div className="layout-container">
-          {/* Main News Feed Column */}
-          <div className="main-feed-column">
-            <div className="news-grid" id="article-grid">
-              {filteredArticles.map((article, index) => {
-                const isSaved = savedStories.includes(article.id);
-                const headline = article.ai_hook_title || article.original_title;
-                const bullets = (article.ai_summary && article.ai_summary.length > 0) 
-                  ? article.ai_summary.slice(0, 2)
-                  : [article.original_description.slice(0, 100) + '...', 'Key financial impact for active consumer accounts.'];
-
-                // Requirement 1: Conditional statement injecting an Ad Component after every 3rd news item
-                const shouldInjectAd = (index + 1) % 3 === 0;
-                const adIndex = Math.floor(index / 3);
-                const adData = SPONSORED_OFFERS[adIndex % SPONSORED_OFFERS.length];
-
-                return (
-                  <React.Fragment key={article.id}>
-                    {/* Standard Editorial Article Card */}
-                    <article 
-                      id={`article-${article.id}`}
-                      className="article-card"
+              <div className="grid gap-5 md:grid-cols-2 md:items-center">
+                <div className="overflow-hidden rounded-xl bg-neutral-100">
+                  <img
+                    src={hero.image}
+                    alt=""
+                    className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                  />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold tracking-[0.14em] text-teal-800 uppercase">
+                    {hero.source} · {formatRelativeTime(hero.timestamp)}
+                  </p>
+                  <h1 className="font-display mt-2 text-2xl leading-tight font-semibold tracking-tight text-neutral-950 sm:text-3xl lg:text-[2rem]">
+                    {hero.ai_hook_title || hero.original_title}
+                  </h1>
+                  <ul className="mt-3 space-y-1.5 text-sm leading-relaxed text-neutral-600">
+                    {(hero.ai_summary || []).slice(0, 2).map((b, i) => (
+                      <li key={i} className="flex gap-2">
+                        <span className="mt-2 size-1 shrink-0 rounded-full bg-teal-700" />
+                        <span>{b}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <span className="text-xs font-medium text-neutral-500">
+                      {hero.read_time || "3 min read"}
+                    </span>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-neutral-950 underline-offset-2 hover:underline"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActive(hero);
+                      }}
                     >
-                      {/* Card Content Top Container */}
-                      <div style={{ padding: '1.75rem 1.75rem 1rem 1.75rem' }}>
-                        {/* Tags row & Bookmark button */}
-                        <div 
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '0.5rem',
-                            marginBottom: '1rem'
-                          }}
-                        >
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
-                            {article.tags && article.tags.map((tag, tIdx) => (
-                              <span 
-                                key={tag} 
-                                className={`tag-pill ${tIdx === 0 ? 'emerald' : ''}`}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
+                      Read briefing →
+                    </button>
+                    <button
+                      type="button"
+                      className="text-neutral-500"
+                      onClick={(e) => toggleSave(hero.id, e)}
+                      aria-label="Save"
+                    >
+                      {saved.includes(hero.id) ? (
+                        <BookmarkCheck className="size-4 text-teal-800" />
+                      ) : (
+                        <Bookmark className="size-4" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </article>
+          ) : null}
 
-                          <button
-                            id={`bookmark-${article.id}`}
-                            onClick={(e) => toggleBookmark(article.id, e)}
-                            title={isSaved ? "Saved" : "Save for later"}
-                            aria-label="Save story"
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '0.35rem',
-                              color: isSaved ? '#3b82f6' : '#94a3b8',
-                              display: 'flex',
-                              alignItems: 'center'
-                            }}
-                          >
-                            {isSaved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
-                          </button>
-                        </div>
+          {/* Feed */}
+          <section>
+            <div className="mb-4 flex items-end justify-between border-b border-neutral-200 pb-2">
+              <h2 className="text-xs font-bold tracking-[0.16em] text-neutral-500 uppercase">
+                Latest
+              </h2>
+              <p className="text-[11px] text-neutral-400">{filtered.length} stories</p>
+            </div>
 
-                        {/* Credit Metadata */}
-                        <div 
-                          id={`credit-${article.id}`}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            gap: '0.5rem',
-                            fontSize: '0.75rem',
-                            color: '#64748b',
-                            marginBottom: '0.75rem'
-                          }}
-                        >
-                          <span 
-                            style={{ 
-                              fontWeight: 700, 
-                              color: '#0f172a',
-                              backgroundColor: '#f8fafc',
-                              padding: '0.15rem 0.4rem',
-                              borderRadius: '0.25rem',
-                              border: '1px solid #e2e8f0'
-                            }}
-                          >
-                            Source: {article.source}
-                          </span>
-                          <span>•</span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                            <Clock size={12} /> {formatRelativeTime(article.timestamp)}
-                          </span>
-                          {article.read_time && (
-                            <>
-                              <span>•</span>
-                              <span>{article.read_time}</span>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Bold, modern headline */}
-                        <h2 
-                          id={`headline-${article.id}`}
-                          style={{
-                            fontSize: '1.1875rem',
-                            fontWeight: 700,
-                            lineHeight: 1.4,
-                            color: '#0f172a',
-                            margin: '0 0 1.25rem 0',
-                            letterSpacing: '-0.015em'
-                          }}
-                        >
-                          {headline}
-                        </h2>
-
-                        {/* Bulleted "Why This Matters" summary section (strictly 2 bullet points max) */}
-                        <div 
-                          style={{
-                            paddingTop: '0.75rem',
-                            borderTop: '1px solid #f1f5f9',
-                            marginBottom: '1rem'
-                          }}
-                        >
-                          <div 
-                            style={{
-                              fontSize: '0.75rem',
-                              fontWeight: 700,
-                              textTransform: 'uppercase',
-                              letterSpacing: '0.04em',
-                              color: '#0f172a',
-                              marginBottom: '0.625rem',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '0.375rem'
-                            }}
-                          >
-                            <Sparkles size={13} color="#10b981" />
-                            <span>Why This Matters</span>
-                          </div>
-                          <ul className="why-matters-list">
-                            {bullets.map((bullet, bIdx) => (
-                              <li key={bIdx} className="why-matters-item">
-                                {bullet}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      </div>
-
-                      {/* Prominent "Read Full Story ↗" action button with target="_blank" and rel="noopener noreferrer" */}
-                      <div style={{ padding: '0 1.75rem 1.75rem 1.75rem' }}>
-                        <a
-                          id={`read-story-${article.id}`}
-                          href={article.original_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="read-story-btn"
-                        >
-                          <span>Read Full Story</span>
-                          <ExternalLink size={16} strokeWidth={2.4} />
-                        </a>
-
-                        {/* Optional Executive Analysis View Modal */}
+            <div className="divide-y divide-neutral-100">
+              {rest.map((a, idx) => (
+                <React.Fragment key={a.id}>
+                  <article
+                    className="flex cursor-pointer gap-4 py-5 transition hover:bg-neutral-50/80"
+                    onClick={() => setActive(a)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
+                        {a.source} · {formatRelativeTime(a.timestamp)}
+                      </p>
+                      <h3 className="font-display mt-1 text-lg leading-snug font-semibold text-neutral-950 sm:text-xl">
+                        {a.ai_hook_title || a.original_title}
+                      </h3>
+                      <p className="mt-1 line-clamp-2 text-sm text-neutral-600">
+                        {a.ai_summary?.[0] || a.original_description}
+                      </p>
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="text-[11px] text-neutral-400">
+                          {a.read_time || "3 min"}
+                        </span>
                         <button
-                          id={`briefing-btn-${article.id}`}
-                          className="briefing-btn"
-                          onClick={() => setActiveStory(article)}
+                          type="button"
+                          onClick={(e) => toggleSave(a.id, e)}
+                          className="text-neutral-400 hover:text-teal-800"
                         >
-                          <FileText size={14} />
-                          <span>View Executive Briefing</span>
+                          {saved.includes(a.id) ? (
+                            <BookmarkCheck className="size-3.5 text-teal-800" />
+                          ) : (
+                            <Bookmark className="size-3.5" />
+                          )}
                         </button>
                       </div>
-                    </article>
+                    </div>
+                    <div className="hidden w-28 shrink-0 overflow-hidden rounded-lg bg-neutral-100 sm:block sm:w-36">
+                      <img src={a.image} alt="" className="aspect-[4/3] h-full w-full object-cover" />
+                    </div>
+                  </article>
 
-                    {/* 
-                      Requirement 1 & 4: IN-FEED AD INJECTION 
-                      Conditional statement injecting an Ad Component styled exactly like an article card after every 3rd news item.
-                      Clearly labeled with a tiny, elegant "SPONSORED / ADVERTISEMENT" tag at the top.
-                    */}
-                    {shouldInjectAd && (
-                      <article 
-                        key={`ad-slot-${index + 1}`}
-                        id={`ad-slot-${index + 1}`}
-                        className="article-card sponsored-card"
-                      >
-                        <div style={{ padding: '1.75rem 1.75rem 1rem 1.75rem' }}>
-                          {/* Sponsored Tag & Rate Pill */}
-                          <div 
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              gap: '0.5rem',
-                              marginBottom: '1rem'
-                            }}
-                          >
-                            <span 
-                              id={`ad-label-${index + 1}`}
-                              className="sponsored-tag"
-                            >
-                              <Award size={12} color="#10b981" />
-                              <span>{adData.sponsorBadge}</span>
-                            </span>
+                  {/* Native partner slot every 3 items */}
+                  {idx === 2 && SPONSORED_OFFERS[0] ? (
+                    <PartnerCard offer={SPONSORED_OFFERS[0]} />
+                  ) : null}
+                </React.Fragment>
+              ))}
 
-                            <span 
-                              style={{
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                color: '#10b981',
-                                backgroundColor: '#ecfdf5',
-                                border: '1px solid #d1fae5',
-                                padding: '0.2rem 0.55rem',
-                                borderRadius: '9999px'
-                              }}
-                            >
-                              {adData.rateHighlight}
-                            </span>
-                          </div>
-
-                          {/* Sponsor Metadata Citation */}
-                          <div 
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              flexWrap: 'wrap',
-                              gap: '0.5rem',
-                              fontSize: '0.75rem',
-                              color: '#64748b',
-                              marginBottom: '0.75rem'
-                            }}
-                          >
-                            <span 
-                              style={{ 
-                                fontWeight: 700, 
-                                color: '#0f172a',
-                                backgroundColor: '#f8fafc',
-                                padding: '0.15rem 0.4rem',
-                                borderRadius: '0.25rem',
-                                border: '1px solid #e2e8f0'
-                              }}
-                            >
-                              {adData.sponsorName}
-                            </span>
-                            <span>•</span>
-                            <span style={{ color: '#10b981', fontWeight: 600 }}>Verified Partner</span>
-                          </div>
-
-                          {/* Bold, modern sponsored headline */}
-                          <h2 
-                            style={{
-                              fontSize: '1.1875rem',
-                              fontWeight: 700,
-                              lineHeight: 1.4,
-                              color: '#0f172a',
-                              margin: '0 0 1.25rem 0',
-                              letterSpacing: '-0.015em'
-                            }}
-                          >
-                            {adData.headline}
-                          </h2>
-
-                          {/* Bulleted "Why This Matters" summary section */}
-                          <div 
-                            style={{
-                              paddingTop: '0.75rem',
-                              borderTop: '1px solid #f1f5f9',
-                              marginBottom: '1rem'
-                            }}
-                          >
-                            <div 
-                              style={{
-                                fontSize: '0.75rem',
-                                fontWeight: 700,
-                                textTransform: 'uppercase',
-                                letterSpacing: '0.04em',
-                                color: '#0f172a',
-                                marginBottom: '0.625rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '0.375rem'
-                              }}
-                            >
-                              <TrendingUp size={13} color="#10b981" />
-                              <span>Key Financial Advantage</span>
-                            </div>
-                            <ul className="why-matters-list">
-                              {adData.whyMatters.map((bullet, bIdx) => (
-                                <li key={bIdx} className="why-matters-item">
-                                  {bullet}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        </div>
-
-                        {/* Cohesive Emerald High-Contrast Action Button */}
-                        <div style={{ padding: '0 1.75rem 1.75rem 1.75rem' }}>
-                          <a
-                            id={`ad-cta-${index + 1}`}
-                            href={adData.ctaUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="emerald-cta-btn"
-                          >
-                            <span>{adData.ctaText}</span>
-                            <ExternalLink size={16} strokeWidth={2.4} />
-                          </a>
-
-                          <div 
-                            style={{
-                              marginTop: '0.625rem',
-                              textAlign: 'center',
-                              fontSize: '0.6875rem',
-                              color: '#94a3b8'
-                            }}
-                          >
-                            {adData.disclosure}
-                          </div>
-                        </div>
-                      </article>
-                    )}
-                  </React.Fragment>
-                );
-              })}
+              {filtered.length === 0 ? (
+                <p className="py-16 text-center text-sm text-neutral-500">
+                  No stories match. Clear filters or refresh the wire.
+                </p>
+              ) : null}
             </div>
+          </section>
+        </div>
+
+        {/* Sidebar */}
+        <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">
+          <div className="rounded-2xl border border-neutral-200 bg-neutral-950 p-5 text-white">
+            <p className="text-[10px] font-bold tracking-[0.18em] text-teal-300 uppercase">
+              Weekly brief
+            </p>
+            <h3 className="font-display mt-2 text-xl font-semibold">Signal in your inbox</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-neutral-400">
+              One sharp digest: rates, fintech, and money moves worth knowing.
+            </p>
+            <form onSubmit={submitNewsletter} className="mt-4 space-y-2">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@email.com"
+                className="h-11 w-full rounded-xl border border-neutral-700 bg-neutral-900 px-3 text-sm text-white outline-none placeholder:text-neutral-500 focus:border-teal-500"
+              />
+              <button
+                type="submit"
+                className="press h-11 w-full rounded-xl bg-teal-600 text-sm font-bold text-white hover:bg-teal-500"
+              >
+                Subscribe free
+              </button>
+            </form>
+            {emailMsg ? <p className="mt-2 text-xs text-teal-200">{emailMsg}</p> : null}
           </div>
 
-          {/* 
-            Requirement 2 & 3: STICKY AFFILIATE WIDGET (Desktop Viewport)
-            Dedicated widget space displayed as a modern, sticky right-hand sidebar.
-            Populated with clean mockup for "Top Financial Pick" (High-Yield Savings Account paying 5.15% APY).
-          */}
-          <aside 
-            id="desktop-sticky-affiliate-sidebar"
-            className="sticky-affiliate-sidebar"
-            aria-label="Sponsored Financial Opportunities"
-          >
-            <div 
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e2e8f0',
-                borderRadius: '0.75rem',
-                overflow: 'hidden',
-                boxShadow: '0 4px 20px -4px rgba(15, 23, 42, 0.06)'
-              }}
+          {SPONSORED_OFFERS.map((o) => (
+            <PartnerCard key={o.id} offer={o} compact />
+          ))}
+
+          <div className="rounded-2xl border border-neutral-200 p-4">
+            <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
+              Advertise
+            </p>
+            <p className="mt-1 text-sm font-semibold text-neutral-900">
+              Reach readers who care about money products
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
+              Sponsored slots and newsletter mentions. Labeled, never mixed into news voice.
+            </p>
+            <a
+              href="mailto:hello@finsignal.news?subject=FinSignal%20sponsorship"
+              className="mt-3 inline-block text-xs font-bold text-teal-800 underline-offset-2 hover:underline"
             >
-              {/* Widget Header Badge */}
-              <div 
-                style={{
-                  padding: '1.25rem 1.25rem 1rem 1.25rem',
-                  borderBottom: '1px solid #f1f5f9',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-                  <Star size={14} color="#10b981" fill="#10b981" />
-                  <span 
-                    style={{
-                      fontSize: '0.6875rem',
-                      fontWeight: 800,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      color: '#0f172a'
-                    }}
-                  >
-                    Top Financial Pick
-                  </span>
-                </div>
+              Request media kit →
+            </a>
+          </div>
 
-                <span 
-                  style={{
-                    fontSize: '0.6875rem',
-                    color: '#64748b',
-                    fontWeight: 600,
-                    textTransform: 'uppercase'
-                  }}
-                >
-                  Partner Pick
-                </span>
-              </div>
-
-              {/* Widget Core Content */}
-              <div style={{ padding: '1.25rem' }}>
-                <div style={{ marginBottom: '0.75rem' }}>
-                  <span 
-                    style={{
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      color: '#64748b'
-                    }}
-                  >
-                    High-Yield Cash Management
-                  </span>
-                  <h3 
-                    style={{
-                      fontSize: '1.125rem',
-                      fontWeight: 800,
-                      color: '#0f172a',
-                      margin: '0.25rem 0 0.5rem 0',
-                      lineHeight: 1.3
-                    }}
-                  >
-                    VaultPrime Liquid Savings
-                  </h3>
-                </div>
-
-                {/* Rate Showcase Callout */}
-                <div 
-                  style={{
-                    backgroundColor: '#ecfdf5',
-                    border: '1px solid #d1fae5',
-                    borderRadius: '0.5rem',
-                    padding: '0.875rem 1rem',
-                    marginBottom: '1.25rem',
-                    textAlign: 'center'
-                  }}
-                >
-                  <div 
-                    style={{
-                      fontSize: '1.75rem',
-                      fontWeight: 900,
-                      color: '#059669',
-                      letterSpacing: '-0.03em',
-                      lineHeight: 1
-                    }}
-                  >
-                    5.15% APY
-                  </div>
-                  <div 
-                    style={{
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      color: '#065f46',
-                      marginTop: '0.375rem'
-                    }}
-                  >
-                    Variable APY • 12x National Average
-                  </div>
-                </div>
-
-                {/* Key Benefits Checklist */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem', marginBottom: '1.25rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.8125rem', color: '#334155' }}>
-                    <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: '0.125rem' }} />
-                    <span><strong>$2.5M FDIC Insurance</strong> across program bank custodial network</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.8125rem', color: '#334155' }}>
-                    <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: '0.125rem' }} />
-                    <span><strong>$0 Monthly Fees</strong> and no minimum deposit balance</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', fontSize: '0.8125rem', color: '#334155' }}>
-                    <CheckCircle2 size={16} color="#10b981" style={{ flexShrink: 0, marginTop: '0.125rem' }} />
-                    <span><strong>Instant Liquidity</strong> with same-day ACH & FedNow transfers</span>
-                  </div>
-                </div>
-
-                {/* High-Contrast Action Button */}
-                <a
-                  id="affiliate-widget-cta-btn"
-                  href="https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="emerald-cta-btn"
-                  style={{ width: '100%' }}
-                >
-                  <span>Open Account & Earn 5.15%</span>
-                  <ExternalLink size={15} strokeWidth={2.4} />
-                </a>
-
-                {/* Editorial Disclosure */}
-                <p 
-                  style={{
-                    fontSize: '0.6875rem',
-                    color: '#94a3b8',
-                    lineHeight: 1.4,
-                    margin: '0.875rem 0 0 0',
-                    textAlign: 'center'
-                  }}
-                >
-                  Sponsored Partner • Member FDIC. We may earn a commission when you register through our links at no cost to you.
-                </p>
-              </div>
-            </div>
-          </aside>
-        </div>
+          <p className="text-[10px] leading-relaxed text-neutral-400">
+            Headlines may be AI-assisted. Always verify on the original publisher. FinSignal is an
+            independent wire — not investment advice.
+          </p>
+        </aside>
       </main>
 
-      {/* 
-        Requirement 2 & 3: MOBILE DISMISSIBLE BOTTOM-FLOATING BANNER
-        On mobile viewports (<1024px), transforms the affiliate offer into an elegant, dismissible bottom-floating banner.
-      */}
-      {!isMobileBannerDismissed && (
-        <aside 
-          id="mobile-affiliate-floating-banner"
-          className="mobile-floating-banner"
-          aria-label="Special Financial Opportunity"
-          style={{
-            display: 'flex'
-          }}
-        >
-          {/* Top header row inside banner */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
-              <span 
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.25rem',
-                  fontSize: '0.6875rem',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  color: '#0f172a'
-                }}
-              >
-                <Star size={13} color="#10b981" fill="#10b981" />
-                <span>Top Cash Pick: VaultPrime</span>
-              </span>
-              <span 
-                style={{
-                  fontSize: '0.6875rem',
-                  fontWeight: 800,
-                  color: '#059669',
-                  backgroundColor: '#ecfdf5',
-                  padding: '0.125rem 0.375rem',
-                  borderRadius: '9999px',
-                  border: '1px solid #d1fae5'
-                }}
-              >
-                5.15% APY
-              </span>
-            </div>
+      <footer className="border-t border-neutral-200 py-8">
+        <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 text-xs text-neutral-500 sm:flex-row sm:items-center sm:justify-between sm:px-6">
+          <p>© {new Date().getFullYear()} FinSignal</p>
+          <p>Sources linked · Ads labeled · Built for clarity</p>
+        </div>
+      </footer>
 
-            {/* Dismiss Button */}
-            <button
-              id="dismiss-mobile-banner-btn"
-              onClick={() => setIsMobileBannerDismissed(true)}
-              aria-label="Dismiss affiliate banner"
-              style={{
-                background: 'none',
-                border: 'none',
-                padding: '0.25rem',
-                color: '#94a3b8',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center'
-              }}
-            >
-              <X size={16} />
-            </button>
-          </div>
-
-          {/* Banner Description */}
-          <p style={{ margin: 0, fontSize: '0.8125rem', color: '#475569', lineHeight: 1.4 }}>
-            Earn <strong>5.15% APY</strong> with $2.5M FDIC sweep insurance and $0 fees.
-          </p>
-
-          {/* Action Button & Link */}
-          <a
-            id="mobile-affiliate-cta-btn"
-            href="https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="emerald-cta-btn"
-            style={{ padding: '0.625rem 1rem', fontSize: '0.875rem' }}
-          >
-            <span>Claim 5.15% APY ↗</span>
-          </a>
-        </aside>
-      )}
-
-      {/* 
-        Rule 1: Modal View with Dynamic Canonical Update
-        When open, the canonical URL dynamically shifts to activeStory.original_url
-      */}
-      {activeStory && (
-        <div 
-          id="reader-modal-overlay"
-          className="modal-backdrop"
-          onClick={() => setActiveStory(null)}
-        >
-          <div 
-            id="reader-modal-card"
-            className="modal-box"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Top Bar */}
-            <div 
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between', 
-                marginBottom: '1.25rem' 
-              }}
-            >
-              <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
-                {activeStory.tags && activeStory.tags.map((tag, idx) => (
-                  <span key={tag} className={`tag-pill ${idx === 0 ? 'emerald' : ''}`}>
-                    {tag}
-                  </span>
-                ))}
-              </div>
-
+      {/* Story panel */}
+      {active ? (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <button
+            type="button"
+            className="absolute inset-0 bg-black/40"
+            aria-label="Close"
+            onClick={() => setActive(null)}
+          />
+          <div className="relative z-10 flex h-full w-full max-w-lg flex-col bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3">
+              <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
+                Briefing
+              </p>
               <button
-                id="close-reader-modal"
-                onClick={() => setActiveStory(null)}
-                style={{
-                  background: '#f8fafc',
-                  border: '1px solid #e2e8f0',
-                  borderRadius: '0.375rem',
-                  padding: '0.4rem',
-                  cursor: 'pointer',
-                  color: '#64748b',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
+                type="button"
+                className="grid size-9 place-items-center rounded-lg border border-neutral-200"
+                onClick={() => setActive(null)}
               >
-                <X size={18} />
+                <X className="size-4" />
               </button>
             </div>
-
-            {/* Modal Headline */}
-            <h2 
-              style={{
-                fontSize: '1.5rem',
-                fontWeight: 800,
-                color: '#0f172a',
-                lineHeight: 1.3,
-                margin: '0 0 0.75rem 0',
-                letterSpacing: '-0.02em'
-              }}
-            >
-              {activeStory.ai_hook_title || activeStory.original_title}
-            </h2>
-
-            {/* Credit Metadata inside Modal */}
-            <div 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                fontSize: '0.8125rem',
-                color: '#64748b',
-                paddingBottom: '1.25rem',
-                marginBottom: '1.5rem',
-                borderBottom: '1px solid #e2e8f0'
-              }}
-            >
-              <span>Source: <strong>{activeStory.source}</strong></span>
-              <span>•</span>
-              <span>{formatRelativeTime(activeStory.timestamp)}</span>
-              <span>•</span>
-              <span style={{ color: '#10b981', fontWeight: 600 }}>Canonical Verified</span>
-            </div>
-
-            {/* Why This Matters Box */}
-            <div 
-              style={{
-                backgroundColor: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                borderLeft: '4px solid #10b981',
-                borderRadius: '0.5rem',
-                padding: '1.25rem',
-                marginBottom: '1.5rem'
-              }}
-            >
-              <div 
-                style={{
-                  fontSize: '0.8125rem',
-                  fontWeight: 700,
-                  color: '#0f172a',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.04em',
-                  marginBottom: '0.75rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.375rem'
-                }}
-              >
-                <Sparkles size={14} color="#10b981" />
-                <span>Executive Analysis (Why This Matters)</span>
-              </div>
-              <ul className="why-matters-list">
-                {activeStory.ai_summary && activeStory.ai_summary.map((item, idx) => (
-                  <li key={idx} className="why-matters-item" style={{ fontSize: '0.9375rem', color: '#334155' }}>
-                    {item}
+            <div className="flex-1 overflow-y-auto p-5">
+              <img
+                src={active.image}
+                alt=""
+                className="mb-4 aspect-[16/9] w-full rounded-xl object-cover"
+              />
+              <p className="text-[11px] font-bold tracking-wider text-teal-800 uppercase">
+                {active.source} · {formatRelativeTime(active.timestamp)}
+              </p>
+              <h2 className="font-display mt-2 text-2xl font-semibold leading-snug">
+                {active.ai_hook_title || active.original_title}
+              </h2>
+              <ul className="mt-4 space-y-2 text-sm leading-relaxed text-neutral-700">
+                {(active.ai_summary || []).map((b, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="mt-2 size-1.5 shrink-0 rounded-full bg-teal-700" />
+                    {b}
                   </li>
                 ))}
               </ul>
-            </div>
-
-            {/* Story Description / Original Abstract */}
-            <div style={{ fontSize: '1rem', lineHeight: 1.7, color: '#334155', marginBottom: '2rem' }}>
-              <p style={{ margin: 0 }}>
-                {activeStory.original_description}
-              </p>
-            </div>
-
-            {/* Bottom Actions: Safe target="_blank" rel="noopener noreferrer" link */}
-            <div 
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingTop: '1.25rem',
-                borderTop: '1px solid #e2e8f0',
-                flexWrap: 'wrap',
-                gap: '1rem'
-              }}
-            >
-              <button
-                onClick={() => toggleBookmark(activeStory.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '0.375rem',
-                  background: 'none',
-                  border: 'none',
-                  color: savedStories.includes(activeStory.id) ? '#3b82f6' : '#64748b',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  cursor: 'pointer'
-                }}
-              >
-                {savedStories.includes(activeStory.id) ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
-                <span>{savedStories.includes(activeStory.id) ? 'Saved in Reading List' : 'Save for Later'}</span>
-              </button>
-
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <p className="mt-4 text-sm text-neutral-500">{active.original_description}</p>
+              <div className="mt-6 flex flex-wrap gap-2">
                 <a
-                  id="modal-external-link"
-                  href={activeStory.original_url}
+                  href={active.original_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="read-story-btn"
-                  style={{ width: 'auto', padding: '0.625rem 1.25rem', display: 'inline-flex' }}
+                  className="press inline-flex h-11 items-center gap-2 rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white"
                 >
-                  <span>Open Original Source</span>
-                  <ExternalLink size={15} />
+                  Read full story <ExternalLink className="size-3.5" />
                 </a>
-                
                 <button
-                  onClick={() => setActiveStory(null)}
-                  style={{
-                    padding: '0.625rem 1.25rem',
-                    borderRadius: '0.5rem',
-                    border: '1px solid #e2e8f0',
-                    backgroundColor: '#f8fafc',
-                    color: '#0f172a',
-                    fontWeight: 600,
-                    fontSize: '0.875rem',
-                    cursor: 'pointer'
-                  }}
+                  type="button"
+                  onClick={() => toggleSave(active.id)}
+                  className="press inline-flex h-11 items-center gap-2 rounded-xl border border-neutral-200 px-4 text-sm font-semibold"
                 >
-                  Done
+                  {saved.includes(active.id) ? (
+                    <>
+                      <BookmarkCheck className="size-4 text-teal-800" /> Saved
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark className="size-4" /> Save
+                    </>
+                  )}
                 </button>
               </div>
             </div>
           </div>
         </div>
-      )}
+      ) : null}
+    </div>
+  );
+}
 
-      {/* Footer */}
-      <footer 
-        id="simple-footer"
-        style={{
-          borderTop: '1px solid #e2e8f0',
-          padding: '1.75rem 1.5rem',
-          textAlign: 'center',
-          fontSize: '0.8125rem',
-          color: '#64748b',
-          backgroundColor: '#ffffff'
-        }}
-      >
-        <div style={{ maxWidth: '86rem', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-          <span>Personal Finance & Fintech News Hub • RSS & AI Aggregator</span>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <span>SEO Canonical Active</span>
-            <span>•</span>
-            <span>rel="noopener noreferrer" Enforced</span>
-            <span>•</span>
-            <span>Sponsored Disclosures Active</span>
-          </div>
-        </div>
-      </footer>
+function PartnerCard({ offer, compact }: { offer: SponsoredOffer; compact?: boolean }) {
+  return (
+    <div
+      className={`rounded-2xl border border-amber-200/80 bg-amber-50/50 ${compact ? "p-4" : "my-2 p-5"}`}
+    >
+      <p className="text-[10px] font-bold tracking-[0.14em] text-amber-800 uppercase">
+        {offer.disclosure}
+      </p>
+      <p className="mt-1 text-xs font-semibold text-neutral-500">{offer.sponsorName}</p>
+      <h4 className="mt-1 text-base font-bold text-neutral-950">{offer.headline}</h4>
+      {!compact ? (
+        <ul className="mt-2 space-y-1 text-sm text-neutral-600">
+          {offer.whyMatters.map((w, i) => (
+            <li key={i}>· {w}</li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="mt-3 flex items-center justify-between gap-2">
+        <span className="rounded-full bg-white px-2.5 py-0.5 text-[11px] font-bold text-teal-900 ring-1 ring-neutral-200">
+          {offer.rateHighlight}
+        </span>
+        <a
+          href={offer.ctaUrl}
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+          className="text-xs font-bold text-neutral-950 underline-offset-2 hover:underline"
+        >
+          {offer.ctaText} →
+        </a>
+      </div>
     </div>
   );
 }
@@ -1733,7 +746,7 @@ function NewsHubContent() {
 export default function App() {
   return (
     <HelmetProvider>
-      <NewsHubContent />
+      <FinSignalApp />
     </HelmetProvider>
   );
 }
