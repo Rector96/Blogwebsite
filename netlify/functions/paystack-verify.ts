@@ -6,11 +6,16 @@ async function applyPayment(reference: string, payload: any) {
   const { data: payment } = await db.from("sponsor_payments").select("*").eq("reference", reference).maybeSingle();
   if (!payment) return { ok: false, reason: "payment_not_found" };
 
-  const successful = payload?.status === "success" && String(payload?.currency || "NGN") === "NGN" && Number(payload?.amount) === Number(payment.amount_kobo);
+  const expectedCurrency = String(payment.currency || payment.paystack_currency || "NGN").toUpperCase();
+  const expectedAmount = Number(payment.amount_subunit ?? payment.amount_kobo ?? 0);
+  const successful = payload?.status === "success"
+    && String(payload?.currency || "").toUpperCase() === expectedCurrency
+    && Number(payload?.amount) === expectedAmount;
   if (!successful) {
     await db.from("sponsor_payments").update({
       status: payload?.status === "failed" ? "failed" : "pending",
       paystack_status: String(payload?.status || "unknown"),
+      paystack_currency: payload?.currency ? String(payload.currency).toUpperCase() : null,
       paystack_transaction_id: payload?.id ? String(payload.id) : null,
       updated_at: new Date().toISOString(),
     }).eq("reference", reference);
@@ -22,6 +27,7 @@ async function applyPayment(reference: string, payload: any) {
   await db.from("sponsor_payments").update({
     status: "paid",
     paystack_status: "success",
+    paystack_currency: payload?.currency ? String(payload.currency).toUpperCase() : null,
     paystack_transaction_id: payload.id ? String(payload.id) : null,
     paid_at: paidAt,
     updated_at: paidAt,
