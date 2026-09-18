@@ -16,7 +16,7 @@ export type NewsArticle = {
   read_time: string;
   category: string;
   trend_score: number;
-  trend_label: "Trending" | "Developing" | "Fresh";
+  trend_label: "Breaking" | "Trending" | "Developing" | "Fresh";
   image_credit: string;
   image_license: string;
   image_source_url: string;
@@ -32,19 +32,31 @@ const rss = new Parser({
 });
 
 const feeds = [
+  ["https://feeds.bbci.co.uk/news/world/rss.xml", "BBC World"],
+  ["https://feeds.bbci.co.uk/news/rss.xml", "BBC News"],
+  ["https://feeds.bbci.co.uk/news/business/rss.xml", "BBC Business"],
+  ["https://feeds.bbci.co.uk/news/technology/rss.xml", "BBC Technology"],
+  ["https://feeds.bbci.co.uk/sport/rss.xml", "BBC Sport"],
+  ["https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera"],
+  ["https://www.france24.com/en/rss", "France 24"],
+  ["https://rss.dw.com/rdf/rss-en-all", "DW"],
+  ["https://techcrunch.com/feed/", "TechCrunch"],
+  ["https://www.coindesk.com/arc/outboundfeeds/rss/", "CoinDesk"],
   ["https://finance.yahoo.com/news/rssindex", "Yahoo Finance"],
   ["https://www.finextra.com/rss/headlines.aspx", "Finextra"],
   ["https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch"],
-  ["https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera"],
-  ["https://techcrunch.com/feed/", "TechCrunch"],
-  ["https://www.coindesk.com/arc/outboundfeeds/rss/", "CoinDesk"],
+  ["https://www.espn.com/espn/rss/news", "ESPN"],
 ] as const;
 
 const queries = [
-  ["(finance OR markets OR banking OR economy OR companies)", "Business"],
-  ['("artificial intelligence" OR AI OR technology OR cybersecurity OR chips)', "Tech"],
-  ["(geopolitics OR diplomacy OR conflict OR election OR government)", "World"],
-  ["(Africa OR Nigeria OR Kenya OR Ghana OR SouthAfrica OR Egypt)", "Africa"],
+  ["(breaking OR latest OR developing OR "just in" OR "breaking news")", "World"],
+  ["(Europe OR European OR UK OR Britain OR France OR Germany OR Italy OR Spain OR Poland OR Ukraine OR Russia)", "Europe"],
+  ["(Middle East OR Israel OR Palestine OR Gaza OR Lebanon OR Iran OR Iraq OR Syria OR Gulf OR Saudi Arabia OR UAE)", "Middle East"],
+  ["(Asia OR China OR Japan OR India OR Korea OR Pakistan OR Indonesia OR Philippines OR Australia)", "Asia"],
+  ["(Africa OR Nigeria OR Kenya OR Ghana OR SouthAfrica OR Egypt OR Ethiopia OR Sudan OR Morocco)", "Africa"],
+  ["(football OR soccer OR Premier League OR Champions League OR UEFA OR FIFA OR NBA OR NFL OR tennis OR athletics OR Olympics)", "Sports"],
+  ["(finance OR markets OR banking OR economy OR companies OR stocks OR oil OR trade)", "Business"],
+  ['("artificial intelligence" OR AI OR technology OR cybersecurity OR chips OR software OR robotics)', "Tech"],
 ] as const;
 
 const stop = new Set([
@@ -127,7 +139,7 @@ async function getGdelt() {
       u.searchParams.set("query", query);
       u.searchParams.set("mode", "artlist");
       u.searchParams.set("maxrecords", "15");
-      u.searchParams.set("timespan", "3h");
+      u.searchParams.set("timespan", "6h");
       u.searchParams.set("sort", "datedesc");
       u.searchParams.set("format", "json");
       const r = await fetch(u, {
@@ -253,7 +265,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const items = scoreItems(dedupe([...rssItems, ...gdeltItems]))
     .sort((a, b) => b.trendScore - a.trendScore)
-    .slice(0, 20);
+    .slice(0, 32);
 
   const results = (await Promise.all(items.map(async (item) => {
     const section = category(item.title + " " + item.desc, item.category);
@@ -354,3 +366,6 @@ export default async (req: Request) => {
     });
   }
 };
+
+
+export const config = { schedule: "*/5 * * * *" };
