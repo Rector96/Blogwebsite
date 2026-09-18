@@ -1,6 +1,17 @@
 [build]
   command = "npm run build"
   publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[[redirects]]
+  from = "/api/cron/ingest"
+  to = "/.netlify/functions/cron-ingest"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"
