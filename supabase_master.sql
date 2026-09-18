@@ -148,42 +148,7 @@ create policy "Public read active sponsors"
     and (ends_at is null or ends_at >= now())
   );
 
--- Example sponsor rows (replace URLs with real affiliate / paid links)
-insert into public.sponsors (
-  slug, sponsor_name, headline, why_matters, cta_text, cta_url,
-  rate_highlight, disclosure, placement, active, priority, monthly_fee_usd
-) values
-(
-  'partner-cash-demo',
-  'Partner · Cash',
-  'Institutional-style cash yields for everyday balances',
-  '["Compare APY, liquidity, and insurance before parking large cash.", "Rates move — confirm live terms on the partner site."]'::jsonb,
-  'View offer',
-  'https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps',
-  'High-yield cash',
-  'Sponsored · We may earn a commission',
-  'both',
-  true,
-  10,
-  250.00
-),
-(
-  'partner-invest-demo',
-  'Partner · Investing',
-  'Tax-aware investing tools for taxable accounts',
-  '["Direct indexing features are not return guarantees.", "Suitability depends on tax residency and risk tolerance."]'::jsonb,
-  'Learn more',
-  'https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail',
-  'Tax tools',
-  'Sponsored · We may earn a commission',
-  'sidebar',
-  true,
-  20,
-  200.00
-)
-on conflict (slug) do nothing;
-
--- -----------------------------------------------------------------------------
+-- No demo sponsor rows are inserted. Create only real paid/approved sponsors through admin.\n\n-- -----------------------------------------------------------------------------
 -- 4) CLICK EVENTS — measure which offers convert (for $1k optimization)
 -- -----------------------------------------------------------------------------
 create table if not exists public.sponsor_clicks (
