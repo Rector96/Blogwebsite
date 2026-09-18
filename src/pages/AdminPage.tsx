@@ -1,32 +1,61 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Helmet } from "react-helmet-async";
+import { BarChart3, BookOpen, CreditCard, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Search, Settings, ShieldCheck, Users } from "lucide-react";
 
 type Dashboard = {
-  sponsors: Array<{ id: string; sponsor_name: string; headline: string; placement: string; active: boolean; monthly_fee_usd: number | null }>;
-  leads: Array<{ id: string; name: string | null; email: string; company: string | null; message: string | null; status: string; created_at: string }>;
-  events: Array<{ event_name: string; day: string; event_count: number }>;
+  generated_at: string;
+  overview: Record<string, number>;
+  daily: Array<{ day: string; value: number }>;
+  sources: Array<{ label: string; value: number }>;
+  countries: Array<{ label: string; value: number }>;
+  cities: Array<{ label: string; value: number }>;
+  devices: Array<{ label: string; value: number }>;
+  browsers: Array<{ label: string; value: number }>;
+  top_paths: Array<{ label: string; value: number }>;
+  top_articles: Array<{ id: string; views: number; article: any }>;
+  sponsors: any[];
+  leads: any[];
+  payments: any[];
+  articles: any[];
+  audit_logs: any[];
 };
 
-async function api(path: string, options?: RequestInit) {
-  const response = await fetch(path, { ...options, headers: { "content-type": "application/json", ...(options?.headers || {}) } });
+const tabs = [
+  ["dashboard", "Dashboard", BarChart3],
+  ["news", "News", Newspaper],
+  ["analytics", "Analytics", Globe2],
+  ["monetization", "Monetization", DollarSign],
+  ["audience", "Audience", Users],
+  ["newsletter", "Newsletter", Megaphone],
+  ["security", "Security", ShieldCheck],
+  ["settings", "Settings", Settings],
+] as const;
+
+async function api(options?: RequestInit) {
+  const response = await fetch("/api/admin", {
+    ...options,
+    headers: { "content-type": "application/json", ...(options?.headers || {}) },
+  });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Request failed");
   return data;
 }
+const money = (value: number) => "₦" + Number(value || 0).toLocaleString("en-NG");
+const number = (value: number) => Number(value || 0).toLocaleString("en-NG");
 
 export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [authed, setAuthed] = useState(false);
   const [data, setData] = useState<Dashboard | null>(null);
+  const [tab, setTab] = useState("dashboard");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [showSponsorForm, setShowSponsorForm] = useState(false);
-  const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", monthly_fee_usd: "", disclosure: "Sponsored · Paid placement" });
+  const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", monthly_fee_naira: "75000", disclosure: "Sponsored · Paid placement" });
 
   const load = async () => {
     try {
-      const result = await api("/api/admin");
+      const result = await api();
       setData(result);
       setAuthed(true);
       setError("");
@@ -34,139 +63,124 @@ export default function AdminPage() {
       setAuthed(false);
     }
   };
-
   useEffect(() => { void load(); }, []);
 
-  const login = async (e: FormEvent) => {
-    e.preventDefault();
-    setError("");
-    try {
-      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "login", password }) });
-      setPassword("");
-      await load();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Login failed");
-    }
+  const post = async (body: Record<string, unknown>) => {
+    setBusy(true);
+    try { await api({ method: "POST", body: JSON.stringify(body) }); await load(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Action failed"); }
+    finally { setBusy(false); }
   };
 
-  const updateSponsor = async (id: string, active: boolean) => {
+  const login = async (e: FormEvent) => {
+    e.preventDefault(); setBusy(true); setError("");
     try {
-      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "sponsor_status", id, active }) });
-      await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Update failed"); }
+      await api({ method: "POST", body: JSON.stringify({ action: "login", password }) });
+      setPassword(""); await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Login failed"); }
+    finally { setBusy(false); }
   };
 
   const addSponsor = async (e: FormEvent) => {
     e.preventDefault();
-    setError("");
-    try {
-      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "sponsor_create", ...sponsorForm, monthly_fee_usd: sponsorForm.monthly_fee_usd ? Number(sponsorForm.monthly_fee_usd) : null }) });
-      setSponsorForm({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", monthly_fee_usd: "", disclosure: "Sponsored · Paid placement" });
-      setShowSponsorForm(false);
-      await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Could not create sponsor"); }
-  };
-
-  const updateLead = async (id: string, status: string) => {
-    try {
-      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "lead_status", id, status }) });
-      await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "Update failed"); }
+    await post({ action: "sponsor_create", ...sponsorForm, monthly_fee_naira: Number(sponsorForm.monthly_fee_naira || 0) });
+    setSponsorForm({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", monthly_fee_naira: "75000", disclosure: "Sponsored · Paid placement" });
   };
 
   const logout = async () => {
-    setBusy(true);
-    try {
-      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "logout" }) });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Logout failed");
-    } finally {
-      setBusy(false);
-      setAuthed(false);
-      setData(null);
-    }
+    await post({ action: "logout" });
+    setAuthed(false); setData(null);
   };
 
+  const activeSponsors = data?.sponsors.filter(s => s.active).length || 0;
+  const pendingLeads = data?.leads.filter(l => l.status === "new").length || 0;
+  const pendingPayments = data?.payments.filter(p => p.status === "pending").length || 0;
+  const topCountries = useMemo(() => data?.countries.slice(0, 8) || [], [data]);
+  const topSources = useMemo(() => data?.sources.slice(0, 8) || [], [data]);
+
   if (!authed || !data) {
-    return (
-      <div className="grid min-h-dvh place-items-center bg-neutral-950 p-4">
-        <Helmet><title>RWDNEWS Admin</title><meta name="robots" content="noindex,nofollow,noarchive" /></Helmet>
-        <form onSubmit={login} className="w-full max-w-sm border border-neutral-800 bg-white p-6">
-          <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">Private</p>
-          <h1 className="font-display mt-2 text-3xl font-semibold">RWDNEWS Admin</h1>
-          <p className="mt-2 text-sm text-neutral-500">Sponsors, advertiser leads and engagement reporting.</p>
-          <div className="relative mt-5">
-            <input
-              type={showPassword ? "text" : "password"}
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="h-11 w-full border px-3 pr-20"
-              placeholder="Admin password"
-              autoComplete="current-password"
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(value => !value)}
-              className="absolute top-1/2 right-2 -translate-y-1/2 px-2 py-1 text-xs font-semibold text-neutral-500"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-            >
-              {showPassword ? "Hide" : "Show"}
-            </button>
-          </div>
-          <button disabled={busy} className="mt-3 h-11 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50">Sign in</button>
-          {error ? <p className="mt-3 text-xs text-red-700">{error}</p> : null}
-        </form>
-      </div>
-    );
+    return <div className="grid min-h-dvh place-items-center bg-neutral-950 p-4">
+      <Helmet><title>RWDNEWS Admin</title><meta name="robots" content="noindex,nofollow,noarchive" /></Helmet>
+      <form onSubmit={login} className="w-full max-w-sm border border-neutral-800 bg-white p-6 shadow-2xl">
+        <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">Private operations</p>
+        <h1 className="font-display mt-2 text-3xl font-semibold">RWDNEWS Admin</h1>
+        <p className="mt-2 text-sm text-neutral-500">News, audience, sponsors, payments and platform operations.</p>
+        <div className="relative mt-5"><input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} className="h-11 w-full border px-3 pr-20" placeholder="Admin password" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(v => !v)} className="absolute top-1/2 right-2 -translate-y-1/2 px-2 py-1 text-xs font-semibold text-neutral-500">{showPassword ? "Hide" : "Show"}</button></div>
+        <button disabled={busy} className="mt-3 h-11 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50">Sign in</button>
+        {error ? <p className="mt-3 text-xs text-red-700">{error}</p> : null}
+      </form>
+    </div>;
   }
 
-  const totals = data.events.reduce<Record<string, number>>((acc, e) => {
-    acc[e.event_name] = (acc[e.event_name] || 0) + Number(e.event_count);
-    return acc;
-  }, {});
+  return <div className="min-h-dvh bg-neutral-100 text-neutral-950">
+    <Helmet><title>RWDNEWS Admin</title></Helmet>
+    <header className="sticky top-0 z-40 border-b bg-neutral-950 text-white">
+      <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
+        <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Private operations</p><h1 className="font-display text-xl font-semibold sm:text-2xl">RWDNEWS Admin</h1></div>
+        <div className="flex items-center gap-2"><a href="/" className="border border-neutral-700 px-3 py-2 text-xs font-semibold text-amber-400">Open site</a><button onClick={() => void logout()} disabled={busy} className="grid size-9 place-items-center border border-neutral-700"><LogOut className="size-4" /></button></div>
+      </div>
+      <nav className="mx-auto flex max-w-[1500px] gap-1 overflow-x-auto px-3 pb-3 sm:px-5" aria-label="Admin sections">
+        {tabs.map(([id, label, Icon]) => <button key={id} onClick={() => setTab(id)} className={tab === id ? "flex shrink-0 items-center gap-2 rounded-full bg-white px-3 py-2 text-xs font-bold text-neutral-950" : "flex shrink-0 items-center gap-2 rounded-full px-3 py-2 text-xs font-semibold text-neutral-400 hover:bg-neutral-800 hover:text-white"}><Icon className="size-3.5" />{label}</button>)}
+      </nav>
+    </header>
 
-  return (
-    <div className="min-h-dvh bg-neutral-100 text-neutral-950">
-      <Helmet><title>RWDNEWS Admin</title></Helmet>
-      <header className="border-b bg-neutral-950 text-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-          <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Private dashboard</p><h1 className="font-display text-2xl font-semibold">RWDNEWS Admin</h1></div>
-          <div className="flex items-center gap-2"><a href="/" className="border border-neutral-700 px-3 py-2 text-xs font-semibold text-amber-400">Open site</a><button onClick={() => void logout()} disabled={busy} className="border border-neutral-700 px-3 py-2 text-xs font-semibold text-white disabled:opacity-50">Log out</button></div>
+    <main className="mx-auto max-w-[1500px] space-y-6 px-4 py-5 sm:px-6 sm:py-7">
+      {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
+
+      {tab === "dashboard" ? <section className="space-y-6">
+        <PageHeading title="Dashboard" subtitle="A live operating view of RWDNEWS." />
+        <MetricGrid overview={data.overview} />
+        <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+          <Panel title="Daily page views" subtitle="Last 30 days"><DailyChart data={data.daily} /></Panel>
+          <Panel title="Traffic sources" subtitle="Where readers arrive from"><Bars data={topSources} /></Panel>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
-        {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
-        <section><div className="mb-3 flex items-end justify-between"><div><p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-500">Overview</p><h2 className="font-display text-2xl font-semibold">Performance</h2></div><p className="text-xs text-neutral-500">Recorded product events</p></div><div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {["article_open","article_share","article_save","newsletter_signup","sponsor_click","advertise_open"].map(k => (
-            <div key={k} className="border bg-white p-4"><p className="text-[10px] font-bold uppercase text-neutral-500">{k.replace("_"," ")}</p><p className="mt-2 text-2xl font-bold">{totals[k] || 0}</p></div>
-          ))}
-        </div></section>
-        <section className="border bg-white">
-          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-display text-xl font-semibold">Sponsors / ads</h2><p className="text-xs text-neutral-500">Only active paid sponsor campaigns appear on the public site.</p></div><button onClick={() => setShowSponsorForm(v => !v)} className="h-10 bg-neutral-950 px-4 text-xs font-bold text-white">{showSponsorForm ? "Close form" : "+ Add sponsor"}</button></div>
-          {showSponsorForm ? <form onSubmit={addSponsor} className="grid gap-3 border-b bg-neutral-50 p-4 sm:grid-cols-2"><input required placeholder="Sponsor / brand name" value={sponsorForm.sponsor_name} onChange={e => setSponsorForm(v => ({ ...v, sponsor_name: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input required placeholder="Campaign headline" value={sponsorForm.headline} onChange={e => setSponsorForm(v => ({ ...v, headline: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input required type="url" placeholder="CTA / website URL" value={sponsorForm.cta_url} onChange={e => setSponsorForm(v => ({ ...v, cta_url: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input placeholder="Button text" value={sponsorForm.cta_text} onChange={e => setSponsorForm(v => ({ ...v, cta_text: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><select value={sponsorForm.placement} onChange={e => setSponsorForm(v => ({ ...v, placement: e.target.value }))} className="h-10 border bg-white px-3 text-sm"><option value="sidebar">Sidebar</option><option value="in_feed">In feed</option><option value="both">Sidebar + in feed</option></select><input type="number" min="0" step="1" placeholder="Monthly fee (USD)" value={sponsorForm.monthly_fee_usd} onChange={e => setSponsorForm(v => ({ ...v, monthly_fee_usd: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input placeholder="Disclosure text" value={sponsorForm.disclosure} onChange={e => setSponsorForm(v => ({ ...v, disclosure: e.target.value }))} className="h-10 border bg-white px-3 text-sm sm:col-span-2" /><button disabled={busy} className="h-10 bg-amber-500 px-4 text-xs font-bold sm:col-span-2 disabled:opacity-50">Create sponsor (starts active)</button></form> : null}
-          <div className="divide-y">
-            {data.sponsors.length ? data.sponsors.map(s => (
-              <div key={s.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
-                <div><p className="text-xs font-bold text-amber-800">{s.sponsor_name}</p><p className="font-semibold">{s.headline}</p><p className="mt-1 text-xs text-neutral-500">{s.placement} · {s.monthly_fee_usd ? "$" + s.monthly_fee_usd + "/mo" : "direct deal"}</p></div>
-                <span className={s.active ? "text-xs font-bold text-teal-800" : "text-xs font-bold text-neutral-400"}>{s.active ? "ACTIVE" : "OFF"}</span>
-                <button disabled={busy} onClick={() => void updateSponsor(s.id, !s.active)} className="h-9 border px-3 text-xs font-semibold disabled:opacity-50">{s.active ? "Pause" : "Activate"}</button>
-              </div>
-            )) : <p className="p-4 text-sm text-neutral-500">No active sponsor campaigns yet. Add a real advertiser above when a paid deal is confirmed.</p>}
-          </div>
-        </section>
-        <section className="border bg-white">
-          <div className="border-b p-4"><h2 className="font-display text-xl font-semibold">Advertiser leads</h2></div>
-          <div className="divide-y">
-            {data.leads.length ? data.leads.map(l => (
-              <div key={l.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto] md:items-center">
-                <div><p className="font-semibold">{l.company || l.name || "Unnamed lead"}</p><p className="text-sm">{l.email}</p><p className="mt-1 text-xs text-neutral-500">{l.message || "Sponsorship inquiry"} · {new Date(l.created_at).toLocaleString()}</p></div>
-                <select value={l.status} disabled={busy} onChange={e => void updateLead(l.id, e.target.value)} className="h-9 border px-2 text-xs disabled:opacity-50"><option>new</option><option>contacted</option><option>won</option><option>lost</option></select>
-              </div>
-            )) : <p className="p-4 text-sm text-neutral-500">No advertiser leads yet.</p>}
-          </div>
-        </section>
-      </main>
-    </div>
-  );
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Panel title="Top countries"><Bars data={topCountries} /></Panel>
+          <Panel title="Top stories"><div className="divide-y">{data.top_articles.slice(0,8).map((x) => <div key={x.id} className="py-3"><p className="text-xs text-neutral-500">{number(x.views)} views</p><p className="font-semibold">{x.article?.ai_hook_title || x.article?.original_title || x.id}</p></div>)}</div></Panel>
+          <Panel title="Operations"><div className="space-y-3 text-sm"><StatusLine label="Active sponsors" value={number(activeSponsors)} /><StatusLine label="New advertiser leads" value={number(pendingLeads)} /><StatusLine label="Pending payments" value={number(pendingPayments)} /><StatusLine label="Newsletter subscribers" value={number(data.overview.newsletter_subscribers)} /></div></Panel>
+        </div>
+      </section> : null}
+
+      {tab === "news" ? <section className="space-y-6">
+        <PageHeading title="News operations" subtitle="Manage visibility and homepage emphasis without changing the source-backed wire." />
+        <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured })} className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
+      </section> : null}
+
+      {tab === "analytics" ? <section className="space-y-6">
+        <PageHeading title="Analytics" subtitle="Traffic, engagement and acquisition over the recorded period." />
+        <MetricGrid overview={data.overview} />
+        <div className="grid gap-6 lg:grid-cols-2"><Panel title="Daily traffic"><DailyChart data={data.daily} /></Panel><Panel title="Traffic sources"><Bars data={data.sources} /></Panel><Panel title="Countries"><Bars data={data.countries} /></Panel><Panel title="Top pages"><Bars data={data.top_paths} /></Panel></div>
+      </section> : null}
+
+      {tab === "audience" ? <section className="space-y-6">
+        <PageHeading title="Audience" subtitle="Understand who is reading RWDNEWS and how they reach it." />
+        <div className="grid gap-6 lg:grid-cols-2"><Panel title="Countries"><Bars data={data.countries} /></Panel><Panel title="Cities"><Bars data={data.cities} /></Panel><Panel title="Devices"><Bars data={data.devices} /></Panel><Panel title="Browsers"><Bars data={data.browsers} /></Panel></div>
+      </section> : null}
+
+      {tab === "monetization" ? <section className="space-y-6">
+        <PageHeading title="Monetization" subtitle="All sponsor inventory, advertiser leads and NGN payments." />
+        <MetricGrid overview={data.overview} moneyMetric="paid_revenue_naira" />
+        <Panel title="Add a direct sponsor" subtitle="Direct deals can be created here, then activated after the deal is confirmed."><form onSubmit={addSponsor} className="grid gap-3 md:grid-cols-2 lg:grid-cols-4"><input required placeholder="Brand / company" value={sponsorForm.sponsor_name} onChange={e=>setSponsorForm(v=>({...v,sponsor_name:e.target.value}))} className="h-10 border px-3 text-sm" /><input required placeholder="Campaign headline" value={sponsorForm.headline} onChange={e=>setSponsorForm(v=>({...v,headline:e.target.value}))} className="h-10 border px-3 text-sm" /><input required type="url" placeholder="Website URL" value={sponsorForm.cta_url} onChange={e=>setSponsorForm(v=>({...v,cta_url:e.target.value}))} className="h-10 border px-3 text-sm" /><input type="number" min="0" placeholder="Monthly fee ₦" value={sponsorForm.monthly_fee_naira} onChange={e=>setSponsorForm(v=>({...v,monthly_fee_naira:e.target.value}))} className="h-10 border px-3 text-sm" /><select value={sponsorForm.placement} onChange={e=>setSponsorForm(v=>({...v,placement:e.target.value}))} className="h-10 border px-3 text-sm"><option value="sidebar">Sidebar</option><option value="in_feed">In-feed</option><option value="both">Homepage + sidebar</option></select><input placeholder="CTA text" value={sponsorForm.cta_text} onChange={e=>setSponsorForm(v=>({...v,cta_text:e.target.value}))} className="h-10 border px-3 text-sm" /><button disabled={busy} className="h-10 bg-neutral-950 px-4 text-xs font-bold text-white">Create paused sponsor</button></form></Panel>
+        <Panel title="Sponsors" subtitle="Real paid campaigns only."><div className="divide-y">{data.sponsors.map(s=><div key={s.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto_auto] lg:items-center"><div><p className="text-xs font-bold text-amber-800">{s.sponsor_name}</p><p className="font-semibold">{s.headline}</p><p className="text-xs text-neutral-500">{s.placement} · {money(s.monthly_fee_naira)} · {s.starts_at ? new Date(s.starts_at).toLocaleDateString() : "no start"} → {s.ends_at ? new Date(s.ends_at).toLocaleDateString() : "open"}</p></div><span className={s.active?"text-xs font-bold text-teal-800":"text-xs font-bold text-neutral-400"}>{s.active?"ACTIVE":"PAUSED"}</span><button disabled={busy} onClick={()=>void post({action:"sponsor_status",id:s.id,active:!s.active})} className="border px-3 py-2 text-xs font-semibold">{s.active?"Pause":"Activate"}</button></div>)}</div></Panel>
+        <Panel title="Payments" subtitle="Paystack transactions in Nigerian naira."><div className="divide-y">{data.payments.map(p=><div key={p.reference} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto_auto] lg:items-center"><div><p className="font-semibold">{p.package_name} · {money(p.amount_naira)}</p><p className="text-xs text-neutral-500">{p.company || p.name || "Advertiser"} · {p.email} · {p.reference}</p><p className="text-xs text-neutral-500">{p.status} · {p.paystack_status || "not verified"} · {new Date(p.created_at).toLocaleString()}</p></div><button disabled={busy} onClick={()=>void post({action:"payment_verify",reference:p.reference})} className="border px-3 py-2 text-xs font-semibold">Verify</button>{p.status==="paid" && !p.sponsor_id ? <button disabled={busy} onClick={()=>void post({action:"payment_activate",reference:p.reference})} className="bg-teal-800 px-3 py-2 text-xs font-bold text-white">Activate campaign</button> : <span className="text-xs text-neutral-500">{p.sponsor_id?"Campaign active/linked":"—"}</span>}</div>)}</div></Panel>
+        <Panel title="Advertiser leads"><div className="divide-y">{data.leads.map(l=><div key={l.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="font-semibold">{l.company || l.name || "Unnamed lead"}</p><p className="text-sm">{l.email}</p><p className="text-xs text-neutral-500">{l.message || "Sponsorship inquiry"} · {new Date(l.created_at).toLocaleString()}</p></div><select value={l.status} disabled={busy} onChange={e=>void post({action:"lead_status",id:l.id,status:e.target.value})} className="h-9 border px-2 text-xs"><option>new</option><option>contacted</option><option>won</option><option>lost</option></select></div>)}</div></Panel>
+      </section> : null}
+
+      {tab === "newsletter" ? <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Your audience list is ready for growth and future sponsorship." /><MetricGrid overview={{newsletter_subscribers:data.overview.newsletter_subscribers}} /><Panel title="Next operating data"><p className="text-sm leading-relaxed text-neutral-600">Subscriber emails remain protected in Supabase. This dashboard exposes aggregate counts rather than the private email list.</p></Panel></section> : null}
+
+      {tab === "security" ? <section className="space-y-6"><PageHeading title="Security & audit" subtitle="Track administrative changes and keep the private area separate from public analytics." /><Panel title="Recent admin actions"><div className="divide-y">{data.audit_logs.map(log=><div key={log.id} className="py-3"><p className="text-xs font-bold">{log.action}</p><p className="text-xs text-neutral-500">{log.entity_type || "system"} · {log.entity_id || "—"} · {new Date(log.created_at).toLocaleString()}</p></div>)}</div></Panel></section> : null}
+
+      {tab === "settings" ? <section className="space-y-6"><PageHeading title="Settings" subtitle="Production configuration and operating notes." /><div className="grid gap-6 md:grid-cols-2"><Panel title="Payment configuration"><StatusLine label="Currency" value="NGN / Nigerian naira" /><StatusLine label="Payment provider" value="Paystack" /><StatusLine label="Webhook endpoint" value="/api/paystack/webhook" /><StatusLine label="Admin session" value="12-hour signed HttpOnly cookie" /></Panel><Panel title="News standards"><StatusLine label="Coverage" value="Global" /><StatusLine label="Images" value="Real/source-backed images only" /><StatusLine label="Breaking wire" value="Scheduled + live refresh" /><StatusLine label="Editorial rule" value="Sponsored content labeled" /></Panel></div></section> : null}
+    </main>
+  </div>;
 }
+
+function PageHeading({ title, subtitle }: { title: string; subtitle: string }) { return <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">RWDNEWS</p><h2 className="font-display mt-1 text-3xl font-semibold">{title}</h2><p className="mt-1 text-sm text-neutral-500">{subtitle}</p></div>; }
+function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) { return <section className="border border-neutral-200 bg-white p-4 shadow-sm sm:p-5"><div className="mb-4 border-b border-neutral-100 pb-3"><h3 className="font-display text-xl font-semibold">{title}</h3>{subtitle?<p className="mt-1 text-xs text-neutral-500">{subtitle}</p>:null}</div>{children}</section>; }
+function MetricGrid({ overview, moneyMetric }: { overview: Record<string,number>; moneyMetric?: string }) {
+  const labels: Array<[string,string]> = [["page_views","Page views"],["unique_sessions","Unique sessions"],["article_opens","Article opens"],["shares","Shares"],["sponsor_clicks","Sponsor clicks"],["advertiser_leads","Advertiser leads"],["newsletter_subscribers","Newsletter subscribers"],["paid_revenue_naira","Paid revenue"]];
+  return <div className="grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-8">{labels.map(([key,label])=><div key={key} className="border bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{label}</p><p className="mt-2 text-2xl font-bold">{moneyMetric===key?money(overview[key]):key==="paid_revenue_naira"?money(overview[key]):number(overview[key])}</p></div>)}</div>;
+}
+function StatusLine({label,value}:{label:string;value:string}) { return <div className="flex items-center justify-between gap-4 border-b border-neutral-100 py-3 text-sm"><span className="text-neutral-500">{label}</span><span className="text-right font-semibold">{value}</span></div>; }
+function Bars({data}:{data:Array<{label:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="space-y-3">{data.length?data.map(x=><div key={x.label}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate">{x.label}</span><span className="font-bold">{number(x.value)}</span></div><div className="h-2 bg-neutral-100"><div className="h-full bg-neutral-900" style={{width: Math.max(3,(x.value/max)*100)+"%"}} /></div></div>):<p className="text-sm text-neutral-500">No traffic recorded yet.</p>}</div>; }
+function DailyChart({data}:{data:Array<{day:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="flex h-44 items-end gap-1 overflow-x-auto">{data.map(x=><div key={x.day} className="flex min-w-4 flex-1 flex-col items-center justify-end gap-1"><div title={x.day+" · "+number(x.value)} className="w-full min-w-2 bg-neutral-900" style={{height:Math.max(3,(x.value/max)*130)+"px"}} /><span className="hidden text-[8px] text-neutral-400 sm:block">{x.day.slice(5)}</span></div>)}</div>; }
