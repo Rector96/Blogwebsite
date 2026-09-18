@@ -18,7 +18,8 @@ export default function AdminPage() {
   const [password, setPassword] = useState("");
   const [authed, setAuthed] = useState(false);
   const [data, setData] = useState<Dashboard | null>(null);
-  const [error, setError] = useState("");\n  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const load = async () => {
     try {
