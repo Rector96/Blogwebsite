@@ -13,43 +13,11 @@ export type SponsoredOffer = {
   placement?: string;
 };
 
-export const FALLBACK_SPONSORS: SponsoredOffer[] = [
-  {
-    id: "ad-apex",
-    slug: "partner-cash-demo",
-    sponsorName: "Partner · Cash",
-    headline: "Institutional-style cash yields for everyday balances",
-    whyMatters: [
-      "Compare APY, liquidity, and insurance structure before parking large cash.",
-      "Rates move — always confirm live terms on the partner site.",
-    ],
-    ctaText: "View offer",
-    ctaUrl:
-      "https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps",
-    rateHighlight: "High-yield cash",
-    disclosure: "Sponsored · We may earn a commission",
-    placement: "both",
-  },
-  {
-    id: "ad-titan",
-    slug: "partner-invest-demo",
-    sponsorName: "Partner · Investing",
-    headline: "Tax-aware investing tools for taxable accounts",
-    whyMatters: [
-      "Direct indexing features are not return guarantees.",
-      "Suitability depends on tax residency and risk tolerance.",
-    ],
-    ctaText: "Learn more",
-    ctaUrl:
-      "https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail",
-    rateHighlight: "Tax tools",
-    disclosure: "Sponsored · We may earn a commission",
-    placement: "sidebar",
-  },
-];
+export const FALLBACK_SPONSORS: SponsoredOffer[] = [];
 
 export async function fetchSponsors(): Promise<SponsoredOffer[]> {
-  if (!isSupabaseConfigured || !supabase) return FALLBACK_SPONSORS;
+  if (!isSupabaseConfigured || !supabase) return [];
+
   const { data, error } = await supabase
     .from("sponsors")
     .select(
@@ -58,7 +26,7 @@ export async function fetchSponsors(): Promise<SponsoredOffer[]> {
     .eq("active", true)
     .order("priority", { ascending: true });
 
-  if (error || !data?.length) return FALLBACK_SPONSORS;
+  if (error || !data?.length) return [];
 
   return data.map((row) => ({
     id: String(row.id),
