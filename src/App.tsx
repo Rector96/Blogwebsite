@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import { Bookmark, BookmarkCheck, Menu, RefreshCw, Search, X } from "lucide-react";
+import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
   FALLBACK_SPONSORS,
@@ -10,6 +10,11 @@ import {
   type SponsoredOffer,
 } from "./lib/sponsors";
 import { ArticleReader } from "./components/ArticleReader";
+import { AdSlot } from "./components/AdSlot";
+import AdminPage from "./pages/AdminPage";
+import { InfoPage } from "./pages/InfoPage";
+import StoryPage from "./pages/StoryPage";
+import { logRwdNewsEvent } from "./lib/analytics";
 
 export interface EnrichedArticle {
   id: string;
@@ -167,6 +172,11 @@ function todayLabel() {
   });
 }
 
+function storyPath(article: EnrichedArticle) {
+  const title = (article.ai_hook_title || article.original_title).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
+  return "/news/" + title + "--" + encodeURIComponent(article.id);
+}
+
 function normalizeTags(tags?: string[]) {
   return (tags || []).map((t) => String(t).replace(/^#/, ""));
 }
@@ -174,6 +184,14 @@ function normalizeTags(tags?: string[]) {
 function RwdNewsApp() {
   const [articles, setArticles] = useState<EnrichedArticle[]>([]);
   const [sponsors, setSponsors] = useState<SponsoredOffer[]>(FALLBACK_SPONSORS);
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("rwdnews_recent_v1");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTag, setSelectedTag] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -193,7 +211,7 @@ function RwdNewsApp() {
   const [leadEmail, setLeadEmail] = useState("");
   const [leadName, setLeadName] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
-  const [leadMsg, setLeadMsg] = useState<string | null>(null);\n  const [showLoader, setShowLoader] = useState(true);
+  const [leadMsg, setLeadMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -233,6 +251,21 @@ function RwdNewsApp() {
     void fetchNews();
   }, []);
 
+  const openArticle = (article: EnrichedArticle) => {
+    setRecentlyViewed((prev) => {
+      const next = [article.id, ...prev.filter((id) => id !== article.id)].slice(0, 8);
+      try { localStorage.setItem("rwdnews_recent_v1", JSON.stringify(next)); } catch {}
+      return next;
+    });
+    void logRwdNewsEvent({ event: "article_open", articleId: article.id, articleUrl: article.original_url });
+    window.location.assign(storyPath(article));
+  };
+
+  const openAdvertiserForm = () => {
+    setLeadOpen(true);
+    void logRwdNewsEvent({ event: "advertise_open", placement: "media_kit" });
+  };
+
   const tags = useMemo(() => {
     const categories = new Set<string>();
     articles.forEach((a) => {
@@ -263,7 +296,18 @@ function RwdNewsApp() {
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSaved((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (!prev.includes(id)) {
+        const article = articles.find((item) => item.id === id);
+        void logRwdNewsEvent({
+          event: "article_save",
+          articleId: id,
+          articleUrl: article?.original_url,
+        });
+      }
+      return next;
+    });
   };
 
   const submitNewsletter = async (e: React.FormEvent) => {
@@ -280,6 +324,7 @@ function RwdNewsApp() {
           .upsert({ email: v, source: "rwdnews_web" }, { onConflict: "email" });
       }
       setEmailMsg("You're on the RWDNEWS list.");
+      void logRwdNewsEvent({ event: "newsletter_signup", placement: "sidebar" });
       setEmail("");
     } catch {
       setEmailMsg("Thanks — we'll confirm shortly.");
@@ -304,10 +349,10 @@ function RwdNewsApp() {
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>RWDNEWS — Markets, Fintech & Money</title>
+        <title>RWDNEWS — Global News, Trends & Briefings</title>
         <meta
           name="description"
-          content="RWDNEWS — markets, fintech, and money. AI-curated briefings you read on-site."
+          content="RWDNEWS delivers source-backed global news, developing stories, trends, and concise briefings you can read on-site."
         />
       </Helmet>
 
@@ -320,7 +365,7 @@ function RwdNewsApp() {
           </span>
           <button
             type="button"
-            onClick={() => setLeadOpen(true)}
+            onClick={openAdvertiserForm}
             className="font-semibold text-amber-400"
           >
             Advertise
@@ -334,7 +379,7 @@ function RwdNewsApp() {
           <a href="/" className="block shrink-0" aria-label="RWDNEWS home">
             <img
               src="/rwdnews-logo.svg"
-              alt="RWDNEWS — Markets, Fintech & Money"
+              alt="RWDNEWS — Global News, Trends & Briefings"
               className="h-auto w-[205px] sm:w-[275px]"
             />
           </a>
@@ -357,7 +402,7 @@ function RwdNewsApp() {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto border-t border-neutral-100 px-4 py-2 sm:px-6">
+        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto border-t border-neutral-100 px-4 py-2 sm:px-6" aria-label="News categories">
           {tags.map((t) => (
             <button
               key={t}
@@ -374,7 +419,7 @@ function RwdNewsApp() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
-        <div className="ad-slot ad-slot-leader">Advertisement</div>
+        <AdSlot slot={import.meta.env.VITE_ADSENSE_LEADER_SLOT} className="ad-slot-leader" />
       </div>
 
       <main className="mx-auto grid max-w-6xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-[1fr_300px]">
@@ -382,7 +427,7 @@ function RwdNewsApp() {
           {hero ? (
             <section className="border-b border-neutral-200 pb-8">
               <div className="grid gap-6 lg:grid-cols-12">
-                <article className="group cursor-pointer lg:col-span-7" onClick={() => setActive(hero)}>
+                <article className="group cursor-pointer lg:col-span-7" onClick={() => openArticle(hero)}>
                   <div className="overflow-hidden bg-neutral-100">
                     <img
                       src={hero.image}
@@ -411,7 +456,7 @@ function RwdNewsApp() {
                     <article
                       key={a.id}
                       className="story-row cursor-pointer py-4 first:pt-0"
-                      onClick={() => setActive(a)}
+                      onClick={() => openArticle(a)}
                     >
                       <div className="mb-3 overflow-hidden bg-neutral-100">
                         <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
@@ -431,7 +476,7 @@ function RwdNewsApp() {
           ) : null}
 
           <div className="py-5">
-            <div className="ad-slot ad-slot-infeed">Advertisement</div>
+            <AdSlot slot={import.meta.env.VITE_ADSENSE_INFEED_SLOT} className="ad-slot-infeed" />
           </div>
 
           <section className="mb-8">
@@ -450,7 +495,7 @@ function RwdNewsApp() {
                   <button
                     key={"trend-" + a.id}
                     type="button"
-                    onClick={() => setActive(a)}
+                    onClick={() => openArticle(a)}
                     className="group overflow-hidden border border-neutral-200 bg-white text-left"
                   >
                     <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
@@ -468,6 +513,22 @@ function RwdNewsApp() {
           </section>
 
           <section>
+            {recentlyViewed.length > 0 && !searchQuery && selectedTag === "All" ? (
+              <div className="mb-8">
+                <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
+                  <h2 className="text-sm font-extrabold tracking-wide uppercase">Continue reading</h2>
+                  <button type="button" onClick={() => setRecentlyViewed([])} className="text-[11px] text-neutral-400 hover:text-neutral-700">Clear</button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {recentlyViewed.map((id) => articles.find((a) => a.id === id)).filter(Boolean).slice(0, 4).map((a) => (
+                    <button key={a!.id} type="button" onClick={() => openArticle(a!)} className="border border-neutral-200 p-3 text-left hover:bg-neutral-50">
+                      <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">{a!.source}</p>
+                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold">{a!.ai_hook_title || a!.original_title}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
               <h2 className="text-sm font-extrabold tracking-wide uppercase">Latest</h2>
               <span className="text-[11px] text-neutral-400">{filtered.length} stories</span>
@@ -477,7 +538,7 @@ function RwdNewsApp() {
                 <React.Fragment key={a.id}>
                   <article
                     className="story-row flex cursor-pointer gap-4 py-5"
-                    onClick={() => setActive(a)}
+                    onClick={() => openArticle(a)}
                   >
                     <div className="min-w-0 flex-1">
                       <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
@@ -526,7 +587,7 @@ function RwdNewsApp() {
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <div className="ad-slot ad-slot-sidebar">Advertisement</div>
+          <AdSlot slot={import.meta.env.VITE_ADSENSE_SIDEBAR_SLOT} className="ad-slot-sidebar" />
           <div className="border border-neutral-200 bg-neutral-50 p-4">
             <p className="text-[10px] font-bold tracking-[0.16em] text-teal-800 uppercase">RWDNEWS standard</p>
             <p className="mt-1 text-sm font-semibold">Source-backed first. AI-assisted second.</p>
@@ -537,7 +598,7 @@ function RwdNewsApp() {
           <div className="border border-neutral-200 bg-neutral-950 p-5 text-white">
             <p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Newsletter</p>
             <h3 className="font-display mt-2 text-xl font-semibold">RWDNEWS Brief</h3>
-            <p className="mt-1 text-sm text-neutral-400">Markets & fintech — weekly.</p>
+            <p className="mt-1 text-sm text-neutral-400">Global news & trends — weekly.</p>
             <form onSubmit={submitNewsletter} className="mt-4 space-y-2">
               <input
                 type="email"
@@ -566,7 +627,7 @@ function RwdNewsApp() {
               Request media kit →
             </button>
           </div>
-          <div className="ad-slot ad-slot-sidebar">Advertisement</div>
+          <AdSlot slot={import.meta.env.VITE_ADSENSE_SIDEBAR_SLOT} className="ad-slot-sidebar" />
         </aside>
       </main>
 
@@ -576,6 +637,9 @@ function RwdNewsApp() {
           <p className="mt-2 text-sm text-neutral-500">
             Read on-site briefings · Sources credited · Built for readers & advertisers
           </p>
+          <nav className="mt-4 flex flex-wrap gap-4 text-xs font-semibold text-neutral-600" aria-label="RWDNEWS information">
+            <a href="/about">About</a><a href="/editorial">Editorial</a><a href="/advertise">Advertise</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+          </nav>
         </div>
       </footer>
 
@@ -596,6 +660,18 @@ function RwdNewsApp() {
             className="relative z-10 w-full max-w-md space-y-3 border bg-white p-6 shadow-xl"
           >
             <h3 className="font-display text-xl font-semibold">Advertise on RWDNEWS</h3>
+            <p className="text-sm leading-relaxed text-neutral-600">
+              Put your brand in front of readers through sponsored stories, newsletter
+              placements, or premium homepage inventory. We will send the current media kit
+              and availability after your inquiry.
+            </p>
+            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
+              {["Sponsored stories", "Newsletter", "Homepage"].map((item) => (
+                <div key={item} className="border border-neutral-200 px-3 py-2 font-semibold text-neutral-700">
+                  {item}
+                </div>
+              ))}
+            </div>
             <input className="h-11 w-full border px-3 text-sm" placeholder="Name" value={leadName} onChange={(e) => setLeadName(e.target.value)} />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Work email" value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} required />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Company" value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} />
@@ -640,9 +716,10 @@ function PartnerCard({
 }
 
 export default function App() {
-  return (
-    <HelmetProvider>
-      <RwdNewsApp />
-    </HelmetProvider>
-  );
+  const path = typeof window !== "undefined" ? window.location.pathname : "/";
+  let page: React.ReactNode = <RwdNewsApp />;
+  if (path === "/admin" || path.startsWith("/admin/")) page = <AdminPage />;
+  else if (path.startsWith("/news/")) page = <StoryPage />;
+  else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path)) page = <InfoPage path={path} />;
+  return <HelmetProvider>{page}</HelmetProvider>;
 }
