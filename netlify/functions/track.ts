@@ -19,6 +19,7 @@ function sourceFrom(referrer: string, utmSource: string) {
   if (!referrer) return "Direct";
   try {
     const host = new URL(referrer).hostname.replace(/^www\./, "");
+    if (/news\.google\./i.test(host)) return "Google News";
     if (/google\./i.test(host)) return "Google";
     if (/bing\./i.test(host)) return "Bing";
     if (/yahoo\./i.test(host)) return "Yahoo";
@@ -27,7 +28,6 @@ function sourceFrom(referrer: string, utmSource: string) {
     if (/t\.co/i.test(host)) return "X";
     if (/whatsapp\./i.test(host)) return "WhatsApp";
     if (/t\.me|telegram\./i.test(host)) return "Telegram";
-    if (/news\.google\./i.test(host)) return "Google News";
     return host.slice(0, 80);
   } catch { return "Referral"; }
 }
