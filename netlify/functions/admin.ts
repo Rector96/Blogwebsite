@@ -154,8 +154,7 @@ export default async (req: Request) => {
       const response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload?.status) return json({ error: payload?.message || "Paystack verification failed." }, 502);
-      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,currency").eq("reference", reference).maybeSingle()).data;
-      const expectedCurrency = String(paymentRow?.currency || "NGN").toUpperCase();
+      const expectedCurrency = String(paymentRow.currency || "NGN").toUpperCase();
       const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? 0);
       const amountOk = String(payload.data?.currency || "").toUpperCase() === expectedCurrency
         && Number(payload.data?.amount) === expectedAmount;
