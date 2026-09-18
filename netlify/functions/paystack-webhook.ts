@@ -17,7 +17,12 @@ export default async (req: Request) => {
     return json({ error: "Invalid signature." }, 401);
   }
 
-  const event = JSON.parse(raw || "{}");
+  let event: any;
+  try {
+    event = JSON.parse(raw || "{}");
+  } catch {
+    return json({ error: "Invalid JSON." }, 400);
+  }
   if (event.event !== "charge.success") return json({ ok: true, ignored: true });
 
   const reference = String(event?.data?.reference || "");
