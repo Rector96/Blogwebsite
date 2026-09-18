@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import { Bookmark, BookmarkCheck, Menu, RefreshCw, Search, X } from "lucide-react";
+import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
   FALLBACK_SPONSORS,
@@ -10,6 +10,7 @@ import {
   type SponsoredOffer,
 } from "./lib/sponsors";
 import { ArticleReader } from "./components/ArticleReader";
+import { logRwdNewsEvent } from "./lib/analytics";
 
 export interface EnrichedArticle {
   id: string;
@@ -193,7 +194,7 @@ function RwdNewsApp() {
   const [leadEmail, setLeadEmail] = useState("");
   const [leadName, setLeadName] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
-  const [leadMsg, setLeadMsg] = useState<string | null>(null);\n  const [showLoader, setShowLoader] = useState(true);
+  const [leadMsg, setLeadMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -233,6 +234,20 @@ function RwdNewsApp() {
     void fetchNews();
   }, []);
 
+  const openArticle = (article: EnrichedArticle) => {
+    setActive(article);
+    void logRwdNewsEvent({
+      event: "article_open",
+      articleId: article.id,
+      articleUrl: article.original_url,
+    });
+  };
+
+  const openAdvertiserForm = () => {
+    setLeadOpen(true);
+    void logRwdNewsEvent({ event: "advertise_open", placement: "media_kit" });
+  };
+
   const tags = useMemo(() => {
     const categories = new Set<string>();
     articles.forEach((a) => {
@@ -263,7 +278,18 @@ function RwdNewsApp() {
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    setSaved((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSaved((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      if (!prev.includes(id)) {
+        const article = articles.find((item) => item.id === id);
+        void logRwdNewsEvent({
+          event: "article_save",
+          articleId: id,
+          articleUrl: article?.original_url,
+        });
+      }
+      return next;
+    });
   };
 
   const submitNewsletter = async (e: React.FormEvent) => {
@@ -280,6 +306,7 @@ function RwdNewsApp() {
           .upsert({ email: v, source: "rwdnews_web" }, { onConflict: "email" });
       }
       setEmailMsg("You're on the RWDNEWS list.");
+      void logRwdNewsEvent({ event: "newsletter_signup", placement: "sidebar" });
       setEmail("");
     } catch {
       setEmailMsg("Thanks — we'll confirm shortly.");
@@ -304,10 +331,10 @@ function RwdNewsApp() {
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>RWDNEWS — Markets, Fintech & Money</title>
+        <title>RWDNEWS — Global News, Trends & Briefings</title>
         <meta
           name="description"
-          content="RWDNEWS — markets, fintech, and money. AI-curated briefings you read on-site."
+          content="RWDNEWS delivers source-backed global news, developing stories, trends, and concise briefings you can read on-site."
         />
       </Helmet>
 
@@ -320,7 +347,7 @@ function RwdNewsApp() {
           </span>
           <button
             type="button"
-            onClick={() => setLeadOpen(true)}
+            onClick={openAdvertiserForm}
             className="font-semibold text-amber-400"
           >
             Advertise
@@ -334,7 +361,7 @@ function RwdNewsApp() {
           <a href="/" className="block shrink-0" aria-label="RWDNEWS home">
             <img
               src="/rwdnews-logo.svg"
-              alt="RWDNEWS — Markets, Fintech & Money"
+              alt="RWDNEWS — Global News, Trends & Briefings"
               className="h-auto w-[205px] sm:w-[275px]"
             />
           </a>
@@ -382,7 +409,7 @@ function RwdNewsApp() {
           {hero ? (
             <section className="border-b border-neutral-200 pb-8">
               <div className="grid gap-6 lg:grid-cols-12">
-                <article className="group cursor-pointer lg:col-span-7" onClick={() => setActive(hero)}>
+                <article className="group cursor-pointer lg:col-span-7" onClick={() => openArticle(hero)}>
                   <div className="overflow-hidden bg-neutral-100">
                     <img
                       src={hero.image}
@@ -411,7 +438,7 @@ function RwdNewsApp() {
                     <article
                       key={a.id}
                       className="story-row cursor-pointer py-4 first:pt-0"
-                      onClick={() => setActive(a)}
+                      onClick={() => openArticle(a)}
                     >
                       <div className="mb-3 overflow-hidden bg-neutral-100">
                         <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
