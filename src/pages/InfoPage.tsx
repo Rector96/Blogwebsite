@@ -28,21 +28,29 @@ const content: Record<string, { title: string; intro: string; sections: Array<[s
 };
 
 const packages = [
-  { code: "sidebar", name: "Sidebar Sponsor", price: 75000, detail: "30 days · sidebar placement" },
-  { code: "in_feed", name: "In-feed Sponsor", price: 100000, detail: "30 days · inside the news feed" },
-  { code: "homepage", name: "Homepage Featured", price: 150000, detail: "30 days · premium homepage placement" },
-  { code: "homepage_sidebar", name: "Homepage + Sidebar", price: 200000, detail: "30 days · homepage + sidebar" },
-  { code: "sponsored_story", name: "Sponsored Article / Briefing", price: 150000, detail: "Sponsored content · clearly labeled" },
-  { code: "premium", name: "Premium Monthly", price: 300000, detail: "30 days · homepage + sidebar + in-feed priority" },
+  { code: "sidebar", name: "Sidebar Sponsor", usd: 75, ngn: 75000, detail: "30 days · sidebar placement" },
+  { code: "in_feed", name: "In-feed Sponsor", usd: 100, ngn: 100000, detail: "30 days · inside the news feed" },
+  { code: "homepage", name: "Homepage Featured", usd: 150, ngn: 150000, detail: "30 days · premium homepage placement" },
+  { code: "homepage_sidebar", name: "Homepage + Sidebar", usd: 200, ngn: 200000, detail: "30 days · homepage + sidebar" },
+  { code: "sponsored_story", name: "Sponsored Article / Briefing", usd: 150, ngn: 150000, detail: "Sponsored content · clearly labeled" },
+  { code: "premium", name: "Premium Monthly", usd: 300, ngn: 300000, detail: "30 days · homepage + sidebar + in-feed priority" },
 ];
 
-function money(value: number) { return "₦" + value.toLocaleString("en-NG"); }
+function money(value: number, currency: "USD" | "NGN") {
+  return currency === "USD"
+    ? "$" + value.toLocaleString("en-US")
+    : "₦" + value.toLocaleString("en-NG");
+}
 
 function AdvertisePage() {
   const [selected, setSelected] = useState(packages[0].code);
+  const [currency, setCurrency] = useState<"USD" | "NGN">("USD");
   const [form, setForm] = useState({ email: "", name: "", company: "", headline: "", cta_url: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const selectedPackage = packages.find(p => p.code === selected) || packages[0];
+  const price = currency === "USD" ? selectedPackage.usd : selectedPackage.ngn;
 
   useEffect(() => {
     void logRwdNewsEvent({ event: "page_view", placement: "advertise_page" });
@@ -61,8 +69,9 @@ function AdvertisePage() {
     e.preventDefault(); setBusy(true); setMessage("");
     try {
       const result = await fetch("/api/paystack/init", {
-        method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ package_code: selected, ...form }),
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ package_code: selected, currency, ...form }),
       });
       const payload = await result.json();
       if (!result.ok) throw new Error(payload.error || "Could not start payment.");
@@ -74,17 +83,53 @@ function AdvertisePage() {
   };
 
   return <div className="min-h-dvh bg-white text-neutral-950">
-    <Helmet><title>Advertise with RWDNEWS</title><meta name="description" content="Advertise with RWDNEWS using transparent Nigerian-naira sponsorship packages." /></Helmet>
+    <Helmet><title>Advertise with RWDNEWS</title><meta name="description" content="Global sponsorship opportunities on RWDNEWS with USD and NGN payment options." /></Helmet>
     <header className="border-b border-neutral-200"><div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6"><a href="/" className="font-display text-2xl font-bold">RWDNEWS</a><a href="/" className="text-sm font-semibold text-teal-800">Back to news</a></div></header>
     <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
-      <div className="max-w-3xl"><p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">For brands</p><h1 className="font-display mt-2 text-4xl font-semibold sm:text-5xl">Advertise on RWDNEWS</h1><p className="mt-4 text-lg leading-relaxed text-neutral-600">Reach a growing global news audience with clearly labeled sponsorships. Prices are in Nigerian naira and payment is handled securely by Paystack.</p></div>
+      <div className="max-w-3xl">
+        <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">For brands worldwide</p>
+        <h1 className="font-display mt-2 text-4xl font-semibold sm:text-5xl">Advertise on RWDNEWS</h1>
+        <p className="mt-4 text-lg leading-relaxed text-neutral-600">Reach a global news audience with clearly labeled sponsorships. USD is the default global rate card; Nigerian advertisers can choose NGN.</p>
+      </div>
       {message ? <div className="mt-6 border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">{message}</div> : null}
-      <section className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {packages.map(p => <button type="button" key={p.code} onClick={()=>setSelected(p.code)} className={selected===p.code?"border-2 border-neutral-950 bg-neutral-950 p-5 text-left text-white":"border border-neutral-200 bg-white p-5 text-left hover:border-neutral-400"}><p className="text-xs font-bold uppercase tracking-wider">{p.name}</p><p className="font-display mt-2 text-3xl font-semibold">{money(p.price)}</p><p className={selected===p.code?"mt-1 text-sm text-neutral-300":"mt-1 text-sm text-neutral-500"}>{p.detail}</p></button>)}
+      <div className="mt-8 flex flex-wrap items-center gap-2">
+        <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Display currency</span>
+        <button type="button" onClick={()=>setCurrency("USD")} className={currency==="USD" ? "bg-neutral-950 px-4 py-2 text-xs font-bold text-white" : "border px-4 py-2 text-xs font-bold"}>USD — Global</button>
+        <button type="button" onClick={()=>setCurrency("NGN")} className={currency==="NGN" ? "bg-neutral-950 px-4 py-2 text-xs font-bold text-white" : "border px-4 py-2 text-xs font-bold"}>NGN — Nigeria</button>
+      </div>
+      <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {packages.map(p => <button type="button" key={p.code} onClick={()=>setSelected(p.code)} className={selected===p.code?"border-2 border-neutral-950 bg-neutral-950 p-5 text-left text-white":"border border-neutral-200 bg-white p-5 text-left hover:border-neutral-400"}>
+          <p className="text-xs font-bold uppercase tracking-wider">{p.name}</p>
+          <p className="font-display mt-2 text-3xl font-semibold">{money(currency === "USD" ? p.usd : p.ngn, currency)}</p>
+          <p className={selected===p.code?"mt-1 text-sm text-neutral-300":"mt-1 text-sm text-neutral-500"}>{p.detail}</p>
+        </button>)}
       </section>
       <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_360px]">
-        <section className="border border-neutral-200 p-5 sm:p-7"><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Selected package</p><h2 className="font-display mt-1 text-2xl font-semibold">{packages.find(p=>p.code===selected)?.name}</h2><p className="mt-1 text-sm text-neutral-500">{money(packages.find(p=>p.code===selected)?.price || 0)} · 30 days</p><form onSubmit={submit} className="mt-6 space-y-3"><input required type="email" placeholder="Business email" value={form.email} onChange={e=>setForm(v=>({...v,email:e.target.value}))} className="h-11 w-full border px-3 text-sm" /><input placeholder="Your name" value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))} className="h-11 w-full border px-3 text-sm" /><input required placeholder="Company / brand" value={form.company} onChange={e=>setForm(v=>({...v,company:e.target.value}))} className="h-11 w-full border px-3 text-sm" /><input required placeholder="Campaign headline" value={form.headline} onChange={e=>setForm(v=>({...v,headline:e.target.value}))} className="h-11 w-full border px-3 text-sm" /><input type="url" placeholder="Website URL" value={form.cta_url} onChange={e=>setForm(v=>({...v,cta_url:e.target.value}))} className="h-11 w-full border px-3 text-sm" /><button disabled={busy} className="h-12 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50">Pay {money(packages.find(p=>p.code===selected)?.price || 0)} with Paystack</button></form><p className="mt-3 text-xs leading-relaxed text-neutral-500">Payment confirms the transaction. RWDNEWS still reviews and approves the campaign before it appears publicly.</p></section>
-        <aside className="space-y-4"><div className="border border-neutral-200 bg-neutral-50 p-5"><h3 className="font-display text-xl font-semibold">Other options</h3><p className="mt-2 text-sm leading-relaxed text-neutral-600">Newsletter sponsorship, custom campaign requirements and longer campaigns can be arranged directly.</p><p className="mt-3 font-semibold">Newsletter sponsorship: ₦75,000 / issue</p><p className="mt-1 font-semibold">Custom monthly packages: from ₦300,000</p><a href="/" className="mt-4 inline-block text-sm font-bold text-teal-800">Back to RWDNEWS →</a></div><div className="border border-neutral-200 p-5"><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Editorial separation</p><p className="mt-2 text-sm leading-relaxed text-neutral-600">Paid placements are clearly labeled and do not purchase editorial treatment.</p></div></aside>
+        <section className="border border-neutral-200 p-5 sm:p-7">
+          <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Selected package</p>
+          <h2 className="font-display mt-1 text-2xl font-semibold">{selectedPackage.name}</h2>
+          <p className="mt-1 text-sm text-neutral-500">{money(price, currency)} · 30 days</p>
+          <form onSubmit={submit} className="mt-6 space-y-3">
+            <input required type="email" placeholder="Business email" value={form.email} onChange={e=>setForm(v=>({...v,email:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+            <input placeholder="Your name" value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+            <input required placeholder="Company / brand" value={form.company} onChange={e=>setForm(v=>({...v,company:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+            <input required placeholder="Campaign headline" value={form.headline} onChange={e=>setForm(v=>({...v,headline:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+            <input type="url" placeholder="Website URL" value={form.cta_url} onChange={e=>setForm(v=>({...v,cta_url:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+            <button disabled={busy} className="h-12 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50">Pay {money(price, currency)} with Paystack</button>
+          </form>
+          <p className="mt-3 text-xs leading-relaxed text-neutral-500">Payment confirms the transaction. RWDNEWS still reviews and approves the campaign before it appears publicly.</p>
+        </section>
+        <aside className="space-y-4">
+          <div className="border border-neutral-200 bg-neutral-50 p-5">
+            <h3 className="font-display text-xl font-semibold">Payment notes</h3>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">Paystack supports USD for eligible Nigeria-based businesses, but USD/international payments must be enabled on your Paystack account. If USD is not enabled yet, use NGN or enable USD in Paystack before launching international campaigns.</p>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-600">USD prices are the global RWDNEWS rate card. NGN prices are the local Nigerian rate card; they are not an automatic exchange-rate conversion.</p>
+          </div>
+          <div className="border border-neutral-200 p-5">
+            <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Editorial separation</p>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">Paid placements are clearly labeled and do not purchase editorial treatment.</p>
+          </div>
+        </aside>
       </div>
     </main>
   </div>;
