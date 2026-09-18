@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Helmet } from "react-helmet-async";
+import { logRwdNewsEvent } from "../lib/analytics";
 
 const content: Record<string, { title: string; intro: string; sections: Array<[string, string]> }> = {
   "/about": { title: "About RWDNEWS", intro: "RWDNEWS is a source-backed global news briefing platform built to help readers understand what is happening without drowning in noise.", sections: [
@@ -44,6 +45,7 @@ function AdvertisePage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    void logRwdNewsEvent({ event: "page_view", placement: "advertise_page" });
     const params = new URLSearchParams(window.location.search);
     const reference = params.get("reference");
     if (!reference || params.get("payment") !== "callback") return;
