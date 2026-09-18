@@ -7,7 +7,7 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Function first — must be above SPA fallback
+# Function routes must be above the SPA fallback.
 [[redirects]]
   from = "/api/news"
   to = "/.netlify/functions/news"
@@ -17,6 +17,24 @@
 [[redirects]]
   from = "/api/cron/ingest"
   to = "/.netlify/functions/cron-ingest"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/admin"
+  to = "/.netlify/functions/admin"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/ads.txt"
+  to = "/.netlify/functions/ads-txt"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sitemap.xml"
+  to = "/.netlify/functions/sitemap"
   status = 200
   force = true
 
