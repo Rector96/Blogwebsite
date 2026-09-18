@@ -1,7 +1,7 @@
 import { runIngest } from "./news";
 
 export default async (req: Request) => {
-  const secret = process.env.CRON_SECRET || "";
+  const secret = Netlify.env.get("CRON_SECRET") || "";
   const supplied =
     req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
     new URL(req.url).searchParams.get("secret") ||
