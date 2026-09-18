@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Helmet } from "react-helmet-async";
-import { BarChart3, BookOpen, CreditCard, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Search, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Settings, ShieldCheck, Users } from "lucide-react";
 
 type Dashboard = {
   generated_at: string;
