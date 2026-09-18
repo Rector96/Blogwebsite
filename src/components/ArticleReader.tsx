@@ -53,11 +53,27 @@ export function ArticleReader({
       if (navigator.share) {
         await navigator.share({ title, url, text: title });
       } else if (navigator.clipboard) {
-        await navigator.clipboard.writeText(`${title} — ${url}`);
+        await navigator.clipboard.writeText(title + " — " + url);
       }
     } catch {
       /* ignore */
     }
+  };
+
+  const openShare = (platform: string) => {
+    const url = encodeURIComponent(
+      typeof window !== "undefined" ? window.location.href : article.original_url,
+    );
+    const text = encodeURIComponent(title);
+    const links: Record<string, string> = {
+      whatsapp: "https://wa.me/?text=" + text + "%20" + url,
+      telegram: "https://t.me/share/url?url=" + url + "&text=" + text,
+      x: "https://twitter.com/intent/tweet?text=" + text + "&url=" + url,
+      facebook: "https://www.facebook.com/sharer/sharer.php?u=" + url,
+      linkedin: "https://www.linkedin.com/sharing/share-offsite/?url=" + url,
+    };
+    const target = links[platform];
+    if (target) window.open(target, "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -67,6 +83,11 @@ export function ArticleReader({
         <meta name="description" content={bullets[0] || article.original_description} />
         <meta property="og:title" content={title} />
         <meta property="og:image" content={article.image} />
+        <meta property="og:type" content="article" />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content={title} />
+        <meta name="twitter:description" content={bullets[0] || article.original_description} />
+        <meta name="twitter:image" content={article.image} />
         <script type="application/ld+json">
           {JSON.stringify({
             "@context": "https://schema.org",
@@ -75,7 +96,11 @@ export function ArticleReader({
             image: [article.image],
             datePublished: article.timestamp,
             author: { "@type": "Organization", name: article.source },
-            publisher: { "@type": "Organization", name: "RWDNEWS" },
+            publisher: {
+              "@type": "Organization",
+              name: "RWDNEWS",
+              logo: { "@type": "ImageObject", url: "/rwdnews-logo.svg" },
+            },
             description: bullets[0] || article.original_description,
           })}
         </script>
@@ -104,6 +129,8 @@ export function ArticleReader({
               type="button"
               className="grid size-9 place-items-center border border-neutral-200"
               onClick={() => void share()}
+              aria-label="Share story"
+              title="Share story"
             >
               <Share2 className="size-4" />
             </button>
@@ -119,6 +146,11 @@ export function ArticleReader({
 
         <div className="flex-1 overflow-y-auto">
           <img src={article.image} alt="" className="aspect-[16/9] w-full object-cover" />
+          <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-5 py-2.5 text-[10px] text-neutral-400 sm:px-8">
+            <span>Source: {article.source}</span>
+            {article.image_credit ? <span>· Image: {article.image_credit}</span> : null}
+            {article.image_license ? <span>· {article.image_license}</span> : null}
+          </div>
 
           <div className="px-5 py-6 sm:px-8">
             <p className="text-[11px] font-bold tracking-[0.14em] text-amber-800 uppercase">
@@ -167,6 +199,28 @@ export function ArticleReader({
                   ))}
                 </div>
               ) : null}
+            </div>
+
+            <div className="border-t border-neutral-200 pt-6">
+              <p className="mb-2 text-[10px] font-bold tracking-[0.14em] text-neutral-500 uppercase">Share this briefing</p>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+                {[
+                  ["whatsapp", "WhatsApp"],
+                  ["telegram", "Telegram"],
+                  ["x", "X"],
+                  ["facebook", "Facebook"],
+                  ["linkedin", "LinkedIn"],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => openShare(key)}
+                    className="h-10 border border-neutral-200 text-xs font-semibold hover:bg-neutral-50"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="mt-8 flex flex-col gap-3 border-t border-neutral-200 pt-6">
