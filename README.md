@@ -1,6 +1,6 @@
-# FinSignal
+# RWDNEWS
 
-Global **markets · fintech · personal finance** news wire.
+Source-backed **global news · trends · briefings** platform.
 
 ## Reach ~$1k/month (infrastructure)
 
@@ -12,7 +12,7 @@ Global **markets · fintech · personal finance** news wire.
 | Labeled partner slots | Done (DB-driven when connected) |
 | Media kit lead form | Done |
 
-You still need: **host Node server**, **cron-job.org**, **traffic**, and **sell 2–3 sponsors/month**.
+You still need: **production secrets**, **cron ingestion**, **AdSense approval or real sponsors**, and **traffic**. Revenue is a target, not a guarantee.
 
 See `docs/PATH_TO_1K.md` and `docs/GROWTH_AND_CRON.md`.
 
@@ -62,3 +62,22 @@ Every 30–60 minutes.
 
 Edit rows in Supabase table **`sponsors`** (headline, cta_url, monthly_fee_usd, active).
 Watch **`sponsor_clicks`** and **`sales_leads`**.
+
+
+## Admin
+
+The private dashboard is at `/admin`. It uses a server-side password and HttpOnly session cookie; never put the admin password in a Vite `VITE_*` variable.
+
+Required Netlify variables:
+- `ADMIN_PASSWORD`
+- `ADMIN_SESSION_SECRET`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+The dashboard shows engagement totals, sponsor inventory and advertiser leads.
+
+## Ads
+
+RWDNEWS now has real AdSense-ready slots, but ads remain disabled until the site has an approved AdSense account and real publisher/ad-unit IDs. Do not invent publisher IDs or ads.txt entries.
+
+Google requires site approval before ads can serve, and global traffic may require a certified consent-management setup for personalized ads in the EEA, UK and Switzerland.
+
