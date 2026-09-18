@@ -15,8 +15,10 @@ import {
   CheckCircle2,
   TrendingUp,
   Star,
-  Award
+  Award,
+  Database
 } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 
 export interface EnrichedArticle {
   id: string;
@@ -208,10 +210,25 @@ function NewsHubContent() {
   // Requirement 2: Mobile dismissible floating affiliate banner state
   const [isMobileBannerDismissed, setIsMobileBannerDismissed] = useState<boolean>(false);
 
-  // Fetch news from /api/news with automatic fallback to seed data
+  // Fetch news from Supabase (if keys provided) or /api/news with automatic fallback to seed data
   const fetchNews = async (forceRefresh = false) => {
     try {
       setRefreshing(true);
+
+      // Check if user has connected Supabase
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from('articles')
+          .select('*')
+          .order('timestamp', { ascending: false })
+          .limit(30);
+
+        if (!error && data && data.length > 0) {
+          setArticles(data as EnrichedArticle[]);
+          return;
+        }
+      }
+
       const url = forceRefresh ? '/api/news?refresh=true' : '/api/news';
       const res = await fetch(url);
       if (res.ok) {
@@ -699,6 +716,27 @@ function NewsHubContent() {
 
           {/* Simple Actions & Rule 3: Robots Noindex Toggle */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            {/* Database & Backend Status Badge */}
+            <div
+              id="backend-status-badge"
+              title={isSupabaseConfigured ? "Connected to Supabase PostgreSQL" : "Connected to Express RSS Aggregator"}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                padding: '0.375rem 0.65rem',
+                borderRadius: '0.5rem',
+                border: isSupabaseConfigured ? '1px solid #a7f3d0' : '1px solid #e2e8f0',
+                backgroundColor: isSupabaseConfigured ? '#ecfdf5' : '#f8fafc',
+                color: isSupabaseConfigured ? '#047857' : '#64748b',
+                fontSize: '0.75rem',
+                fontWeight: 600
+              }}
+            >
+              <Database size={13} color={isSupabaseConfigured ? '#059669' : '#64748b'} />
+              <span>{isSupabaseConfigured ? 'Supabase Live' : 'Express / Cloud API'}</span>
+            </div>
+
             {/* Rule 3: Robots Noindex Control Toggle */}
             <button
               id="toggle-noindex-btn"
