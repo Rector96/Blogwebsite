@@ -3,7 +3,6 @@ import { Helmet, HelmetProvider } from "react-helmet-async";
 import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
-  FALLBACK_SPONSORS,
   fetchSponsors,
   logSponsorClick,
   submitSalesLead,
@@ -183,7 +182,7 @@ function normalizeTags(tags?: string[]) {
 
 function RwdNewsApp() {
   const [articles, setArticles] = useState<EnrichedArticle[]>([]);
-  const [sponsors, setSponsors] = useState<SponsoredOffer[]>(FALLBACK_SPONSORS);
+  const [sponsors, setSponsors] = useState<SponsoredOffer[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem("rwdnews_recent_v1");
