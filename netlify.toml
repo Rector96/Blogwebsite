@@ -27,6 +27,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/paystack/verify"
+  to = "/.netlify/functions/paystack-verify"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/paystack/webhook"
   to = "/.netlify/functions/paystack-webhook"
   status = 200
