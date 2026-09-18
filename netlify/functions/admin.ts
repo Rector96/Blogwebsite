@@ -35,14 +35,18 @@ function authorized(req: Request) {
 
 export default async (req: Request) => {
   const database = db();
-  if (!database) return new Response(JSON.stringify({ error: "Admin database is not configured." }), { status: 503, headers: { "content-type": "application/json" } });
+  if (!database) return new Response(JSON.stringify({ error: "Admin database is not configured. Check SUPABASE_URL/VITE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Netlify." }), { status: 503, headers: { "content-type": "application/json" } });
 
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
     if (body.action === "login") {
       const password = env("ADMIN_PASSWORD");
-      if (!password || !env("ADMIN_SESSION_SECRET") || String(body.password || "") !== password) {
-        return new Response(JSON.stringify({ error: "Invalid password." }), { status: 401, headers: { "content-type": "application/json" } });
+      const sessionSecret = env("ADMIN_SESSION_SECRET");
+      if (!password || !sessionSecret) {
+        return new Response(JSON.stringify({ error: "Admin login is not configured. Check ADMIN_PASSWORD and ADMIN_SESSION_SECRET in Netlify for the Production environment, then redeploy." }), { status: 503, headers: { "content-type": "application/json" } });
+      }
+      if (String(body.password || "") !== password) {
+        return new Response(JSON.stringify({ error: "Invalid password. Use the exact ADMIN_PASSWORD value saved in Netlify." }), { status: 401, headers: { "content-type": "application/json" } });
       }
       return new Response(JSON.stringify({ ok: true }), { headers: { "content-type": "application/json", "set-cookie": sessionCookie() } });
     }
