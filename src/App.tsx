@@ -175,6 +175,14 @@ function normalizeTags(tags?: string[]) {
 function RwdNewsApp() {
   const [articles, setArticles] = useState<EnrichedArticle[]>([]);
   const [sponsors, setSponsors] = useState<SponsoredOffer[]>(FALLBACK_SPONSORS);
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem("rwdnews_recent_v1");
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [refreshing, setRefreshing] = useState(false);
   const [selectedTag, setSelectedTag] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -236,6 +244,11 @@ function RwdNewsApp() {
 
   const openArticle = (article: EnrichedArticle) => {
     setActive(article);
+    setRecentlyViewed((prev) => {
+      const next = [article.id, ...prev.filter((id) => id !== article.id)].slice(0, 8);
+      try { localStorage.setItem("rwdnews_recent_v1", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
     void logRwdNewsEvent({
       event: "article_open",
       articleId: article.id,
@@ -384,7 +397,7 @@ function RwdNewsApp() {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto border-t border-neutral-100 px-4 py-2 sm:px-6">
+        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto border-t border-neutral-100 px-4 py-2 sm:px-6" aria-label="News categories">
           {tags.map((t) => (
             <button
               key={t}
@@ -495,6 +508,22 @@ function RwdNewsApp() {
           </section>
 
           <section>
+            {recentlyViewed.length > 0 && !searchQuery && selectedTag === "All" ? (
+              <div className="mb-8">
+                <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
+                  <h2 className="text-sm font-extrabold tracking-wide uppercase">Continue reading</h2>
+                  <button type="button" onClick={() => setRecentlyViewed([])} className="text-[11px] text-neutral-400 hover:text-neutral-700">Clear</button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {recentlyViewed.map((id) => articles.find((a) => a.id === id)).filter(Boolean).slice(0, 4).map((a) => (
+                    <button key={a!.id} type="button" onClick={() => openArticle(a!)} className="border border-neutral-200 p-3 text-left hover:bg-neutral-50">
+                      <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">{a!.source}</p>
+                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold">{a!.ai_hook_title || a!.original_title}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
               <h2 className="text-sm font-extrabold tracking-wide uppercase">Latest</h2>
               <span className="text-[11px] text-neutral-400">{filtered.length} stories</span>
