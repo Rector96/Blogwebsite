@@ -90,12 +90,12 @@ function AdvertisePage() {
       <div className="max-w-3xl">
         <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">For brands worldwide</p>
         <h1 className="font-display mt-2 text-4xl font-semibold sm:text-5xl">Advertise on RWDNEWS</h1>
-        <p className="mt-4 text-lg leading-relaxed text-neutral-600">Reach a global news audience with clearly labeled sponsorships. USD is the default global rate card; Nigerian advertisers can choose NGN.</p>
+        <p className="mt-4 text-lg leading-relaxed text-neutral-600">Reach a global news audience with clearly labeled sponsorships. NGN payments are available now; the USD global rate card is ready for international payment support.</p>
       </div>
       {message ? <div className="mt-6 border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">{message}</div> : null}
       <div className="mt-8 flex flex-wrap items-center gap-2">
         <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Display currency</span>
-        <button type="button" onClick={()=>setCurrency("USD")} className={currency==="USD" ? "bg-neutral-950 px-4 py-2 text-xs font-bold text-white" : "border px-4 py-2 text-xs font-bold"}>USD — Global</button>
+        <button type="button" disabled className="border border-dashed px-4 py-2 text-xs font-bold text-neutral-400">USD — Global (coming soon)</button>
         <button type="button" onClick={()=>setCurrency("NGN")} className={currency==="NGN" ? "bg-neutral-950 px-4 py-2 text-xs font-bold text-white" : "border px-4 py-2 text-xs font-bold"}>NGN — Nigeria</button>
       </div>
       <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -124,7 +124,7 @@ function AdvertisePage() {
           <div className="border border-neutral-200 bg-neutral-50 p-5">
             <h3 className="font-display text-xl font-semibold">Payment notes</h3>
             <p className="mt-2 text-sm leading-relaxed text-neutral-600">Paystack supports USD for eligible Nigeria-based businesses, but USD/international payments must be enabled on your Paystack account. If USD is not enabled yet, use NGN or enable USD in Paystack before launching international campaigns.</p>
-            <p className="mt-3 text-sm leading-relaxed text-neutral-600">USD prices are the global RWDNEWS rate card. NGN prices are the local Nigerian rate card; they are not an automatic exchange-rate conversion.</p>
+            <p className="mt-3 text-sm leading-relaxed text-neutral-600">USD prices are the global RWDNEWS rate card and will be enabled for Paystack international payments later. NGN prices are the local Nigerian rate card; they are not an automatic exchange-rate conversion.</p>
           </div>
           <div className="border border-neutral-200 p-5">
             <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Editorial separation</p>
