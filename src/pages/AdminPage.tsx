@@ -21,6 +21,8 @@ export default function AdminPage() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showSponsorForm, setShowSponsorForm] = useState(false);
+  const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", monthly_fee_usd: "", disclosure: "Sponsored · Paid placement" });
 
   const load = async () => {
     try {
@@ -52,6 +54,17 @@ export default function AdminPage() {
       await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "sponsor_status", id, active }) });
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : "Update failed"); }
+  };
+
+  const addSponsor = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    try {
+      await api("/api/admin", { method: "POST", body: JSON.stringify({ action: "sponsor_create", ...sponsorForm, monthly_fee_usd: sponsorForm.monthly_fee_usd ? Number(sponsorForm.monthly_fee_usd) : null }) });
+      setSponsorForm({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", monthly_fee_usd: "", disclosure: "Sponsored · Paid placement" });
+      setShowSponsorForm(false);
+      await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not create sponsor"); }
   };
 
   const updateLead = async (id: string, status: string) => {
@@ -130,7 +143,8 @@ export default function AdminPage() {
           ))}
         </div></section>
         <section className="border bg-white">
-          <div className="border-b p-4"><h2 className="font-display text-xl font-semibold">Sponsors / ads</h2><p className="text-xs text-neutral-500">Only active real sponsor rows are shown publicly.</p></div>
+          <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="font-display text-xl font-semibold">Sponsors / ads</h2><p className="text-xs text-neutral-500">Only active paid sponsor campaigns appear on the public site.</p></div><button onClick={() => setShowSponsorForm(v => !v)} className="h-10 bg-neutral-950 px-4 text-xs font-bold text-white">{showSponsorForm ? "Close form" : "+ Add sponsor"}</button></div>
+          {showSponsorForm ? <form onSubmit={addSponsor} className="grid gap-3 border-b bg-neutral-50 p-4 sm:grid-cols-2"><input required placeholder="Sponsor / brand name" value={sponsorForm.sponsor_name} onChange={e => setSponsorForm(v => ({ ...v, sponsor_name: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input required placeholder="Campaign headline" value={sponsorForm.headline} onChange={e => setSponsorForm(v => ({ ...v, headline: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input required type="url" placeholder="CTA / website URL" value={sponsorForm.cta_url} onChange={e => setSponsorForm(v => ({ ...v, cta_url: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input placeholder="Button text" value={sponsorForm.cta_text} onChange={e => setSponsorForm(v => ({ ...v, cta_text: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><select value={sponsorForm.placement} onChange={e => setSponsorForm(v => ({ ...v, placement: e.target.value }))} className="h-10 border bg-white px-3 text-sm"><option value="sidebar">Sidebar</option><option value="in_feed">In feed</option><option value="both">Sidebar + in feed</option></select><input type="number" min="0" step="1" placeholder="Monthly fee (USD)" value={sponsorForm.monthly_fee_usd} onChange={e => setSponsorForm(v => ({ ...v, monthly_fee_usd: e.target.value }))} className="h-10 border bg-white px-3 text-sm" /><input placeholder="Disclosure text" value={sponsorForm.disclosure} onChange={e => setSponsorForm(v => ({ ...v, disclosure: e.target.value }))} className="h-10 border bg-white px-3 text-sm sm:col-span-2" /><button disabled={busy} className="h-10 bg-amber-500 px-4 text-xs font-bold sm:col-span-2 disabled:opacity-50">Create sponsor (starts active)</button></form> : null}
           <div className="divide-y">
             {data.sponsors.length ? data.sponsors.map(s => (
               <div key={s.id} className="grid gap-3 p-4 md:grid-cols-[1fr_auto_auto] md:items-center">
@@ -138,7 +152,7 @@ export default function AdminPage() {
                 <span className={s.active ? "text-xs font-bold text-teal-800" : "text-xs font-bold text-neutral-400"}>{s.active ? "ACTIVE" : "OFF"}</span>
                 <button disabled={busy} onClick={() => void updateSponsor(s.id, !s.active)} className="h-9 border px-3 text-xs font-semibold disabled:opacity-50">{s.active ? "Pause" : "Activate"}</button>
               </div>
-            )) : <p className="p-4 text-sm text-neutral-500">No sponsor inventory yet. Add real sponsors from Supabase or your ad network.</p>}
+            )) : <p className="p-4 text-sm text-neutral-500">No active sponsor campaigns yet. Add a real advertiser above when a paid deal is confirmed.</p>}
           </div>
         </section>
         <section className="border bg-white">
