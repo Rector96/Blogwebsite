@@ -40,3 +40,10 @@ select
 from public.rwdnews_events
 group by event_name, date_trunc('day', created_at)
 order by day desc, event_name;
+
+-- Keep event details private: anonymous visitors may insert events,
+-- but public roles should not be able to read the raw event stream or summary.
+revoke all on table public.rwdnews_events from anon, authenticated;
+grant insert on table public.rwdnews_events to anon, authenticated;
+
+revoke all on table public.v_rwdnews_event_summary from anon, authenticated;
