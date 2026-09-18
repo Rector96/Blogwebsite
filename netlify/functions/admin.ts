@@ -61,6 +61,9 @@ export default async (req: Request) => {
       const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
       const currency = String(body.currency || "USD").toUpperCase() === "NGN" ? "NGN" : "USD";
       const amount = Number(body.amount || 0);
+      const placement = clean(body.placement || "sidebar", 30);
+      if (!["sidebar", "in_feed", "both"].includes(placement)) return json({ error: "Invalid sponsor placement." }, 400);
+      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Sponsor fee must be greater than zero." }, 400);
       const { data, error } = await database.from("sponsors").insert({
         slug, sponsor_name: sponsorName, headline, why_matters: [], cta_text: clean(body.cta_text || "Learn more", 80),
         cta_url: ctaUrl, rate_highlight: "", disclosure: clean(body.disclosure || "Sponsored · Paid placement", 160),
