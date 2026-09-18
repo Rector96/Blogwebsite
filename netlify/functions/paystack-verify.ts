@@ -1,4 +1,4 @@
-import { database, json, paystackRequest } from "./_paystack";
+import { database, json, paystackRequest } from "../../src/lib/paystack-server";
 
 async function applyPayment(reference: string, payload: any) {
   const db = database();
