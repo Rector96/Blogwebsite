@@ -149,6 +149,8 @@ export default async (req: Request) => {
 
     if (body.action === "payment_verify") {
       const reference = clean(body.reference, 120);
+      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,currency").eq("reference", reference).maybeSingle()).data;
+      if (!paymentRow) return json({ error: "Payment reference not found." }, 404);
       const response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload?.status) return json({ error: payload?.message || "Paystack verification failed." }, 502);
