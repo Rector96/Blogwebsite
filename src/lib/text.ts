@@ -17,3 +17,7 @@ export function decodeHtmlEntities(input: string): string {
     .replace(/&lsquo;/g, "\u2018")
     .replace(/&rsquo;/g, "\u2019");
 }
+
+export function cleanTitle(input: string): string {
+  return decodeHtmlEntities(input).replace(/\s+/g, " ").trim();
+}
