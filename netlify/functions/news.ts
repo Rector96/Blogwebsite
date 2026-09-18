@@ -74,20 +74,6 @@ function category(text: string, hint?: string) {
   return "Business";
 }
 
-function svgImage(title: string, section: string) {
-  const t = clean(title).slice(0, 78).replace(/&/g, "and");
-  const svg =
-    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 900'>" +
-    "<defs><linearGradient id='g' x1='0' x2='1'><stop stop-color='#071a2d'/><stop offset='1' stop-color='#0f766e'/></linearGradient></defs>" +
-    "<rect width='1600' height='900' fill='url(#g)'/>" +
-    "<text x='90' y='120' fill='#f59e0b' font-family='Arial' font-size='30' font-weight='700'>RWDNEWS · " +
-    section.toUpperCase() +
-    "</text><text x='90' y='760' fill='white' font-family='Arial' font-size='56' font-weight='700'>" +
-    t +
-    "</text></svg>";
-  return "data:image/svg+xml;charset=UTF-8," + encodeURIComponent(svg);
-}
-
 function rssImage(item: any) {
   return [
     item?.enclosure?.url,
@@ -101,70 +87,17 @@ function imageKey(link: string) {
   return Buffer.from(link).toString("base64url").slice(0, 48);
 }
 
-async function generateAiImage(title: string, section: string, link: string) {
-  const apiKey = Netlify.env.get("GEMINI_API_KEY");
-  const supabaseUrl = Netlify.env.get("SUPABASE_URL") || Netlify.env.get("VITE_SUPABASE_URL");
-  const serviceKey = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  if (!apiKey || !supabaseUrl || !serviceKey) return null;
-
-  const db = createClient(supabaseUrl, serviceKey);
-  const path = `generated/${imageKey(link)}.png`;
-
+async function fetchArticleImage(link: string) {
+  if (!link || !/^https?:\/\//i.test(link)) return "";
   try {
-    await db.storage.createBucket("article-images", { public: true }).catch(() => undefined);
-    const existing = db.storage.from("article-images").getPublicUrl(path).data.publicUrl;
-    const head = await fetch(existing, { method: "HEAD", signal: AbortSignal.timeout(2500) }).catch(() => null);
-    if (head?.ok) {
-      return {
-        image: existing,
-        credit: "RWDNEWS AI",
-        license: "AI-generated with Google Gemini",
-        sourceUrl: "",
-      };
-    }
-
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await Promise.race([
-      ai.models.generateContent({
-        model: "gemini-2.5-flash-image",
-        contents:
-          "Create a photorealistic editorial news photograph for RWDNEWS. " +
-          "The image must visually represent the subject of the supplied headline and category. " +
-          "No text, no captions, no logos, no watermarks added by the prompt, no charts with text. " +
-          "Use a professional newspaper/magazine photography style, natural lighting, realistic people or places when appropriate, 16:9 composition. " +
-          "Do not invent a recognizable real person's identity. Headline: " + title + " Category: " + section,
-        config: {
-          responseModalities: ["IMAGE"],
-          imageConfig: { aspectRatio: "16:9" },
-        },
-      }),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("AI image timeout")), 18000)),
-    ]);
-
-    const parts = (response as any)?.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find((part: any) => part?.inlineData?.data);
-    if (!imagePart?.inlineData?.data) return null;
-
-    const buffer = Buffer.from(imagePart.inlineData.data, "base64");
-    const mimeType = imagePart.inlineData.mimeType || "image/png";
-    const upload = await db.storage.from("article-images").upload(path, buffer, {
-      contentType: mimeType,
-      upsert: true,
-    });
-    if (upload.error) return null;
-
-    const publicUrl = db.storage.from("article-images").getPublicUrl(path).data.publicUrl;
-    return {
-      image: publicUrl,
-      credit: "RWDNEWS AI",
-      license: "AI-generated with Google Gemini",
-      sourceUrl: "",
-    };
-  } catch {
-    return null;
-  }
+    const response = await fetch(link, { headers: { "User-Agent": "RWDNEWS/1.0 editorial-image-fetch" }, signal: AbortSignal.timeout(3500) });
+    if (!response.ok) return "";
+    const html = await response.text();
+    const match = html.match(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/i);
+    return match?.[1] ? new URL(match[1], link).toString() : "";
+  } catch { return ""; }
 }
-
 async function getRss() {
   const results = await Promise.allSettled(
     feeds.map(async ([url, source]) => {
@@ -322,23 +255,16 @@ async function buildArticles(): Promise<NewsArticle[]> {
     .sort((a, b) => b.trendScore - a.trendScore)
     .slice(0, 20);
 
-  const results = await Promise.all(items.map(async (item) => {
+  const results = (await Promise.all(items.map(async (item) => {
     const section = category(item.title + " " + item.desc, item.category);
     const brief = await aiBrief(item.title, item.desc);
-    const sourceImage = item.image && /^https?:\/\//i.test(item.image)
-      ? {
-          image: item.image,
-          credit: item.source,
-          license: "Publisher feed image — verify rights before commercial reuse",
-          sourceUrl: item.link,
-        }
-      : null;
-    const aiImage = sourceImage ? null : await generateAiImage(item.title, section, item.link);
-    const image = sourceImage || aiImage || {
-      image: svgImage(item.title, section),
-      credit: "RWDNEWS editorial fallback",
-      license: "RWDNEWS generated",
-      sourceUrl: "",
+    const realImageUrl = item.image && /^https?:\/\//i.test(item.image) ? item.image : await fetchArticleImage(item.link);
+    if (!realImageUrl) return null;
+    const image = {
+      image: realImageUrl,
+      credit: item.source,
+      license: "Publisher/source image — verify rights before commercial reuse",
+      sourceUrl: item.link,
     };
     return {
       id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
@@ -362,7 +288,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
       image_source_url: image.sourceUrl,
       discovered_via: item.sources,
     } satisfies NewsArticle;
-  }));
+  }))).filter((item): item is NewsArticle => Boolean(item));
   return results;
 }
 
