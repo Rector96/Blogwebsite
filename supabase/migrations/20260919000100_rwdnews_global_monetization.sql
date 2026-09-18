@@ -184,46 +184,26 @@ for select using (
 -- Global rate card. These are USD list prices, not an exchange-rate conversion.
 -- NGN prices remain available as the local Nigeria rate card.
 create table if not exists public.sponsor_rate_cards (
-  package_code text primary key,
+  package_code text not null,
   package_name text not null,
   currency text not null check (currency in ('USD','NGN')),
   amount numeric(12,2) not null check (amount > 0),
   placement text not null,
   duration_days integer not null default 30,
   active boolean not null default true,
-  updated_at timestamptz not null default now()
+  updated_at timestamptz not null default now(),
+  primary key (package_code, currency)
 );
 
-create index if not exists sponsor_rate_cards_currency_idx on public.sponsor_rate_cards(currency, active);
+-- If an earlier version created package_code as the only primary key, convert it safely.
+alter table public.sponsor_rate_cards drop constraint if exists sponsor_rate_cards_pkey;
+alter table public.sponsor_rate_cards add constraint sponsor_rate_cards_pkey primary key (package_code, currency);
 
+create index if not exists sponsor_rate_cards_currency_idx on public.sponsor_rate_cards(currency, active);
 alter table public.sponsor_rate_cards enable row level security;
 drop policy if exists "Public read active sponsor rate cards" on public.sponsor_rate_cards;
-create policy "Public read active sponsor rate cards" on public.sponsor_rate_cards
-for select using (active = true);
+create policy "Public read active sponsor rate cards" on public.sponsor_rate_cards for select using (active = true);
 
-insert into public.sponsor_rate_cards(package_code,package_name,currency,amount,placement,duration_days)
-values
-('sidebar','Sidebar Sponsor','USD',75,'sidebar',30),
-('in_feed','In-feed Sponsor','USD',100,'in_feed',30),
-('homepage','Homepage Featured Sponsor','USD',150,'both',30),
-('homepage_sidebar','Homepage + Sidebar','USD',200,'both',30),
-('newsletter','Newsletter Sponsor','USD',75,'newsletter',30),
-('sponsored_story','Sponsored Article / Briefing','USD',150,'in_feed',30),
-('premium','Premium Monthly Package','USD',300,'both',30),
-('sidebar','Sidebar Sponsor','NGN',75000,'sidebar',30),
-('in_feed','In-feed Sponsor','NGN',100000,'in_feed',30),
-('homepage','Homepage Featured Sponsor','NGN',150000,'both',30),
-('homepage_sidebar','Homepage + Sidebar','NGN',200000,'both',30),
-('newsletter','Newsletter Sponsor','NGN',75000,'newsletter',30),
-('sponsored_story','Sponsored Article / Briefing','NGN',150000,'in_feed',30),
-('premium','Premium Monthly Package','NGN',300000,'both',30)
-on conflict (package_code) do nothing;
-
--- Replace the rate-card primary key so USD and NGN can coexist.
-alter table public.sponsor_rate_cards drop constraint if exists sponsor_rate_cards_pkey;
-alter table public.sponsor_rate_cards add primary key (package_code, currency);
-
--- The insert above can safely be rerun after the composite key exists.
 insert into public.sponsor_rate_cards(package_code,package_name,currency,amount,placement,duration_days)
 values
 ('sidebar','Sidebar Sponsor','USD',75,'sidebar',30),
@@ -245,10 +225,8 @@ set package_name=excluded.package_name, amount=excluded.amount,
     placement=excluded.placement, duration_days=excluded.duration_days,
     updated_at=now();
 
--- Helpful public view for the live rate card.
 create or replace view public.v_active_sponsor_rate_cards as
 select package_code, package_name, currency, amount, placement, duration_days
 from public.sponsor_rate_cards
 where active = true
 order by currency, amount;
-
