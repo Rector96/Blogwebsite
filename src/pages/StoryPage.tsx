@@ -3,6 +3,7 @@ import { Helmet } from "react-helmet-async";
 import { Check, Copy, ExternalLink, MessageCircle, Send, Share2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { logRwdNewsEvent } from "../lib/analytics";
+import { fetchSponsors, logSponsorClick, type SponsoredOffer } from "../lib/sponsors";
 import type { EnrichedArticle } from "../App";
 
 function currentStoryId() {
@@ -15,6 +16,7 @@ export default function StoryPage() {
   const [article, setArticle] = useState<EnrichedArticle | null>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
+  const [sponsor, setSponsor] = useState<SponsoredOffer | null>(null);
 
   useEffect(() => {
     void logRwdNewsEvent({ event: "page_view", placement: "story_page" });
@@ -39,6 +41,9 @@ export default function StoryPage() {
       }
     }
     void load();
+    void fetchSponsors().then((items) => {
+      if (!cancelled) setSponsor(items.find((item) => item.placement === "both" || item.placement === "in_feed") || items[0] || null);
+    });
     return () => { cancelled = true; };
   }, []);
 
@@ -56,7 +61,8 @@ export default function StoryPage() {
   if (!article) return <div className="grid min-h-dvh place-items-center p-6 text-center"><div><h1 className="font-display text-3xl font-semibold">Story not found</h1><p className="mt-2 text-sm text-neutral-500">This story may have expired from the live wire.</p><a href="/" className="mt-5 inline-block font-semibold text-teal-800">Return to RWDNEWS →</a></div></div>;
 
   const share = (network: string) => {
-    const text = encodeURIComponent(title);
+    const shareMessage = `RWDNEWS — ${title}\n\n${description}\n\nRead the RWDNEWS briefing: ${canonical}`;
+    const text = encodeURIComponent(shareMessage);
     const shareUrl = (network: string) => canonical + (canonical.includes("?") ? "&" : "?") + "utm_source=" + network + "&utm_medium=social&utm_campaign=rwdnews_share";
     const encoded = encodeURIComponent(shareUrl(network));
     const urls: Record<string, string> = {
@@ -79,7 +85,7 @@ export default function StoryPage() {
     } catch {}
   };
 
-  return <div className="min-h-dvh bg-white text-neutral-950"><Helmet><title>{title} — RWDNEWS</title><meta name="description" content={description} /><link rel="canonical" href={canonical} /><meta property="og:title" content={title} /><meta property="og:description" content={description} /><meta property="og:url" content={canonical} /><meta property="og:type" content="article" /><meta property="og:image" content={article.image} /><meta name="twitter:card" content="summary_large_image" /><script type="application/ld+json">{JSON.stringify(jsonLd)}</script></Helmet>
+  return <div className="min-h-dvh bg-white text-neutral-950"><Helmet><title>{title} — RWDNEWS</title><meta name="description" content={description} /><link rel="canonical" href={canonical} /><meta property="og:title" content={`RWDNEWS — ${title}`} /><meta property="og:description" content={`RWDNEWS briefing: ${description}`} /><meta property="og:url" content={canonical} /><meta property="og:type" content="article" /><meta property="og:site_name" content="RWDNEWS" /><meta property="og:image" content={article.image} /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={`RWDNEWS — ${title}`} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={article.image} /><script type="application/ld+json">{JSON.stringify(jsonLd)}</script></Helmet>
     <header className="border-b border-neutral-200"><div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-5 sm:px-6"><a href="/" className="font-display text-2xl font-bold">RWDNEWS</a><a href="/" className="text-sm font-semibold text-teal-800">Back to news</a></div></header>
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12"><p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">{article.source} · {article.category || "World"}</p><h1 className="font-display mt-3 text-4xl leading-tight font-semibold sm:text-5xl">{title}</h1><p className="mt-3 text-lg leading-relaxed text-neutral-600">{description}</p><p className="mt-3 text-xs text-neutral-400">{article.read_time || "3 min read"} · Published {new Date(article.timestamp).toLocaleString()}</p>
       <img src={article.image} alt="" className="mt-8 aspect-[16/9] w-full object-cover bg-neutral-100" /><p className="mt-2 text-[10px] text-neutral-400">{article.image_credit ? "Image: " + article.image_credit : ""}{article.image_license ? " · " + article.image_license : ""}</p>
@@ -102,6 +108,7 @@ export default function StoryPage() {
             ))}
           </ul>
         </section>
+        {sponsor ? <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6"><p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p><p className="mt-1 text-xs font-semibold text-neutral-500">{sponsor.sponsorName}</p><h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>{sponsor.whyMatters?.[0] ? <p className="mt-2 text-sm leading-relaxed text-neutral-600">{sponsor.whyMatters[0]}</p> : null}<a href={sponsor.ctaUrl} target="_blank" rel="noopener noreferrer sponsored" onClick={() => void logSponsorClick(sponsor, "story_page")} className="mt-4 inline-flex items-center border border-neutral-900 bg-neutral-950 px-4 py-2.5 text-xs font-bold text-white">{sponsor.ctaText} →</a></section> : null}
         <div className="mt-8 space-y-4 text-[17px] leading-[1.8] text-neutral-800">
           {article.original_description ? <p className="text-xl text-neutral-700">{article.original_description}</p> : null}
           <h2 className="font-display pt-4 text-2xl font-semibold">Why it matters</h2>
