@@ -1,6 +1,7 @@
 import React from "react";
 import { Bookmark, BookmarkCheck, ExternalLink, Share2, X } from "lucide-react";
 import { Helmet } from "react-helmet-async";
+import { logRwdNewsEvent } from "../lib/analytics";
 
 export type ReaderArticle = {
   id: string;
@@ -14,6 +15,8 @@ export type ReaderArticle = {
   ai_summary: string[];
   tags: string[];
   read_time?: string;
+  image_credit?: string;
+  image_license?: string;
 };
 
 function formatTime(iso: string) {
@@ -50,6 +53,7 @@ export function ArticleReader({
     const url =
       typeof window !== "undefined" ? window.location.href : article.original_url;
     try {
+      void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: "native_share" });
       if (navigator.share) {
         await navigator.share({ title, url, text: title });
       } else if (navigator.clipboard) {
@@ -73,7 +77,10 @@ export function ArticleReader({
       linkedin: "https://www.linkedin.com/sharing/share-offsite/?url=" + url,
     };
     const target = links[platform];
-    if (target) window.open(target, "_blank", "noopener,noreferrer");
+    if (target) {
+      void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: platform });
+      window.open(target, "_blank", "noopener,noreferrer");
+    }
   };
 
   return (
