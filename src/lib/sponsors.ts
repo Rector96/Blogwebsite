@@ -1,0 +1,121 @@
+import { isSupabaseConfigured, supabase } from "./supabase";
+
+export type SponsoredOffer = {
+  id: string;
+  slug?: string;
+  sponsorName: string;
+  headline: string;
+  whyMatters: string[];
+  ctaText: string;
+  ctaUrl: string;
+  rateHighlight: string;
+  disclosure: string;
+  placement?: string;
+};
+
+export const FALLBACK_SPONSORS: SponsoredOffer[] = [
+  {
+    id: "ad-apex",
+    slug: "partner-cash-demo",
+    sponsorName: "Partner · Cash",
+    headline: "Institutional-style cash yields for everyday balances",
+    whyMatters: [
+      "Compare APY, liquidity, and insurance structure before parking large cash.",
+      "Rates move — always confirm live terms on the partner site.",
+    ],
+    ctaText: "View offer",
+    ctaUrl:
+      "https://www.marketwatch.com/personal-finance/banking/high-yield-cash-sweeps",
+    rateHighlight: "High-yield cash",
+    disclosure: "Sponsored · We may earn a commission",
+    placement: "both",
+  },
+  {
+    id: "ad-titan",
+    slug: "partner-invest-demo",
+    sponsorName: "Partner · Investing",
+    headline: "Tax-aware investing tools for taxable accounts",
+    whyMatters: [
+      "Direct indexing features are not return guarantees.",
+      "Suitability depends on tax residency and risk tolerance.",
+    ],
+    ctaText: "Learn more",
+    ctaUrl:
+      "https://finance.yahoo.com/news/direct-indexing-tax-loss-harvesting-retail",
+    rateHighlight: "Tax tools",
+    disclosure: "Sponsored · We may earn a commission",
+    placement: "sidebar",
+  },
+];
+
+export async function fetchSponsors(): Promise<SponsoredOffer[]> {
+  if (!isSupabaseConfigured || !supabase) return FALLBACK_SPONSORS;
+  const { data, error } = await supabase
+    .from("sponsors")
+    .select(
+      "id, slug, sponsor_name, headline, why_matters, cta_text, cta_url, rate_highlight, disclosure, placement, priority",
+    )
+    .eq("active", true)
+    .order("priority", { ascending: true });
+
+  if (error || !data?.length) return FALLBACK_SPONSORS;
+
+  return data.map((row) => ({
+    id: String(row.id),
+    slug: row.slug as string,
+    sponsorName: String(row.sponsor_name),
+    headline: String(row.headline),
+    whyMatters: Array.isArray(row.why_matters)
+      ? (row.why_matters as string[])
+      : [],
+    ctaText: String(row.cta_text || "View offer"),
+    ctaUrl: String(row.cta_url),
+    rateHighlight: String(row.rate_highlight || ""),
+    disclosure: String(row.disclosure || "Sponsored"),
+    placement: String(row.placement || "sidebar"),
+  }));
+}
+
+export async function logSponsorClick(
+  offer: SponsoredOffer,
+  placement: string,
+) {
+  if (!isSupabaseConfigured || !supabase) return;
+  try {
+    await supabase.from("sponsor_clicks").insert({
+      sponsor_id: offer.id.match(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+      )
+        ? offer.id
+        : null,
+      sponsor_slug: offer.slug || offer.id,
+      placement,
+      page_path:
+        typeof window !== "undefined" ? window.location.pathname : "/",
+      user_agent:
+        typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 180) : "",
+    });
+  } catch {
+    /* non-blocking */
+  }
+}
+
+export async function submitSalesLead(input: {
+  name?: string;
+  email: string;
+  company?: string;
+  message?: string;
+}) {
+  if (!isSupabaseConfigured || !supabase) {
+    return { ok: false as const, reason: "no_supabase" };
+  }
+  const { error } = await supabase.from("sales_leads").insert({
+    name: input.name || null,
+    email: input.email.trim().toLowerCase(),
+    company: input.company || null,
+    message: input.message || null,
+    source: "media_kit",
+  });
+  if (error) return { ok: false as const, reason: error.message };
+  return { ok: true as const };
+}
