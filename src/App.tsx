@@ -122,12 +122,12 @@ function RwdNewsApp() {
     void logRwdNewsEvent({ event: "page_view" });
   }, []);
 
-  const fetchNews = async () => {
+  const fetchNews = async (refresh = false) => {
     const hadCachedNews = articles.length > 0;
     setRefreshing(true);
     setFeedSource(hadCachedNews ? "live" : "unavailable");
     try {
-      const response = await fetch("/api/news?refresh=true", {
+      const response = await fetch(refresh ? "/api/news?refresh=true" : "/api/news", {
         headers: { Accept: "application/json" },
       });
       if (!response.ok) throw new Error("Live news API unavailable");
@@ -151,11 +151,17 @@ function RwdNewsApp() {
   };
 
   useEffect(() => {
-    void fetchNews();
+    // Load the latest verified feed from the database immediately.
+    void fetchNews(false);
+    // Refresh from live sources shortly after first paint without blocking the page.
+    const firstRefresh = window.setTimeout(() => void fetchNews(true), 1500);
     const timer = window.setInterval(() => {
-      void fetchNews();
+      void fetchNews(true);
     }, 60_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(firstRefresh);
+      window.clearInterval(timer);
+    };
   }, []);
 
   const openArticle = (article: EnrichedArticle) => {
