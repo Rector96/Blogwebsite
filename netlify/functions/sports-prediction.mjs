@@ -46,7 +46,7 @@ async function loadMatches() {
         live: state === "in", completed: Boolean(statusType.completed) || state === "post", homeLogo: home.team?.logo || "", awayLogo: away.team?.logo || ""
       };
     }).filter(Boolean);
-  }));
+  })));
   return results.flatMap(r => r.status === "fulfilled" ? r.value : []);
 }
 
