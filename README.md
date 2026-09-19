@@ -1,64 +1,59 @@
-# FinSignal
+# RWDNEWS
 
-Global **markets · fintech · personal finance** news wire.
+Global source-backed news platform covering World, Europe, Middle East, Asia, Africa, Nigeria, Ghana, Sports, Business, Tech, Crypto and Entertainment.
 
-## Reach ~$1k/month (infrastructure)
+## Current production
 
-| Piece | Status |
-|-------|--------|
-| Premium news UI | Done |
-| RSS + AI + cron ingest | Done (`/api/cron/ingest`) |
-| Supabase articles + newsletter + **sponsors** + clicks + sales leads | **Run `supabase_master.sql`** |
-| Labeled partner slots | Done (DB-driven when connected) |
-| Media kit lead form | Done |
+- Site: https://rwdnews.netlify.app
+- Main branch: `main`
+- Netlify production deploys from GitHub `main`
+- News ingestion: RSS + GDELT with scheduled refresh
+- Sports desk: live scores/fixtures, sports news and AI-assisted statistical commentary
+- Research Desk: admin-only source-backed research and draft generation
+- Editorial publishing: WIRE, DEVELOPING and RWDNEWS ORIGINAL
+- Admin: private password/session protected operations, editorial, analytics, monetization, audience, newsletter and security areas
+- Article pages: source attribution, original-source CTA, sharing, engagement tracking, related stories and NewsArticle structured data
+- SEO: robots.txt and sitemap include the main sports routes
 
-You still need: **host Node server**, **cron-job.org**, **traffic**, and **sell 2–3 sponsors/month**.
+## Important environment variables
 
-See `docs/PATH_TO_1K.md` and `docs/GROWTH_AND_CRON.md`.
+Configure these in Netlify for the appropriate production/runtime scopes:
 
-## 1. SQL (required)
-
-Supabase → SQL Editor → paste **entire** file:
-
-**`supabase_master.sql`**
-
-## 2. Env
-
-```bash
-cp .env.example .env
+```text
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+SUPABASE_URL
+SUPABASE_SERVICE_ROLE_KEY
+ADMIN_PASSWORD
+ADMIN_SESSION_SECRET
+GEMINI_API_KEY
+OPENAI_API_KEY
 ```
 
-```
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
-GEMINI_API_KEY=
-CRON_SECRET=
-```
+Never commit secret values to GitHub.
 
-## 3. Run
+## AI usage
+
+AI is used for source-bounded summaries, research drafts and sports statistical commentary. It must not invent facts, quotes, numbers, events or sources. Sports predictions are probabilistic commentary, not guarantees or betting advice.
+
+## Editorial and image policy
+
+- Keep publisher/source attribution visible.
+- Send readers to the original publisher for the complete report.
+- Use RWDNEWS-owned, licensed or otherwise rights-cleared images for original/editorial material.
+- Do not present generated images as real event photographs.
+- Sponsored material must be clearly labeled.
+
+## Local development
 
 ```bash
 npm install
 npm run dev
+npm run build
 ```
 
-Production:
+The production build should pass before merging or deploying.
 
-```bash
-npm run build && npm start
-```
+## Operations
 
-## 4. cron-job.org
-
-```
-https://YOUR_HOST/api/cron/ingest?secret=YOUR_CRON_SECRET
-```
-
-Every 30–60 minutes.
-
-## 5. Sell inventory
-
-Edit rows in Supabase table **`sponsors`** (headline, cta_url, monthly_fee_usd, active).
-Watch **`sponsor_clicks`** and **`sales_leads`**.
+Scheduled functions keep the news wire refreshed. Admin credentials and server-side API keys must remain in Netlify environment variables, never in client code or committed files.
