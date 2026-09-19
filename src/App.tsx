@@ -190,7 +190,7 @@ function RwdNewsApp() {
     articles.forEach((a) => {
       if (a.category) categories.add(a.category);
     });
-    const preferred = ["Breaking", "World", "Europe", "Middle East", "Asia", "Africa", "Sports", "Business", "Tech", "Crypto", "Entertainment"];
+    const preferred = ["Breaking", "World", "Nigeria", "Ghana", "Africa", "Europe", "Middle East", "Asia", "Sports", "Business", "Tech", "Crypto", "Entertainment"];
     return ["All", ...preferred.filter((name) => categories.has(name)), ...Array.from(categories).filter((name) => !preferred.includes(name)).sort()];
   }, [articles]);
 
@@ -520,7 +520,7 @@ function RwdNewsApp() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => void fetchNews()}
+                  onClick={() => void fetchNews(true)}
                   className="press mt-4 h-10 rounded-full bg-neutral-950 px-5 text-xs font-bold text-white"
                 >
                   Retry live wire
