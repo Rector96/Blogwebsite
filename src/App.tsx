@@ -37,6 +37,7 @@ export interface EnrichedArticle {
 }
 
 const SAVED_KEY = "rwdnews_saved_v1";
+const NEWS_CACHE_KEY = "rwdnews_news_cache_v1";
 
 function formatRelativeTime(iso: string) {
   try {
@@ -70,7 +71,13 @@ function normalizeTags(tags?: string[]) {
 }
 
 function RwdNewsApp() {
-  const [articles, setArticles] = useState<EnrichedArticle[]>([]);
+  const [articles, setArticles] = useState<EnrichedArticle[]>(() => {
+    try {
+      const raw = localStorage.getItem(NEWS_CACHE_KEY);
+      const cached = raw ? JSON.parse(raw) : [];
+      return Array.isArray(cached) ? cached : [];
+    } catch { return []; }
+  });
   const [sponsors, setSponsors] = useState<SponsoredOffer[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
     try {
@@ -116,6 +123,7 @@ function RwdNewsApp() {
 
   const fetchNews = async () => {
     setRefreshing(true);
+    if (articles.length) setFeedSource("live");
     try {
       const response = await fetch("/api/news?refresh=true", {
         headers: { Accept: "application/json" },
@@ -126,6 +134,9 @@ function RwdNewsApp() {
       };
       const liveArticles = Array.isArray(payload.articles) ? payload.articles : [];
       setArticles(liveArticles);
+      if (liveArticles.length) {
+        try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(liveArticles)); } catch { /* cache is optional */ }
+      }
       setFeedSource(liveArticles.length ? "live" : "unavailable");
     } catch {
       // The site must not silently turn old/fabricated seed content into "real news".
