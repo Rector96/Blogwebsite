@@ -13,6 +13,7 @@ import { AdSlot } from "./components/AdSlot";
 import AdminPage from "./pages/AdminPage";
 import { InfoPage } from "./pages/InfoPage";
 import StoryPage from "./pages/StoryPage";
+import SportsPage from "./pages/SportsPage";
 import { logRwdNewsEvent } from "./lib/analytics";
 
 export interface EnrichedArticle {
@@ -732,6 +733,7 @@ export default function App() {
   const path = typeof window !== "undefined" ? window.location.pathname : "/";
   let page: React.ReactNode = <RwdNewsApp />;
   if (path === "/admin" || path.startsWith("/admin/")) page = <AdminPage />;
+else if (path === "/sports" || path.startsWith("/sports/")) page = <SportsPage />;
   else if (path.startsWith("/news/")) page = <StoryPage />;
   else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path)) page = <InfoPage path={path} />;
   return <HelmetProvider>{page}</HelmetProvider>;
