@@ -65,52 +65,48 @@ function scoreText(m: Match) {
 
 function MatchCard({ match }: { match: Match }) {
   return (
-    <a
-      href={matchPath(match.id)}
-      className="block rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-    >
-      <div className="flex items-center justify-between gap-2 text-[10px] font-bold tracking-wide uppercase">
-        <span className="truncate text-teal-800">{match.league}</span>
-        <span className={match.live ? "text-red-600" : "text-neutral-400"}>
-          {match.live ? "● LIVE" : match.status}
-        </span>
-      </div>
-      <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-3">
-        <div className="space-y-3 text-sm font-semibold">
-          <div className="flex items-center gap-2 truncate">
-            {match.homeLogo ? (
-              <img src={match.homeLogo} alt="" className="size-6 object-contain" />
-            ) : (
-              <span className="size-6 rounded-full bg-neutral-100" />
-            )}
-            <span className="truncate">{match.home}</span>
+    <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <a href={matchPath(match.id)} className="block">
+        <div className="flex items-center justify-between gap-2 text-[10px] font-bold tracking-wide uppercase">
+          <span className="truncate text-teal-800">{match.league}</span>
+          <span className={match.live ? "text-red-600" : "text-neutral-400"}>
+            {match.live ? "● LIVE" : match.status}
+          </span>
+        </div>
+        <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-3">
+          <div className="space-y-3 text-sm font-semibold">
+            <div className="flex items-center gap-2 truncate">
+              {match.homeLogo ? (
+                <img src={match.homeLogo} alt="" className="size-6 object-contain" />
+              ) : (
+                <span className="size-6 rounded-full bg-neutral-100" />
+              )}
+              <span className="truncate">{match.home}</span>
+            </div>
+            <div className="flex items-center gap-2 truncate">
+              {match.awayLogo ? (
+                <img src={match.awayLogo} alt="" className="size-6 object-contain" />
+              ) : (
+                <span className="size-6 rounded-full bg-neutral-100" />
+              )}
+              <span className="truncate">{match.away}</span>
+            </div>
           </div>
-          <div className="flex items-center gap-2 truncate">
-            {match.awayLogo ? (
-              <img src={match.awayLogo} alt="" className="size-6 object-contain" />
-            ) : (
-              <span className="size-6 rounded-full bg-neutral-100" />
-            )}
-            <span className="truncate">{match.away}</span>
+          <div className="text-right font-display text-lg font-bold tabular-nums">
+            <div>{match.homeScore ?? "—"}</div>
+            <div>{match.awayScore ?? "—"}</div>
           </div>
         </div>
-        <div className="text-right font-display text-lg font-bold tabular-nums">
-          <div>{match.homeScore ?? "—"}</div>
-          <div>{match.awayScore ?? "—"}</div>
-        </div>
-      </div>
-      <p className="mt-4 text-[10px] text-neutral-400">{timeLabel(match.startTime)}</p>
-      <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-xs font-extrabold text-teal-800">Match centre →</p>
-        <a
-          href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
-          onClick={(e) => e.stopPropagation()}
-          className="text-xs font-extrabold text-amber-700"
-        >
-          Predict →
-        </a>
-      </div>
-    </a>
+        <p className="mt-4 text-[10px] text-neutral-400">{timeLabel(match.startTime)}</p>
+        <p className="mt-2 text-xs font-extrabold text-teal-800">Match centre →</p>
+      </a>
+      <a
+        href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
+        className="mt-2 inline-block text-xs font-extrabold text-amber-700"
+      >
+        Predict →
+      </a>
+    </div>
   );
 }
 
@@ -453,75 +449,73 @@ export default function SportsPage() {
           )}
         </section>
 
-        {mode === "home" || mode === "results" || mode === "fixtures" || mode === "live" ? (
-          <section className="mt-12">
-            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-900 pb-3">
-              <div>
-                <p className="text-[10px] font-black tracking-[0.16em] text-teal-800 uppercase">
-                  Sports desk
-                </p>
-                <h2 className="font-display text-2xl font-black">Latest sports news</h2>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setStoryTab("news")}
-                  className={
-                    storyTab === "news"
-                      ? "rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white"
-                      : "rounded-full border bg-white px-3 py-2 text-xs font-bold"
-                  }
-                >
-                  Latest
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setStoryTab("rumors")}
-                  className={
-                    storyTab === "rumors"
-                      ? "rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white"
-                      : "rounded-full border bg-white px-3 py-2 text-xs font-bold"
-                  }
-                >
-                  Transfers
-                </button>
-              </div>
+        <section className="mt-12">
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-900 pb-3">
+            <div>
+              <p className="text-[10px] font-black tracking-[0.16em] text-teal-800 uppercase">
+                Sports desk
+              </p>
+              <h2 className="font-display text-2xl font-black">Latest sports news</h2>
             </div>
-            {stories.length ? (
-              <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {stories.map((s) => (
-                  <article
-                    key={s.id}
-                    className="cursor-pointer overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md"
-                    onClick={() => setActiveStory(s)}
-                  >
-                    {s.image ? (
-                      <img src={s.image} alt="" className="aspect-[16/10] w-full object-cover" />
-                    ) : (
-                      <div className="flex aspect-[16/10] items-center justify-center bg-neutral-100 text-xs text-neutral-400">
-                        Sports
-                      </div>
-                    )}
-                    <div className="p-4">
-                      <p className="text-[10px] font-bold text-neutral-500 uppercase">{s.source}</p>
-                      <h3 className="font-display mt-2 text-lg font-bold leading-snug">
-                        {s.ai_hook_title || s.original_title}
-                      </h3>
-                      <p className="mt-2 line-clamp-4 text-sm leading-6 text-neutral-600">
-                        {s.ai_summary?.[0] || s.original_description || "Open for the full RWDNEWS briefing."}
-                      </p>
-                      <p className="mt-3 text-xs font-black text-teal-800">Read full briefing →</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStoryTab("news")}
+                className={
+                  storyTab === "news"
+                    ? "rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white"
+                    : "rounded-full border bg-white px-3 py-2 text-xs font-bold"
+                }
+              >
+                Latest
+              </button>
+              <button
+                type="button"
+                onClick={() => setStoryTab("rumors")}
+                className={
+                  storyTab === "rumors"
+                    ? "rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white"
+                    : "rounded-full border bg-white px-3 py-2 text-xs font-bold"
+                }
+              >
+                Transfers
+              </button>
+            </div>
+          </div>
+          {stories.length ? (
+            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {stories.map((s) => (
+                <article
+                  key={s.id}
+                  className="cursor-pointer overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md"
+                  onClick={() => setActiveStory(s)}
+                >
+                  {s.image ? (
+                    <img src={s.image} alt="" className="aspect-[16/10] w-full object-cover" />
+                  ) : (
+                    <div className="flex aspect-[16/10] items-center justify-center bg-neutral-100 text-xs text-neutral-400">
+                      Sports
                     </div>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-5 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
-                Sports stories are refreshing. Pull again in a moment.
-              </div>
-            )}
-          </section>
-        ) : null}
+                  )}
+                  <div className="p-4">
+                    <p className="text-[10px] font-bold text-neutral-500 uppercase">{s.source}</p>
+                    <h3 className="font-display mt-2 text-lg font-bold leading-snug">
+                      {s.ai_hook_title || s.original_title}
+                    </h3>
+                    <p className="mt-2 line-clamp-4 text-sm leading-6 text-neutral-600">
+                      {s.ai_summary?.[0] || s.original_description || "Open for the full RWDNEWS briefing."}
+                    </p>
+                    <p className="mt-3 text-xs font-black text-teal-800">Read full briefing →</p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-5 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
+              Sports stories are refreshing. Pull again in a moment.
+            </div>
+          )}
+        </section>
 
         <p className="mt-10 text-[10px] leading-6 text-neutral-500">
           Scores and match information are supplied by sports data providers and refreshed
@@ -546,7 +540,6 @@ export default function SportsPage() {
                   activeStory.original_description ||
                     "RWDNEWS is tracking this sports story from the published source.",
                   "Key facts stay on-site so you can understand the report without leaving.",
-                  "Open the original publisher page only if you want the long-form article.",
                 ],
             tags: ["#Sports"],
             read_time: "3 min read",
