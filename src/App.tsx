@@ -404,11 +404,8 @@ function RwdNewsApp() {
             {feedSource === "live" ? "Live global wire" : "Live wire reconnecting"}
           </span>
           <div className="flex items-center gap-3">
-            <a href="/sports" className="font-semibold text-teal-300 hover:text-white">
+            <a href="/sport" className="font-semibold text-teal-300 hover:text-white">
               Sports desk
-            </a>
-            <a href="/sports/predictions" className="font-semibold text-amber-400 hover:text-amber-300">
-              Predictions
             </a>
             <button type="button" onClick={openAdvertiserForm} className="font-semibold text-amber-400">
               Advertise
@@ -473,12 +470,12 @@ function RwdNewsApp() {
               {selectedTag === "Sports" ? (
                 <>
                   {" · "}
-                  <a href="/sports" className="font-semibold text-teal-700 underline-offset-2 hover:underline">
+                  <a href="/sport" className="font-semibold text-teal-700 underline-offset-2 hover:underline">
                     Open Sports desk
                   </a>
                   {" · "}
                   <a
-                    href="/sports/predictions"
+                    href="/sport/predictions"
                     className="font-semibold text-amber-700 underline-offset-2 hover:underline"
                   >
                     AI Predictions
@@ -502,17 +499,17 @@ function RwdNewsApp() {
               <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-400 uppercase">
                 Sports desk
               </p>
-              <p className="mt-0.5 text-sm font-semibold">Scores · news · match outlooks</p>
+              <p className="mt-0.5 text-sm font-semibold">Scores · sports news · live updates</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <a
-                href="/sports"
+                href="/sport"
                 className="rounded-full bg-white px-4 py-2 text-xs font-extrabold text-neutral-950"
               >
                 Full Sports centre
               </a>
               <a
-                href="/sports/predictions"
+                href="/sport/predictions"
                 className="rounded-full bg-amber-500 px-4 py-2 text-xs font-extrabold text-neutral-950"
               >
                 AI Predictions →
@@ -538,7 +535,7 @@ function RwdNewsApp() {
                   <p className="mt-2 text-xs font-semibold leading-snug">
                     {m.home} vs {m.away}
                   </p>
-                  <p className="mt-1 text-[10px] text-amber-400">Predict →</p>
+                  <p className="mt-1 text-[10px] text-amber-400">Open Sports desk →</p>
                 </a>
               ))}
             </div>
@@ -566,7 +563,7 @@ function RwdNewsApp() {
                 </button>
                 {selectedTag === "Sports" ? (
                   <a
-                    href="/sports"
+                    href="/sport"
                     className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-xs font-bold"
                   >
                     Go to Sports desk
@@ -717,30 +714,6 @@ function RwdNewsApp() {
         </div>
 
         <aside className="space-y-6">
-          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-4">
-            <p className="text-[10px] font-extrabold tracking-[0.14em] text-amber-800 uppercase">
-              Sports & predictions
-            </p>
-            <p className="mt-1 text-sm font-semibold">One-tap match outlooks</p>
-            <p className="mt-1 text-xs text-neutral-600">
-              Live boards, transfer news, and cautious AI commentary — not betting tips.
-            </p>
-            <div className="mt-3 flex flex-col gap-2">
-              <a
-                href="/sports/predictions"
-                className="rounded-full bg-amber-500 px-4 py-2 text-center text-xs font-extrabold text-neutral-950"
-              >
-                Open Predictions
-              </a>
-              <a
-                href="/sports"
-                className="rounded-full border border-neutral-300 bg-white px-4 py-2 text-center text-xs font-bold"
-              >
-                Sports desk
-              </a>
-            </div>
-          </div>
-
           {sponsors.slice(0, 2).map((offer) => (
             <div key={offer.id} className="border border-amber-200 bg-amber-50/40 p-4">
               <p className="text-[10px] font-bold tracking-[0.14em] text-amber-800 uppercase">
@@ -831,9 +804,9 @@ export default function App() {
   let page: React.ReactNode = <RwdNewsApp />;
   if (path.startsWith("/admin")) page = <AdminPage />;
   else if (path.startsWith("/news/")) page = <StoryPage />;
-  else if (path === "/sports/predictions" || path.startsWith("/sports/predictions"))
+  else if (path === "/sport/predictions" || path.startsWith("/sport/predictions/"))
     page = <PredictionsPage />;
-  else if (path === "/sports" || path.startsWith("/sports/")) page = <SportsPage />;
+  else if (path === "/sport" || path.startsWith("/sport/")) page = <SportsPage />;
   else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path))
     page = <InfoPage path={path} />;
   return <HelmetProvider>{page}</HelmetProvider>;
