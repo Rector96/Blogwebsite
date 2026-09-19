@@ -247,8 +247,7 @@ function RwdNewsApp() {
       const t = normalizeTags(a.tags);
       const tagOk =
         selectedTag === "All" ||
-        a.category === selectedTag ||
-        t.includes(selectedTag);
+        (selectedTag === "Breaking" ? a.trend_label === "Breaking" : a.category === selectedTag);
       const q = searchQuery.trim().toLowerCase();
       if (!q) return tagOk;
       const blob = [a.ai_hook_title, a.original_title, a.source, ...(a.ai_summary || []), ...t]
@@ -320,7 +319,7 @@ function RwdNewsApp() {
     return () => window.clearInterval(timer);
   }, [heroStories.length, carouselPaused]);
   const rest = filtered.slice(4);
-  const sports = selectedTag === "All" ? articles.filter((a) => a.category === "Sports").slice(0, 4) : [];
+  const sports = articles.filter((a) => a.category === "Sports").slice(0, 4);
   const sportsCards = sportsFeed.live.length ? sportsFeed.live.slice(0, 8) : sportsFeed.featured.length ? sportsFeed.featured.slice(0, 8) : sportsFeed.upcoming.slice(0, 8);
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
