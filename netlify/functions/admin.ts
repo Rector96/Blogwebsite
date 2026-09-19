@@ -247,7 +247,7 @@ export default async (req: Request) => {
   const aggregate = (key: string) => {
     const map = new Map<string, number>();
     for (const row of pageViews) {
-      const value = String(row[key] || "Unknown");
+      const value = String((row as Record<string, unknown>)[key] || "Unknown");
       map.set(value, (map.get(value) || 0) + 1);
     }
     return Array.from(map.entries()).map(([label, value]) => ({ label, value })).sort((a,b) => b.value-a.value).slice(0, 15);
