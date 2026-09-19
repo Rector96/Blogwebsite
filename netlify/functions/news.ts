@@ -205,7 +205,7 @@ async function aiBrief(title: string, desc: string) {
     const ai = new GoogleGenAI({ apiKey: key });
     const response = await Promise.race([
       ai.models.generateContent({
-        model: "gemini-2.0-flash",
+        model: "gemini-3.5-flash",
         contents:
           "RWDNEWS editorial assistant. Use ONLY the supplied title and description. Never invent facts, numbers, names, dates or causes. Write a clear non-clickbait headline and exactly two concise factual bullets. Return JSON. TITLE: " +
           title +
