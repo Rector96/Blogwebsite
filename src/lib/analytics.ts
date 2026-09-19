@@ -25,7 +25,11 @@ export type RwdNewsEvent = {
     | "sponsor_click"
     | "advertise_open"
     | "search"
-    | "external_source_click";
+    | "external_source_click"
+    | "recommendation_impression"
+    | "recommendation_click"
+    | "reading_engaged"
+    | "return_visit";
   articleId?: string;
   articleUrl?: string;
   placement?: string;
