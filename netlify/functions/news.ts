@@ -1,5 +1,4 @@
 import Parser from "rss-parser";
-import { getContext } from "@netlify/functions";
 import { GLOBAL_NEWS_SOURCES } from "./news-sources";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
@@ -17,7 +16,7 @@ export type NewsArticle = {
   tags: string[];
   read_time: string;
   category: string;
-  region?: string;
+  region: string;
   trend_score: number;
   trend_label: "Breaking" | "Trending" | "Developing" | "Fresh";
   image_credit: string;
@@ -351,9 +350,6 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       region: String(a.region || "Global"),
       trend_score: 0,
       trend_label: "Fresh",
-      image_credit: String(a.source || "Publisher"),
-      image_license: "Publisher/source image — verify rights before commercial reuse",
-      image_source_url: String(a.original_url),
       discovered_via: [String(a.source || "RWDNEWS")],
       body: String(a.body || ""), story_type: String(a.story_type || "WIRE"), author_name: String(a.author_name || "RWDNEWS Editorial"), subject: String(a.subject || ""), editorial_status: String(a.editorial_status || "published"), featured: Boolean(a.featured), pinned: Boolean(a.pinned), image_credit: String(a.image_credit || a.source || "Publisher"), image_license: String(a.image_license || "Publisher/source image — verify rights before commercial reuse"), image_source_url: String(a.image_source_url || a.original_url),
     }));
@@ -425,7 +421,7 @@ function personalize(articles: NewsArticle[], country: string) {
 }
 
 export default async (req: Request) => {
-  const geo = (() => { try { return getContext().geo?.country?.code || ""; } catch { return ""; } })();
+  const geo = req.headers.get("x-nf-geo-country") || req.headers.get("x-country") || "";
   const url = new URL(req.url);
   const isCron = url.pathname.includes("/cron-ingest");
   const wantsRefresh = url.searchParams.get("refresh") === "true";
