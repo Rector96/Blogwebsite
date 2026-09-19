@@ -39,7 +39,7 @@ export default async (req: Request, context: Context) => {
 
   const body = await req.json().catch(() => ({}));
   const event = String(body.event || "").slice(0, 50);
-  const allowed = new Set(["page_view","article_open","article_share","article_save","newsletter_signup","sponsor_click","advertise_open","search","external_source_click"]);
+  const allowed = new Set(["page_view","article_open","article_share","article_save","newsletter_signup","sponsor_click","advertise_open","search","external_source_click","recommendation_impression","recommendation_click","reading_engaged","return_visit"]);
   if (!allowed.has(event)) return json({ ok: false }, 400);
 
   const ua = req.headers.get("user-agent") || "";
