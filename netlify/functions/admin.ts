@@ -269,9 +269,31 @@ export default async (req: Request) => {
   }
   const paid = (payments.data || []).filter((p: any) => p.status === "paid");
   const revenue = paid.reduce((sum: number, p: any) => sum + Number(p.amount_naira || 0), 0);
+  const recommendationImpressions = rows.filter((r: any) => r.event_name === "recommendation_impression").length;
+  const recommendationClicks = rows.filter((r: any) => r.event_name === "recommendation_click").length;
+  const engagedReads = rows.filter((r: any) => r.event_name === "reading_engaged").length;
+  const returnVisits = rows.filter((r: any) => r.event_name === "return_visit").length;
+  const searchEvents = rows.filter((r: any) => r.event_name === "search").length;
+  const externalSourceClicks = rows.filter((r: any) => r.event_name === "external_source_click").length;
+  const sessionPageViews = new Map<string, number>();
+  for (const row of pageViews) {
+    const session = String(row.session_id || "");
+    if (session) sessionPageViews.set(session, (sessionPageViews.get(session) || 0) + 1);
+  }
+  const returningSessions = Array.from(sessionPageViews.values()).filter((count) => count > 1).length;
 
   return json({
     generated_at: new Date().toISOString(),
+    engagement: {
+      recommendation_impressions: recommendationImpressions,
+      recommendation_clicks: recommendationClicks,
+      recommendation_ctr: recommendationImpressions ? (recommendationClicks / recommendationImpressions) * 100 : 0,
+      engaged_reads: engagedReads,
+      return_visits: returnVisits,
+      returning_sessions: returningSessions,
+      search_events: searchEvents,
+      external_source_clicks: externalSourceClicks,
+    },
     overview: {
       page_views: pageViews.length,
       unique_sessions: sessions.size,
