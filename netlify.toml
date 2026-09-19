@@ -15,6 +15,18 @@
   force = true
 
 [[redirects]]
+  from = "/api/sports"
+  to = "/.netlify/functions/sports"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/sports-prediction"
+  to = "/.netlify/functions/sports-prediction"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/cron/ingest"
   to = "/.netlify/functions/cron-ingest"
   status = 200
