@@ -123,8 +123,9 @@ function RwdNewsApp() {
   }, []);
 
   const fetchNews = async () => {
+    const hadCachedNews = articles.length > 0;
     setRefreshing(true);
-    if (articles.length) setFeedSource("live");
+    setFeedSource(hadCachedNews ? "live" : "unavailable");
     try {
       const response = await fetch("/api/news?refresh=true", {
         headers: { Accept: "application/json" },
@@ -140,9 +141,10 @@ function RwdNewsApp() {
       }
       setFeedSource(liveArticles.length ? "live" : "unavailable");
     } catch {
-      // The site must not silently turn old/fabricated seed content into "real news".
-      setArticles([]);
-      setFeedSource("unavailable");
+      // Keep the last verified live response visible while the live wire reconnects.
+      // Never replace it with fabricated/seed content.
+      if (!hadCachedNews) setArticles([]);
+      setFeedSource(hadCachedNews ? "live" : "unavailable");
     } finally {
       setRefreshing(false);
     }
