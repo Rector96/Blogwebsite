@@ -132,7 +132,7 @@ async function getRss() {
           date: item.isoDate || item.pubDate,
           source,
           image: rssImage(item),
-          category: region || category(clean(item.title) + " " + clean(item.contentSnippet || ""), undefined),
+          category: feedCategory || category(clean(item.title) + " " + clean(item.contentSnippet || ""), undefined),
         }));
       } catch {
         return [];
