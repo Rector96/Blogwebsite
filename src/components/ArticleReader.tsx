@@ -14,6 +14,8 @@ export type ReaderArticle = {
   ai_summary: string[];
   tags: string[];
   read_time?: string;
+  image_credit?: string;
+  image_license?: string;
 };
 
 function formatTime(iso: string) {
