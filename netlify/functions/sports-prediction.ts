@@ -13,7 +13,7 @@ type Match = {
 };
 
 function env(name: string) {
-  return Netlify.env.get(name) || "";
+  return process.env[name] || "";
 }
 
 async function loadMatches(req: Request): Promise<Match[]> {
