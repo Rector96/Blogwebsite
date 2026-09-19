@@ -308,6 +308,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
       tags: brief.tags,
       read_time: Math.max(2, Math.ceil((item.title + " " + item.desc).split(/\s+/).length / 180)) + " min read",
       category: section,
+      region: item.region || "Global",
       trend_score: item.trendScore,
       trend_label: item.trendLabel,
       image_credit: image.credit,
