@@ -92,12 +92,19 @@ function rssImage(item: any) {
     item?.enclosure?.link,
     item?.["media:content"]?.url,
     item?.["media:content"]?.$?.url,
+    item?.["media:content"]?.["$"]?.url,
     item?.["media:thumbnail"]?.url,
     item?.["media:thumbnail"]?.$?.url,
+    item?.["media:thumbnail"]?.["$"]?.url,
     item?.image?.url,
     item?.image?.link,
+    item?.["image"]?.["$"]?.url,
   ];
-  return candidates.find((x) => typeof x === "string" && /^https?:\/\//i.test(x)) || "";
+  const direct = candidates.find((x) => typeof x === "string" && /^https?:\/\//i.test(x));
+  if (direct) return direct;
+  const html = clean(item?.content || item?.["content:encoded"] || item?.summary || item?.description);
+  const match = html.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"' >]+)["']/i);
+  return match?.[1] || "";
 }
 
 function imageKey(link: string) {
@@ -309,6 +316,43 @@ async function buildArticles(): Promise<NewsArticle[]> {
   return results;
 }
 
+async function getStoredArticles(): Promise<NewsArticle[]> {
+  const url = Netlify.env.get("SUPABASE_URL") || Netlify.env.get("VITE_SUPABASE_URL");
+  const key = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!url || !key) return [];
+  try {
+    const db = createClient(url, key);
+    const { data, error } = await db
+      .from("articles")
+      .select("id,original_url,image,timestamp,source,original_title,original_description,ai_hook_title,ai_summary,tags,read_time")
+      .order("timestamp", { ascending: false })
+      .limit(32);
+    if (error || !Array.isArray(data)) return [];
+    return data.filter((a: any) => a?.original_url && a?.image).map((a: any) => ({
+      id: String(a.id),
+      original_url: String(a.original_url),
+      image: String(a.image),
+      timestamp: a.timestamp || new Date().toISOString(),
+      source: String(a.source || "RWDNEWS"),
+      original_title: String(a.original_title || a.ai_hook_title || ""),
+      original_description: String(a.original_description || ""),
+      ai_hook_title: String(a.ai_hook_title || a.original_title || ""),
+      ai_summary: Array.isArray(a.ai_summary) ? a.ai_summary : [],
+      tags: Array.isArray(a.tags) ? a.tags : ["#World"],
+      read_time: String(a.read_time || "2 min read"),
+      category: category(String(a.original_title || ""), undefined),
+      trend_score: 0,
+      trend_label: "Fresh",
+      image_credit: String(a.source || "Publisher"),
+      image_license: "Publisher/source image — verify rights before commercial reuse",
+      image_source_url: String(a.original_url),
+      discovered_via: [String(a.source || "RWDNEWS")],
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function persist(articles: NewsArticle[]) {
   const url = Netlify.env.get("SUPABASE_URL") || Netlify.env.get("VITE_SUPABASE_URL");
   const key = Netlify.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -336,8 +380,12 @@ async function persist(articles: NewsArticle[]) {
 
 export async function runIngest() {
   const articles = await buildArticles();
-  const saved = articles.length ? await persist(articles) : 0;
-  return { articles, saved, generatedAt: new Date().toISOString() };
+  if (articles.length) {
+    const saved = await persist(articles);
+    return { articles, saved, generatedAt: new Date().toISOString() };
+  }
+  const stored = await getStoredArticles();
+  return { articles: stored, saved: 0, generatedAt: new Date().toISOString(), fallback: stored.length > 0 };
 }
 
 export default async (req: Request) => {
