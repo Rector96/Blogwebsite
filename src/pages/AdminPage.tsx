@@ -139,6 +139,43 @@ export default function AdminPage() {
     finally { setBusy(false); }
   };
 
+  const useResearchAsStory = () => {
+    const report = researchResult?.report;
+    if (!report?.headline) {
+      setError("Run a research report first.");
+      return;
+    }
+    const sourceList = Array.isArray(researchResult.sources) ? researchResult.sources : [];
+    const sourceLine = sourceList.length
+      ? "Sources researched: " + sourceList.slice(0, 8).map((s: any, i: number) => (i + 1) + ". " + s.source + " — " + s.url).join("\n")
+      : "";
+    const body = [
+      report.summary || "",
+      ...(Array.isArray(report.sections) ? report.sections.map((s: any) => "## " + s.title + "\n\n" + s.body) : []),
+      sourceLine,
+      "RWDNEWS editorial note: This report was prepared from the source records shown in the Research Desk. Review the sources and verify the facts before publishing.",
+    ].filter(Boolean).join("\n\n");
+    const firstSource = sourceList[0];
+    setStoryForm(v => ({
+      ...v,
+      headline: report.headline,
+      description: report.summary || "",
+      body,
+      story_type: researchResult.mode === "news" ? "DEVELOPING" : "RWDNEWS ORIGINAL",
+      original_url: firstSource?.url || "",
+      image: "",
+      image_credit: "",
+      image_license: "",
+      image_source_url: "",
+      tags: "",
+      editorial_status: "draft",
+      featured: false,
+      pinned: false,
+    }));
+    setTab("news");
+    setError("");
+  };
+
   const createStory = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -222,6 +259,10 @@ export default function AdminPage() {
         </Panel>
         {researchResult ? <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
           <Panel title={researchResult.report?.headline || researchResult.topic} subtitle={researchResult.report?.confidence || "Research draft"}>
+            <div className="mb-4 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={useResearchAsStory} className="bg-neutral-950 px-4 py-2 text-xs font-bold text-white">Use as RWDNEWS Report Draft</button>
+              <span className="text-xs text-neutral-500">Review sources and facts before publishing.</span>
+            </div>
             <p className="text-sm leading-relaxed text-neutral-700">{researchResult.report?.summary}</p>
             <div className="mt-5 space-y-5">{(researchResult.report?.sections || []).map((s:any,i:number)=><article key={i} className="border-t pt-4"><h3 className="font-display text-lg font-semibold">{s.title}</h3><p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-neutral-700">{s.body}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sources: {(s.source_refs || []).join(", ") || "Not specified"}</p></article>)}</div>
           </Panel>
