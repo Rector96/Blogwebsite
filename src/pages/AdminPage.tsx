@@ -56,6 +56,13 @@ export default function AdminPage() {
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState("");
   const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", disclosure: "Sponsored · Paid placement" });
+  const [storyForm, setStoryForm] = useState({
+    headline: "", description: "", body: "", category: "Business", region: "Global",
+    story_type: "RWDNEWS ORIGINAL", subject: "", author_name: "RWDNEWS Editorial",
+    image: "", image_credit: "RWDNEWS", image_license: "Owned or licensed by RWDNEWS",
+    image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
+    featured: false, pinned: false,
+  });
 
   const load = async () => {
     try {
@@ -89,6 +96,40 @@ export default function AdminPage() {
     e.preventDefault();
     await post({ action: "sponsor_create", ...sponsorForm, amount: Number(sponsorForm.amount || 0) });
     setSponsorForm({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", disclosure: "Sponsored · Paid placement" });
+  };
+
+  const uploadStoryImage = async (file: File) => {
+    if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) { setError("Use JPG, PNG, WebP or AVIF."); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("Image must be 5 MB or smaller."); return; }
+    setBusy(true); setError("");
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Could not read image."));
+        reader.readAsDataURL(file);
+      });
+      const result = await api({ method: "POST", body: JSON.stringify({ action: "article_image_upload", filename: file.name, mime_type: file.type, data }) });
+      setStoryForm(v => ({ ...v, image: String(result.url || "") }));
+    } catch (e) { setError(e instanceof Error ? e.message : "Image upload failed"); }
+    finally { setBusy(false); }
+  };
+
+  const createStory = async (e: FormEvent) => {
+    e.preventDefault();
+    setError("");
+    await post({
+      action: "article_create",
+      ...storyForm,
+      tags: storyForm.tags.split(",").map(x => x.trim()).filter(Boolean),
+    });
+    setStoryForm({
+      headline: "", description: "", body: "", category: "Business", region: "Global",
+      story_type: "RWDNEWS ORIGINAL", subject: "", author_name: "RWDNEWS Editorial",
+      image: "", image_credit: "RWDNEWS", image_license: "Owned or licensed by RWDNEWS",
+      image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
+      featured: false, pinned: false,
+    });
   };
 
   const logout = async () => {
@@ -146,8 +187,40 @@ export default function AdminPage() {
       </section> : null}
 
       {tab === "news" ? <section className="space-y-6">
-        <PageHeading title="News operations" subtitle="Manage visibility and homepage emphasis without changing the source-backed wire." />
-        <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured })} className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
+        <PageHeading title="News operations" subtitle="Publish original RWDNEWS stories and manage the source-backed wire." />
+        <Panel title="Create a story" subtitle="Use this for original reporting, interviews, analysis or verified announcements. Published stories appear in the public feed immediately.">
+          <form onSubmit={createStory} className="grid gap-3 md:grid-cols-2">
+            <input required placeholder="Headline" value={storyForm.headline} onChange={e=>setStoryForm(v=>({...v,headline:e.target.value}))} className="h-11 border px-3 text-sm md:col-span-2" />
+            <textarea required placeholder="Short description / lead" value={storyForm.description} onChange={e=>setStoryForm(v=>({...v,description:e.target.value}))} className="min-h-24 border p-3 text-sm md:col-span-2" />
+            <textarea required placeholder="Full article / briefing" value={storyForm.body} onChange={e=>setStoryForm(v=>({...v,body:e.target.value}))} className="min-h-52 border p-3 text-sm md:col-span-2" />
+            <select value={storyForm.category} onChange={e=>setStoryForm(v=>({...v,category:e.target.value}))} className="h-11 border px-3 text-sm"><option>Business</option><option>World</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Sports</option><option>Tech</option><option>Crypto</option><option>Entertainment</option></select>
+            <select value={storyForm.region} onChange={e=>setStoryForm(v=>({...v,region:e.target.value}))} className="h-11 border px-3 text-sm"><option>Global</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>North America</option><option>South America</option></select>
+            <select value={storyForm.story_type} onChange={e=>setStoryForm(v=>({...v,story_type:e.target.value}))} className="h-11 border px-3 text-sm"><option>RWDNEWS ORIGINAL</option><option>DEVELOPING</option><option>WIRE</option></select>
+            <input placeholder="Person / company / event" value={storyForm.subject} onChange={e=>setStoryForm(v=>({...v,subject:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input placeholder="Author" value={storyForm.author_name} onChange={e=>setStoryForm(v=>({...v,author_name:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <div className="space-y-2 md:col-span-2">
+              <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">Main image</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} onChange={e=>{const f=e.target.files?.[0]; if(f) void uploadStoryImage(f)}} className="block w-full border p-3 text-sm" />
+              <input required type="url" placeholder="Or paste an image URL" value={storyForm.image} onChange={e=>setStoryForm(v=>({...v,image:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+              {storyForm.image ? <img src={storyForm.image} alt="Story preview" className="max-h-56 w-full rounded object-cover" /> : null}
+              <p className="text-xs text-neutral-500">Maximum 5 MB. Use only images you own, licensed, or have permission to publish.</p>
+            </div>
+            <input placeholder="Image credit" value={storyForm.image_credit} onChange={e=>setStoryForm(v=>({...v,image_credit:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input placeholder="Image licence / rights note" value={storyForm.image_license} onChange={e=>setStoryForm(v=>({...v,image_license:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input type="url" placeholder="Image source URL (optional)" value={storyForm.image_source_url} onChange={e=>setStoryForm(v=>({...v,image_source_url:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input type="url" placeholder="Original/source article URL (optional)" value={storyForm.original_url} onChange={e=>setStoryForm(v=>({...v,original_url:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input placeholder="Tags, separated by commas" value={storyForm.tags} onChange={e=>setStoryForm(v=>({...v,tags:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input type="datetime-local" value={storyForm.publish_at} onChange={e=>setStoryForm(v=>({...v,publish_at:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <div className="flex flex-wrap items-center gap-4 border p-3 text-xs md:col-span-2">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={storyForm.featured} onChange={e=>setStoryForm(v=>({...v,featured:e.target.checked}))} /> Feature on homepage</label>
+              <label className="flex items-center gap-2"><input type="checkbox" checked={storyForm.pinned} onChange={e=>setStoryForm(v=>({...v,pinned:e.target.checked}))} /> Pin story</label>
+              <select value={storyForm.editorial_status} onChange={e=>setStoryForm(v=>({...v,editorial_status:e.target.value}))} className="h-9 border px-2"><option value="published">Publish now</option><option value="draft">Save as draft</option></select>
+            </div>
+            <button disabled={busy} className="h-12 bg-neutral-950 px-5 text-xs font-bold text-white md:col-span-2">{storyForm.editorial_status === "draft" ? "Save draft" : "Publish story"}</button>
+            <p className="text-xs text-neutral-500 md:col-span-2">Image rights: only use images you own, licensed, or are otherwise permitted to publish. The source/credit fields are displayed on the story.</p>
+          </form>
+        </Panel>
+        <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {a.story_type || "WIRE"} · {a.category || "News"} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured })} className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
       </section> : null}
 
       {tab === "social" ? <SocialPanel articles={data.articles} copied={copied} onCopy={async (label, text) => { try { await navigator.clipboard.writeText(text); setCopied(label); window.setTimeout(() => setCopied(""), 1800); } catch { setCopied("Copy failed"); } }} /> : null}

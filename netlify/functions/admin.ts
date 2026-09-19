@@ -53,6 +53,26 @@ export default async (req: Request) => {
     if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
     if (body.action === "logout") return json({ ok: true }, 200, { "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
 
+    if (body.action === "article_image_upload") {
+      const filename = clean(body.filename || "image", 120).replace(/[^a-zA-Z0-9._-]/g, "-");
+      const mime = clean(body.mime_type, 80).toLowerCase();
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+      if (!allowed.includes(mime)) return json({ error: "Only JPG, PNG, WebP or AVIF images are allowed." }, 400);
+      const raw = String(body.data || "");
+      const match = raw.match(/^data:([^;]+);base64,(.+)$/);
+      const base64 = match ? match[2] : raw;
+      if (!base64) return json({ error: "Image data is missing." }, 400);
+      const bytes = Buffer.from(base64, "base64");
+      if (bytes.length > 5 * 1024 * 1024) return json({ error: "Image is too large. Maximum size is 5 MB." }, 400);
+      const ext = mime.split("/")[1] === "jpeg" ? "jpg" : mime.split("/")[1];
+      const path = "articles/" + new Date().toISOString().slice(0,10) + "/" + Date.now().toString(36) + "-" + filename.replace(/.[^.]+$/, "") + "." + ext;
+      const { error } = await database.storage.from("rwdnews-images").upload(path, bytes, { contentType: mime, cacheControl: "31536000", upsert: false });
+      if (error) return json({ error: error.message }, 400);
+      const { data: pub } = database.storage.from("rwdnews-images").getPublicUrl(path);
+      await audit(database, "article_image_uploaded", "article_image", path, { mime, bytes: bytes.length });
+      return json({ ok: true, url: pub.publicUrl, path });
+    }
+
     if (body.action === "sponsor_create") {
       const sponsorName = clean(body.sponsor_name, 120);
       const headline = clean(body.headline, 180);
@@ -93,6 +113,44 @@ export default async (req: Request) => {
       if (error) return json({ error: error.message }, 400);
       await audit(database, "lead_status_changed", "sales_lead", id, { status });
       return json({ ok: true });
+    }
+
+    if (body.action === "article_create") {
+      const headline = clean(body.headline, 220);
+      const description = clean(body.description, 1000);
+      const bodyText = clean(body.body, 30000);
+      const image = clean(body.image, 2000);
+      const originalUrl = clean(body.original_url, 1000);
+      const category = clean(body.category || "Business", 50);
+      const region = clean(body.region || "Global", 50);
+      const storyType = clean(body.story_type || "RWDNEWS ORIGINAL", 30);
+      const subject = clean(body.subject, 180);
+      const authorName = clean(body.author_name || "RWDNEWS Editorial", 120);
+      const imageCredit = clean(body.image_credit || "RWDNEWS", 180);
+      const imageLicense = clean(body.image_license || "Owned or licensed by RWDNEWS", 240);
+      const imageSourceUrl = clean(body.image_source_url || originalUrl, 1000);
+      const status = ["published","hidden","archived"].includes(String(body.editorial_status)) ? String(body.editorial_status) : "draft";
+      if (!headline || !description || !bodyText || !image || !/^https?:\/\//i.test(image)) return json({ error: "Headline, description, article body and a valid image URL are required." }, 400);
+      if (originalUrl && !/^https?:\/\//i.test(originalUrl)) return json({ error: "Original/source URL must be a valid URL." }, 400);
+      if (!["Business","World","Europe","Middle East","Asia","Africa","Nigeria","Ghana","Sports","Tech","Crypto","Entertainment"].includes(category)) return json({ error: "Invalid category." }, 400);
+      if (!["Global","Africa","Nigeria","Ghana","Europe","Middle East","Asia","North America","South America"].includes(region)) return json({ error: "Invalid region." }, 400);
+      if (!["WIRE","RWDNEWS ORIGINAL","DEVELOPING"].includes(storyType)) return json({ error: "Invalid story type." }, 400);
+      const timestamp = body.publish_at && !Number.isNaN(Date.parse(String(body.publish_at))) ? new Date(String(body.publish_at)).toISOString() : new Date().toISOString();
+      const id = "original-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+      const slugSource = headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
+      const { data, error } = await database.from("articles").insert({
+        id, original_url: originalUrl || ("https://rwdnews.local/original/" + id), original_title: headline,
+        original_description: description, ai_hook_title: headline, ai_summary: [description],
+        tags: Array.isArray(body.tags) ? body.tags.map((x: unknown) => "#" + clean(x, 40).replace(/^#/,"")).filter(Boolean).slice(0, 8) : [],
+        source: storyType === "RWDNEWS ORIGINAL" ? "RWDNEWS" : clean(body.source || "RWDNEWS", 120),
+        image, read_time: clean(body.read_time || "3 min read", 30), timestamp,
+        editorial_status: status === "draft" ? "hidden" : status, featured: Boolean(body.featured), pinned: Boolean(body.pinned),
+        story_type: storyType, body: bodyText, category, region, subject, author_name: authorName,
+        image_credit: imageCredit, image_license: imageLicense, image_source_url: imageSourceUrl, published_by: "admin",
+      }).select("id").single();
+      if (error) return json({ error: error.message }, 400);
+      await audit(database, "article_created", "article", String(data?.id), { story_type: storyType, category, region, subject, slug: slugSource });
+      return json({ ok: true, id: data?.id });
     }
 
     if (body.action === "article_update") {
@@ -175,7 +233,7 @@ export default async (req: Request) => {
     database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").order("created_at", { ascending: false }).limit(20000),
     database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned").order("timestamp", { ascending: false }).limit(100),
+    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned,story_type,category,region,subject,author_name,image").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
   ]);
 
