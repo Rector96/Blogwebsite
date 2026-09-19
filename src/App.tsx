@@ -15,6 +15,8 @@ import { InfoPage } from "./pages/InfoPage";
 import StoryPage from "./pages/StoryPage";
 import SportsPage from "./pages/SportsPage";
 import { logRwdNewsEvent } from "./lib/analytics";
+import { filterArticlesByTab, withInferredCategory } from "./lib/filterArticles";
+import { matchesCategory } from "./lib/categories";
 
 export interface EnrichedArticle {
   id: string;
@@ -72,7 +74,12 @@ function todayLabel() {
 }
 
 function storyPath(article: EnrichedArticle) {
-  const title = (article.ai_hook_title || article.original_title).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
+  const title = (article.ai_hook_title || article.original_title)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 90);
   return "/news/" + title + "--" + encodeURIComponent(article.id);
 }
 
@@ -86,8 +93,10 @@ function RwdNewsApp() {
     try {
       const raw = localStorage.getItem(NEWS_CACHE_KEY);
       const cached = raw ? JSON.parse(raw) : [];
-      return Array.isArray(cached) ? cached : [];
-    } catch { return []; }
+      return Array.isArray(cached) ? withInferredCategory(cached) : [];
+    } catch {
+      return [];
+    }
   });
   const [sponsors, setSponsors] = useState<SponsoredOffer[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>(() => {
@@ -120,7 +129,11 @@ function RwdNewsApp() {
   const [leadMsg, setLeadMsg] = useState<string | null>(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [carouselPaused, setCarouselPaused] = useState(false);
-  const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[] }>({ live: [], featured: [], upcoming: [] });
+  const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[] }>({
+    live: [],
+    featured: [],
+    upcoming: [],
+  });
   const [sportsLoading, setSportsLoading] = useState(true);
 
   useEffect(() => {
@@ -137,13 +150,13 @@ function RwdNewsApp() {
   useEffect(() => {
     try {
       localStorage.setItem(SAVED_KEY, JSON.stringify(saved));
-    } catch {
-      /* ignore */
-    }
+    } catch {}
   }, [saved]);
 
   useEffect(() => {
-    void fetchSponsors().then((items) => setSponsors(items.filter((item) => item.placement === "in_feed" || item.placement === "both")));
+    void fetchSponsors().then((items) =>
+      setSponsors(items.filter((item) => item.placement === "in_feed" || item.placement === "both")),
+    );
     void logRwdNewsEvent({ event: "page_view" });
   }, []);
 
@@ -156,24 +169,22 @@ function RwdNewsApp() {
         headers: { Accept: "application/json" },
       });
       if (!response.ok) throw new Error("Live news API unavailable");
-      const payload = (await response.json()) as {
-        articles?: EnrichedArticle[];
-      };
+      const payload = (await response.json()) as { articles?: EnrichedArticle[] };
       const liveArticles = Array.isArray(payload.articles) ? payload.articles : [];
       if (liveArticles.length) {
-        setArticles(liveArticles);
-        try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(liveArticles)); } catch { /* cache is optional */ }
+        const normalized = withInferredCategory(liveArticles);
+        setArticles(normalized);
+        try {
+          localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(normalized));
+        } catch {}
         setFeedSource("live");
       } else if (!hadCachedNews && !refresh) {
-        // If the database is empty on first load, immediately try the live wire.
         void fetchNews(true);
         return;
       } else {
         setFeedSource(hadCachedNews ? "live" : "unavailable");
       }
     } catch {
-      // Keep the last verified live response visible while the live wire reconnects.
-      // Never replace it with fabricated/seed content.
       if (!hadCachedNews) setArticles([]);
       setFeedSource(hadCachedNews ? "live" : "unavailable");
     } finally {
@@ -204,13 +215,9 @@ function RwdNewsApp() {
   }, []);
 
   useEffect(() => {
-    // Load the latest verified feed from the database immediately.
     void fetchNews(false);
-    // Refresh from live sources shortly after first paint without blocking the page.
-    const firstRefresh = window.setTimeout(() => void fetchNews(true), 1500);
-    const timer = window.setInterval(() => {
-      void fetchNews(true);
-    }, 60_000);
+    const firstRefresh = window.setTimeout(() => void fetchNews(true), 1200);
+    const timer = window.setInterval(() => void fetchNews(true), 60_000);
     return () => {
       window.clearTimeout(firstRefresh);
       window.clearInterval(timer);
@@ -220,10 +227,16 @@ function RwdNewsApp() {
   const openArticle = (article: EnrichedArticle) => {
     setRecentlyViewed((prev) => {
       const next = [article.id, ...prev.filter((id) => id !== article.id)].slice(0, 8);
-      try { localStorage.setItem("rwdnews_recent_v1", JSON.stringify(next)); } catch {}
+      try {
+        localStorage.setItem("rwdnews_recent_v1", JSON.stringify(next));
+      } catch {}
       return next;
     });
-    void logRwdNewsEvent({ event: "article_open", articleId: article.id, articleUrl: article.original_url });
+    void logRwdNewsEvent({
+      event: "article_open",
+      articleId: article.id,
+      articleUrl: article.original_url,
+    });
     window.location.assign(storyPath(article));
   };
 
@@ -232,80 +245,51 @@ function RwdNewsApp() {
     window.location.assign("/advertise");
   };
 
-  const tags = useMemo(() => {
-    const categories = new Set<string>();
-    articles.forEach((a) => {
-      if (a.category) categories.add(a.category);
-    });
-    const preferred = ["Breaking", "World", "Nigeria", "Ghana", "Africa", "Europe", "Middle East", "Asia", "Sports", "Business", "Tech", "Crypto", "Entertainment"];
-    categories.add("Sports");
-    return ["All", ...preferred.filter((name) => categories.has(name)), ...Array.from(categories).filter((name) => !preferred.includes(name)).sort()];
-  }, [articles]);
+  // Fixed tabs — always available
+  const tags = useMemo(
+    () => ["All", "Sports", "Business", "Tech", "Crypto", "Nigeria", "Africa", "World", "Entertainment"],
+    [],
+  );
 
-  const filtered = useMemo(() => {
-    return articles.filter((a) => {
-      const t = normalizeTags(a.tags);
-      const tagOk =
-        selectedTag === "All" ||
-        (selectedTag === "Breaking" ? a.trend_label === "Breaking" : a.category === selectedTag);
-      const q = searchQuery.trim().toLowerCase();
-      if (!q) return tagOk;
-      const blob = [a.ai_hook_title, a.original_title, a.source, ...(a.ai_summary || []), ...t]
-        .join(" ")
-        .toLowerCase();
-      return tagOk && blob.includes(q);
-    });
-  }, [articles, selectedTag, searchQuery]);
+  // STRICT: All = everything; Sports = sports only; Business = business only; etc.
+  const filtered = useMemo(
+    () => filterArticlesByTab(articles, selectedTag, searchQuery),
+    [articles, selectedTag, searchQuery],
+  );
 
   const recommended = useMemo(() => {
     const categoryWeight = new Map<string, number>();
-    const sourceWeight = new Map<string, number>();
-    const tagWeight = new Map<string, number>();
-
     recentlyViewed.forEach((id, index) => {
       const article = articles.find((a) => a.id === id);
-      if (!article) return;
+      if (!article?.category) return;
       const weight = Math.max(1, 8 - index);
-      if (article.category) categoryWeight.set(article.category, (categoryWeight.get(article.category) || 0) + weight);
-      if (article.source) sourceWeight.set(article.source, (sourceWeight.get(article.source) || 0) + weight);
-      normalizeTags(article.tags).forEach((tag) => tagWeight.set(tag, (tagWeight.get(tag) || 0) + weight));
+      categoryWeight.set(article.category, (categoryWeight.get(article.category) || 0) + weight);
     });
-
     return articles
       .filter((a) => !recentlyViewed.includes(a.id))
       .map((a) => {
         const ageHours = Math.max(0, (Date.now() - new Date(a.timestamp).getTime()) / 3600000);
         const freshness = Math.max(0, 30 - ageHours * 1.5);
-        const trend = Math.min(35, (a.trend_score || 0) * 0.35);
-        const interest =
-          (categoryWeight.get(a.category || "") || 0) * 3 +
-          (sourceWeight.get(a.source || "") || 0) * 1.5 +
-          normalizeTags(a.tags).reduce((sum, tag) => sum + (tagWeight.get(tag) || 0) * 2, 0);
-        const globalImportance = a.trend_label === "Breaking" ? 18 : a.trend_label === "Trending" ? 10 : 0;
-        return { article: a, score: freshness + trend + interest + globalImportance };
+        const interest = (categoryWeight.get(a.category || "") || 0) * 3;
+        const globalImportance =
+          a.trend_label === "Breaking" ? 18 : a.trend_label === "Trending" ? 10 : 0;
+        return { article: a, score: freshness + interest + globalImportance };
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, 6)
       .map((item) => item.article);
   }, [articles, recentlyViewed]);
 
-  useEffect(() => {
-    if (!recommended.length) return;
-    void Promise.all(
-      recommended.map((a) =>
-        logRwdNewsEvent({
-          event: "recommendation_impression",
-          articleId: a.id,
-          articleUrl: a.original_url,
-          placement: "for_you",
-        }),
-      ),
-    );
-  }, [recommended]);
-
   const heroStories = filtered.slice(0, 5);
   const hero = heroStories[heroIndex % Math.max(heroStories.length, 1)] || filtered[0];
   const secondary = filtered.slice(1, 4);
+  const rest = filtered.slice(4);
+  const sports = articles.filter((a) => matchesCategory(a, "Sports")).slice(0, 12);
+  const sportsCards = sportsFeed.live.length
+    ? sportsFeed.live.slice(0, 12)
+    : sportsFeed.featured.length
+      ? sportsFeed.featured.slice(0, 12)
+      : sportsFeed.upcoming.slice(0, 12);
 
   useEffect(() => {
     setHeroIndex(0);
@@ -318,22 +302,11 @@ function RwdNewsApp() {
     }, 6500);
     return () => window.clearInterval(timer);
   }, [heroStories.length, carouselPaused]);
-  const rest = filtered.slice(4);
-  const sports = articles.filter((a) => a.category === "Sports").slice(0, 4);
-  const sportsCards = sportsFeed.live.length ? sportsFeed.live.slice(0, 8) : sportsFeed.featured.length ? sportsFeed.featured.slice(0, 8) : sportsFeed.upcoming.slice(0, 8);
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
     setSaved((prev) => {
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      if (!prev.includes(id)) {
-        const article = articles.find((item) => item.id === id);
-        void logRwdNewsEvent({
-          event: "article_save",
-          articleId: id,
-          articleUrl: article?.original_url,
-        });
-      }
       return next;
     });
   };
@@ -352,7 +325,6 @@ function RwdNewsApp() {
           .upsert({ email: v, source: "rwdnews_web" }, { onConflict: "email" });
       }
       setEmailMsg("You're on the RWDNEWS list.");
-      void logRwdNewsEvent({ event: "newsletter_signup", placement: "sidebar" });
       setEmail("");
     } catch {
       setEmailMsg("Thanks — we'll confirm shortly.");
@@ -374,13 +346,18 @@ function RwdNewsApp() {
     setLeadMsg(res.ok ? "Received. We'll send rates shortly." : "Thanks — we'll follow up.");
   };
 
+  const emptyForTab =
+    selectedTag !== "All" && filtered.length === 0 && !refreshing
+      ? `No ${selectedTag} stories in the live wire right now. Try All, or pull to refresh.`
+      : null;
+
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
         <title>RWDNEWS — Global News, Trends & Briefings</title>
         <meta
           name="description"
-          content="RWDNEWS delivers source-backed global news, developing stories, trends, and concise briefings you can read on-site."
+          content="RWDNEWS delivers source-backed global news, sports, business and tech briefings."
         />
       </Helmet>
 
@@ -389,13 +366,8 @@ function RwdNewsApp() {
           <span className="font-medium tracking-wide text-neutral-300">{todayLabel()}</span>
           <span className="hidden text-neutral-400 sm:inline">
             {feedSource === "live" ? "Live global wire" : "Live wire reconnecting"}
-            {isSupabaseConfigured ? " · Connected" : ""}
           </span>
-          <button
-            type="button"
-            onClick={openAdvertiserForm}
-            className="font-semibold text-amber-400"
-          >
+          <button type="button" onClick={openAdvertiserForm} className="font-semibold text-amber-400">
             Advertise
           </button>
         </div>
@@ -407,7 +379,7 @@ function RwdNewsApp() {
           <a href="/" className="block shrink-0" aria-label="RWDNEWS home">
             <img
               src="/rwdnews-logo.svg"
-              alt="RWDNEWS — Global News, Trends & Briefings"
+              alt="RWDNEWS"
               className="h-auto w-[205px] sm:w-[275px]"
             />
           </a>
@@ -425,85 +397,96 @@ function RwdNewsApp() {
               type="button"
               onClick={() => void fetchNews(true)}
               className="press grid size-9 place-items-center rounded-full border border-neutral-200"
+              aria-label="Refresh news"
             >
               <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
+
         <div className="border-t border-neutral-100 bg-neutral-50/70">
-  <div className="mx-auto max-w-6xl px-4 py-2.5 sm:px-6">
-    <div className="flex items-center gap-3">
-      <span className="hidden shrink-0 text-[10px] font-extrabold tracking-[0.18em] text-neutral-400 uppercase sm:inline">Explore</span>
-      <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="News categories">
-        {tags.map((t) => (
-          <button key={t} type="button" onClick={() => setSelectedTag(t)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${selectedTag === t ? "border-neutral-950 bg-neutral-950 text-white shadow-sm" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400 hover:text-neutral-950"}`}>
-            {t}
-          </button>
-        ))}
-      </div>
-    </div>
-    <div className="mt-2 flex items-center gap-2 md:hidden">
-      <div className="relative min-w-0 flex-1">
-        <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-neutral-400" />
-        <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search global news" className="h-9 w-full rounded-full border border-neutral-200 bg-white pr-3 pl-9 text-xs outline-none focus:border-neutral-400" />
-      </div>
-      {searchQuery ? <button type="button" onClick={() => setSearchQuery("")} className="rounded-full border border-neutral-200 bg-white px-3 py-2 text-[10px] font-bold text-neutral-600">Clear</button> : null}
-    </div>
-    <div className="mt-2 hidden items-center justify-between text-[10px] text-neutral-400 sm:flex">
-      <span>{selectedTag === "All" ? "All global coverage" : selectedTag + " coverage"} · {filtered.length} stories</span>
-      {searchQuery ? <span>Searching: “{searchQuery}”</span> : <span>Source-backed wire</span>}
-    </div>
-  </div>
-</div>
+          <div className="mx-auto max-w-6xl px-4 py-2.5 sm:px-6">
+            <div className="flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {tags.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSelectedTag(t)}
+                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                    selectedTag === t
+                      ? "border-neutral-950 bg-neutral-950 text-white shadow-sm"
+                      : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-neutral-400">
+              {selectedTag === "All"
+                ? `${filtered.length} stories · all topics`
+                : `${filtered.length} ${selectedTag} stories only`}
+            </p>
+          </div>
+        </div>
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
-        <AdSlot slot={import.meta.env.VITE_ADSENSE_LEADER_SLOT} className="ad-slot-leader" />
+        <AdSlot slot="leaderboard" />
       </div>
 
       <main className="mx-auto grid max-w-6xl gap-10 px-4 pb-16 sm:px-6 lg:grid-cols-[1fr_300px]">
         <div className="min-w-0">
-          {hero ? (
+          {emptyForTab ? (
+            <div className="mb-8 border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center">
+              <p className="font-display text-lg font-semibold">{emptyForTab}</p>
+              <button
+                type="button"
+                onClick={() => void fetchNews(true)}
+                className="mt-4 rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white"
+              >
+                Refresh live wire
+              </button>
+            </div>
+          ) : null}
+
+          {hero && !emptyForTab ? (
             <section className="border-b border-neutral-200 pb-8">
               <div className="grid gap-6 lg:grid-cols-12">
-                <article className="group relative cursor-pointer overflow-hidden bg-neutral-950 lg:col-span-7" onClick={() => openArticle(hero)} onMouseEnter={() => setCarouselPaused(true)} onMouseLeave={() => setCarouselPaused(false)} onTouchStart={() => setCarouselPaused(true)} onTouchEnd={() => setCarouselPaused(false)} aria-roledescription="carousel" aria-label="Top stories">
-  <img key={hero.id} src={hero.image} alt="" className="aspect-[16/10] w-full object-cover transition duration-700 group-hover:scale-[1.02]" />
-  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-  <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
-    <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-[0.14em] uppercase">
-      <span className="text-amber-300">{hero.source}</span>{hero.category ? <span className="text-white/65">· {hero.category}</span> : null}<span className="text-white/65">· {formatRelativeTime(hero.timestamp)}</span>
-      {hero.trend_label && hero.trend_label !== "Fresh" ? <span className="rounded-full bg-white/15 px-2 py-1 text-amber-200">{hero.trend_label}</span> : null}
-    </div>
-    <h1 className="font-display mt-2 max-w-3xl text-2xl leading-[1.08] font-semibold sm:text-3xl lg:text-[2.25rem]">{hero.ai_hook_title || hero.original_title}</h1>
-    <p className="mt-2 max-w-2xl line-clamp-2 text-sm leading-relaxed text-white/80 sm:text-[15px]">{hero.ai_summary?.[0] || hero.original_description}</p>
-    <div className="mt-4 flex items-center justify-between gap-3">
-      <span className="text-xs font-bold text-teal-300">Read full briefing →</span>
-      {heroStories.length > 1 ? <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        <button type="button" aria-label="Previous top story" onClick={() => setHeroIndex((index) => (index - 1 + heroStories.length) % heroStories.length)} className="grid size-8 place-items-center rounded-full border border-white/25 bg-black/20 backdrop-blur transition hover:bg-white/15"><ChevronLeft className="size-4" /></button>
-        <span className="px-1 text-[10px] font-bold tabular-nums text-white/70">{(heroIndex % heroStories.length) + 1}/{heroStories.length}</span>
-        <button type="button" aria-label="Next top story" onClick={() => setHeroIndex((index) => (index + 1) % heroStories.length)} className="grid size-8 place-items-center rounded-full border border-white/25 bg-black/20 backdrop-blur transition hover:bg-white/15"><ChevronRight className="size-4" /></button>
-      </div> : null}
-    </div>
-  </div>
-  {heroStories.length > 1 ? <div className="absolute top-4 left-4 flex gap-1.5">{heroStories.map((story, index) => <button key={story.id} type="button" aria-label={`Show top story ${index + 1}`} onClick={(e) => { e.stopPropagation(); setHeroIndex(index); }} className={`h-1.5 rounded-full transition-all ${index === heroIndex % heroStories.length ? "w-7 bg-white" : "w-2 bg-white/45 hover:bg-white/75"}`} />)}</div> : null}
-</article>
+                <article
+                  className="group cursor-pointer lg:col-span-7"
+                  onClick={() => openArticle(hero)}
+                >
+                  <div className="overflow-hidden bg-neutral-100">
+                    <img
+                      src={hero.image}
+                      alt=""
+                      className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                    />
+                  </div>
+                  <p className="mt-3 text-[11px] font-bold tracking-[0.14em] text-amber-800 uppercase">
+                    {hero.category || hero.source} · {formatRelativeTime(hero.timestamp)}
+                  </p>
+                  <h1 className="font-display mt-1 text-2xl leading-[1.15] font-semibold sm:text-3xl">
+                    {hero.ai_hook_title || hero.original_title}
+                  </h1>
+                  <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
+                    {hero.ai_summary?.[0] || hero.original_description}
+                  </p>
+                </article>
                 <div className="flex flex-col divide-y divide-neutral-200 lg:col-span-5">
                   {secondary.map((a) => (
                     <article
                       key={a.id}
-                      className="story-row cursor-pointer py-4 first:pt-0"
+                      className="cursor-pointer py-4 first:pt-0"
                       onClick={() => openArticle(a)}
                     >
-                      <div className="mb-3 overflow-hidden bg-neutral-100">
-                        <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
-                      </div>
                       <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
-                        {a.source} · {formatRelativeTime(a.timestamp)}
+                        {a.category || a.source} · {formatRelativeTime(a.timestamp)}
                       </p>
-                      <h2 className="story-title font-display mt-1 text-lg font-semibold leading-snug">
+                      <h2 className="font-display mt-1 text-lg font-semibold leading-snug">
                         {a.ai_hook_title || a.original_title}
                       </h2>
-                      <p className="mt-1 line-clamp-2 text-sm text-neutral-600">{a.ai_summary?.[0]}</p>
                     </article>
                   ))}
                 </div>
@@ -511,121 +494,78 @@ function RwdNewsApp() {
             </section>
           ) : null}
 
-          {recommended.length > 0 ? (
-            <section className="mb-8 border-y border-neutral-200 py-5">
-              <div className="mb-3 flex items-end justify-between">
-                <div>
-                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-teal-800 uppercase">Personal signal</p>
-                  <h2 className="font-display text-xl font-semibold">For You</h2>
-                  <p className="text-xs text-neutral-500">Fresh stories shaped by what you read, while keeping major global stories visible.</p>
-                </div>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {recommended.map((a) => (
-                  <button key={"for-you-" + a.id} type="button" onClick={() => { void logRwdNewsEvent({ event: "recommendation_click", articleId: a.id, articleUrl: a.original_url, placement: "for_you" }); openArticle(a); }} className="group overflow-hidden border border-neutral-200 bg-white text-left">
-                    <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
-                    <div className="p-3">
-                      <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">{a.category || "World"} · {a.source}</p>
-                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold leading-snug">{a.ai_hook_title || a.original_title}</p>
-                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-neutral-500">{a.ai_summary?.[0] || a.original_description}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          <div className="py-5">
-            <AdSlot slot={import.meta.env.VITE_ADSENSE_INFEED_SLOT} className="ad-slot-infeed" />
-          </div>
-
-          <section className="mb-8">
-            <div className="mb-3 flex items-center justify-between border-b border-neutral-900 pb-2">
-              <div>
-                <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-800 uppercase">Live signal</p>
-                <h2 className="font-display text-xl font-semibold">Trending now</h2>
-              </div>
-              <span className="text-[11px] text-neutral-400">Source-backed</span>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {filtered
-                .filter((a) => a.trend_label === "Trending" || (a.trend_score || 0) >= 55)
-                .slice(0, 3)
-                .map((a) => (
-                  <button
-                    key={"trend-" + a.id}
-                    type="button"
-                    onClick={() => openArticle(a)}
-                    className="group overflow-hidden border border-neutral-200 bg-white text-left"
-                  >
-                    <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
-                    <div className="p-3">
-                      <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
-                        {a.category || "World"} · {a.trend_label || "Fresh"}
-                      </p>
-                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold leading-snug">
-                        {a.ai_hook_title || a.original_title}
-                      </p>
-                    </div>
-                  </button>
-                ))}
-            </div>
-          </section>
-
-          {(selectedTag === "All" || selectedTag === "Sports") ? (
+          {(selectedTag === "All" || selectedTag === "Sports") && (
             <section className="mb-8 border border-neutral-200 bg-neutral-950 text-white">
-            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-5">
-              <div>
-                <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">Live sports</p>
-                <h2 className="font-display text-xl font-semibold">Scores & major leagues</h2>
-              </div>
-              <span className="text-[10px] font-semibold text-neutral-400">{sportsFeed.live.length ? "● LIVE" : "Fixtures & results"}</span>
-            </div>
-            {sportsLoading ? (
-              <div className="p-5 text-sm text-neutral-400">Loading live scores…</div>
-            ) : sportsCards.length ? (
-              <div className="grid gap-px bg-neutral-800 sm:grid-cols-2 lg:grid-cols-4">
-                {sportsCards.map((m: any) => (
-                  <div key={m.id} className="bg-neutral-950 p-4">
-                    <div className="flex items-center justify-between gap-2 text-[9px] font-bold tracking-wider uppercase">
-                      <span className="truncate text-amber-400">{m.league}</span>
-                      <span className={m.live ? "text-red-400" : "text-neutral-500"}>{m.live ? "LIVE" : m.status}</span>
-                    </div>
-                    <div className="mt-3 space-y-2 text-sm">
-                      <div className="flex items-center justify-between gap-3"><span className="truncate">{m.home}</span><strong>{m.homeScore ?? "–"}</strong></div>
-                      <div className="flex items-center justify-between gap-3"><span className="truncate">{m.away}</span><strong>{m.awayScore ?? "–"}</strong></div>
-                    </div>
-                    <button type="button" onClick={() => window.location.assign("/sports")} className="mt-3 text-[10px] font-bold text-teal-300">Match centre →</button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="p-5 text-sm text-neutral-400">No live matches right now. Check the major-league fixtures below.</div>
-            )}
-            <div className="flex flex-wrap gap-2 border-t border-neutral-800 px-4 py-3 text-[10px] font-semibold text-neutral-300 sm:px-5">
-              {["Premier League", "Champions League", "La Liga", "NBA", "NFL", "MLB", "Bundesliga", "Serie A"].map((league) => <span key={league} className="rounded-full border border-neutral-700 px-2.5 py-1">{league}</span>)}
-            </div>
-            <p className="px-4 pb-4 text-[9px] text-neutral-500 sm:px-5">Live sports data is supplied by SportScore. RWDNEWS match outlooks are informational, not guaranteed results or betting advice.</p>
-          </section>
-
-          ) : null}
-
-          {sports.length ? (
-            <section className="mb-8">
-              <div className="mb-3 flex items-center justify-between border-b border-neutral-900 pb-2">
+              <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
                 <div>
-                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-teal-800 uppercase">Global sports</p>
-                  <h2 className="font-display text-xl font-semibold">Sports pulse</h2>
+                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">
+                    Live sports
+                  </p>
+                  <h2 className="font-display text-xl font-semibold">Scores & major leagues</h2>
                 </div>
-                <button type="button" onClick={() => setSelectedTag("Sports")} className="text-[11px] font-semibold text-neutral-500">See all →</button>
+                <a href="/sports" className="text-[11px] font-semibold text-neutral-300">
+                  Full centre →
+                </a>
+              </div>
+              {sportsLoading ? (
+                <div className="p-5 text-sm text-neutral-400">Loading scores…</div>
+              ) : sportsCards.length ? (
+                <div className="grid gap-px bg-neutral-800 sm:grid-cols-2 lg:grid-cols-4">
+                  {sportsCards.map((m: any) => (
+                    <div key={m.id} className="bg-neutral-950 p-4">
+                      <div className="flex items-center justify-between text-[9px] font-bold uppercase">
+                        <span className="truncate text-amber-400">{m.league}</span>
+                        <span className={m.live ? "text-red-400" : "text-neutral-500"}>
+                          {m.live ? "LIVE" : m.status}
+                        </span>
+                      </div>
+                      <div className="mt-3 space-y-2 text-sm">
+                        <div className="flex justify-between gap-3">
+                          <span className="truncate">{m.home}</span>
+                          <strong>{m.homeScore ?? "–"}</strong>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                          <span className="truncate">{m.away}</span>
+                          <strong>{m.awayScore ?? "–"}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-5 text-sm text-neutral-400">
+                  No live boards right now. Sports headlines still appear below when available.
+                </div>
+              )}
+            </section>
+          )}
+
+          {selectedTag === "All" && sports.length > 0 ? (
+            <section className="mb-8">
+              <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
+                <h2 className="text-sm font-extrabold tracking-wide uppercase">Sports pulse</h2>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTag("Sports")}
+                  className="text-[11px] font-semibold text-neutral-500"
+                >
+                  See all sports →
+                </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {sports.map((a) => (
-                  <button key={"sports-" + a.id} type="button" onClick={() => openArticle(a)} className="group overflow-hidden border border-neutral-200 bg-white text-left">
-                    <img src={a.image} alt="" className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                {sports.slice(0, 8).map((a) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => openArticle(a)}
+                    className="overflow-hidden border border-neutral-200 bg-white text-left shadow-sm"
+                  >
+                    <img src={a.image} alt="" className="aspect-[4/3] w-full object-cover" />
                     <div className="p-3">
-                      <p className="text-[10px] font-bold tracking-wider text-teal-800 uppercase">{a.source} · {formatRelativeTime(a.timestamp)}</p>
-                      <p className="font-display mt-1 line-clamp-3 text-base font-semibold leading-snug">{a.ai_hook_title || a.original_title}</p>
+                      <p className="text-[10px] font-bold text-teal-800 uppercase">{a.source}</p>
+                      <p className="font-display mt-1 line-clamp-3 text-sm font-semibold">
+                        {a.ai_hook_title || a.original_title}
+                      </p>
                     </div>
                   </button>
                 ))}
@@ -634,92 +574,44 @@ function RwdNewsApp() {
           ) : null}
 
           <section>
-            {recentlyViewed.length > 0 && !searchQuery && selectedTag === "All" ? (
-              <div className="mb-8">
-                <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
-                  <h2 className="text-sm font-extrabold tracking-wide uppercase">Continue reading</h2>
-                  <button type="button" onClick={() => setRecentlyViewed([])} className="text-[11px] text-neutral-400 hover:text-neutral-700">Clear</button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {recentlyViewed.map((id) => articles.find((a) => a.id === id)).filter(Boolean).slice(0, 4).map((a) => (
-                    <button key={a!.id} type="button" onClick={() => openArticle(a!)} className="border border-neutral-200 p-3 text-left hover:bg-neutral-50">
-                      <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">{a!.source}</p>
-                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold">{a!.ai_hook_title || a!.original_title}</p>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
             <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
-              <h2 className="text-sm font-extrabold tracking-wide uppercase">Latest</h2>
+              <h2 className="text-sm font-extrabold tracking-wide uppercase">
+                {selectedTag === "All" ? "Latest" : selectedTag}
+              </h2>
               <span className="text-[11px] text-neutral-400">{filtered.length} stories</span>
             </div>
             <div className="divide-y divide-neutral-100">
-              {rest.map((a, idx) => (
-                <React.Fragment key={a.id}>
-                  <article
-                    className="story-row flex cursor-pointer gap-4 py-5"
-                    onClick={() => openArticle(a)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
-                        {a.source} · {formatRelativeTime(a.timestamp)}
-                      </p>
-                      <h3 className="story-title font-display mt-1 text-xl font-semibold leading-snug">
-                        {a.ai_hook_title || a.original_title}
-                      </h3>
-                      <p className="mt-1 line-clamp-2 text-sm text-neutral-600">
-                        {a.ai_summary?.[0] || a.original_description}
-                      </p>
-                      <button type="button" className="mt-2 text-neutral-400" onClick={(e) => toggleSave(a.id, e)}>
-                        {saved.includes(a.id) ? (
-                          <BookmarkCheck className="size-3.5 text-teal-800" />
-                        ) : (
-                          <Bookmark className="size-3.5" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="hidden w-28 shrink-0 bg-neutral-100 sm:block sm:w-36">
-                      <img src={a.image} alt="" className="aspect-[4/3] h-full w-full object-cover" />
-                    </div>
-                  </article>
-                  {idx === 2 && sponsors[0] ? (
-                    <PartnerCard offer={sponsors[0]} placement="in_feed" />
-                  ) : null}
-                </React.Fragment>
+              {rest.map((a) => (
+                <article
+                  key={a.id}
+                  className="flex cursor-pointer gap-4 py-5"
+                  onClick={() => openArticle(a)}
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">
+                      {a.category || a.source} · {formatRelativeTime(a.timestamp)}
+                    </p>
+                    <h3 className="font-display mt-1 text-xl font-semibold leading-snug">
+                      {a.ai_hook_title || a.original_title}
+                    </h3>
+                    <p className="mt-1 line-clamp-2 text-sm text-neutral-600">
+                      {a.ai_summary?.[0] || a.original_description}
+                    </p>
+                  </div>
+                  <div className="hidden w-28 shrink-0 sm:block sm:w-36">
+                    <img src={a.image} alt="" className="aspect-[4/3] w-full object-cover" />
+                  </div>
+                </article>
               ))}
             </div>
-            {filtered.length === 0 ? (
-              <div className="border border-neutral-200 bg-neutral-50 p-8 text-center">
-                <p className="font-display text-xl font-semibold">Live stories are loading.</p>
-                <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-neutral-500">
-                  RWDNEWS only displays source-backed stories. If the live wire is temporarily unavailable, we will not fill the feed with fabricated headlines.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => void fetchNews(true)}
-                  className="press mt-4 h-10 rounded-full bg-neutral-950 px-5 text-xs font-bold text-white"
-                >
-                  Retry live wire
-                </button>
-              </div>
-            ) : null}
           </section>
         </div>
 
         <aside className="space-y-6 lg:sticky lg:top-6 lg:self-start">
-          <AdSlot slot={import.meta.env.VITE_ADSENSE_SIDEBAR_SLOT} className="ad-slot-sidebar" />
-          <div className="border border-neutral-200 bg-neutral-50 p-4">
-            <p className="text-[10px] font-bold tracking-[0.16em] text-teal-800 uppercase">RWDNEWS standard</p>
-            <p className="mt-1 text-sm font-semibold">Source-backed first. AI-assisted second.</p>
-            <p className="mt-1 text-xs leading-relaxed text-neutral-500">
-              Headlines and briefings are generated from discovered publisher reports; the original source stays one tap away.
-            </p>
-          </div>
+          <AdSlot slot="sidebar" />
           <div className="border border-neutral-200 bg-neutral-950 p-5 text-white">
             <p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Newsletter</p>
             <h3 className="font-display mt-2 text-xl font-semibold">RWDNEWS Brief</h3>
-            <p className="mt-1 text-sm text-neutral-400">Global news & trends — weekly.</p>
             <form onSubmit={submitNewsletter} className="mt-4 space-y-2">
               <input
                 type="email"
@@ -728,39 +620,37 @@ function RwdNewsApp() {
                 placeholder="Email address"
                 className="h-11 w-full border border-neutral-700 bg-neutral-900 px-3 text-sm text-white outline-none"
               />
-              <button type="submit" className="press h-11 w-full bg-amber-500 text-sm font-bold text-neutral-950">
+              <button
+                type="submit"
+                className="h-11 w-full bg-amber-500 text-sm font-bold text-neutral-950"
+              >
                 Subscribe free
               </button>
             </form>
             {emailMsg ? <p className="mt-2 text-xs text-amber-200">{emailMsg}</p> : null}
           </div>
           {sponsors.slice(0, 2).map((o) => (
-            <PartnerCard key={o.id} offer={o} placement="sidebar" compact />
+            <div key={o.id} className="border border-amber-200 bg-amber-50/40 p-4">
+              <p className="text-[10px] font-bold text-amber-800 uppercase">Sponsored</p>
+              <h4 className="mt-1 text-base font-bold">{o.headline}</h4>
+              <a
+                href={o.ctaUrl}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="mt-2 inline-block text-xs font-bold"
+                onClick={() => void logSponsorClick(o, "sidebar")}
+              >
+                {o.ctaText} →
+              </a>
+            </div>
           ))}
-          <div className="border border-neutral-200 p-4">
-            <p className="text-[10px] font-bold tracking-wider text-neutral-500 uppercase">For brands</p>
-            <p className="mt-1 text-sm font-semibold">Advertise on RWDNEWS</p>
-            <button
-              type="button"
-              onClick={() => { void logRwdNewsEvent({ event: "advertise_open", placement: "sidebar" }); window.location.assign("/advertise"); }}
-              className="mt-3 text-xs font-bold text-teal-800 underline-offset-2 hover:underline"
-            >
-              Request media kit →
-            </button>
-          </div>
-          <AdSlot slot={import.meta.env.VITE_ADSENSE_SIDEBAR_SLOT} className="ad-slot-sidebar" />
         </aside>
       </main>
 
       <footer className="border-t border-neutral-200 bg-neutral-50 py-10">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[190px]" />
-          <p className="mt-2 text-sm text-neutral-500">
-            Read on-site briefings · Sources credited · Built for readers & advertisers
-          </p>
-          <nav className="mt-4 flex flex-wrap gap-4 text-xs font-semibold text-neutral-600" aria-label="RWDNEWS information">
-            <a href="/about">About</a><a href="/editorial">Editorial</a><a href="/advertise">Advertise</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
-          </nav>
+          <p className="font-display text-xl font-bold">RWDNEWS</p>
+          <p className="mt-1 text-sm text-neutral-500">Sports · Business · Tech · Africa</p>
         </div>
       </footer>
 
@@ -781,22 +671,10 @@ function RwdNewsApp() {
             className="relative z-10 w-full max-w-md space-y-3 border bg-white p-6 shadow-xl"
           >
             <h3 className="font-display text-xl font-semibold">Advertise on RWDNEWS</h3>
-            <p className="text-sm leading-relaxed text-neutral-600">
-              Put your brand in front of readers through sponsored stories, newsletter
-              placements, or premium homepage inventory. We will send the current media kit
-              and availability after your inquiry.
-            </p>
-            <div className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-3">
-              {["Sponsored stories", "Newsletter", "Homepage"].map((item) => (
-                <div key={item} className="border border-neutral-200 px-3 py-2 font-semibold text-neutral-700">
-                  {item}
-                </div>
-              ))}
-            </div>
             <input className="h-11 w-full border px-3 text-sm" placeholder="Name" value={leadName} onChange={(e) => setLeadName(e.target.value)} />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Work email" value={leadEmail} onChange={(e) => setLeadEmail(e.target.value)} required />
             <input className="h-11 w-full border px-3 text-sm" placeholder="Company" value={leadCompany} onChange={(e) => setLeadCompany(e.target.value)} />
-            <button type="submit" className="press h-11 w-full bg-neutral-950 text-sm font-bold text-white">
+            <button type="submit" className="h-11 w-full bg-neutral-950 text-sm font-bold text-white">
               Request media kit
             </button>
             {leadMsg ? <p className="text-xs text-teal-800">{leadMsg}</p> : null}
@@ -807,41 +685,13 @@ function RwdNewsApp() {
   );
 }
 
-function PartnerCard({
-  offer,
-  placement,
-  compact,
-}: {
-  offer: SponsoredOffer;
-  placement: string;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`border border-amber-200 bg-amber-50/40 ${compact ? "p-4" : "my-1 p-5"}`}>
-      <p className="text-[10px] font-bold tracking-[0.14em] text-amber-800 uppercase">
-        {offer.disclosure || "Sponsored"}
-      </p>
-      <p className="mt-1 text-xs font-semibold text-neutral-500">{offer.sponsorName}</p>
-      <h4 className="mt-1 text-base font-bold">{offer.headline}</h4>
-      <a
-        href={offer.ctaUrl}
-        target="_blank"
-        rel="noopener noreferrer sponsored"
-        className="mt-3 inline-block text-xs font-bold underline-offset-2 hover:underline"
-        onClick={() => void logSponsorClick(offer, placement)}
-      >
-        {offer.ctaText} →
-      </a>
-    </div>
-  );
-}
-
 export default function App() {
   const path = typeof window !== "undefined" ? window.location.pathname : "/";
   let page: React.ReactNode = <RwdNewsApp />;
-  if (path === "/admin" || path.startsWith("/admin/")) page = <AdminPage />;
-else if (path === "/sports" || path.startsWith("/sports/")) page = <SportsPage />;
+  if (path.startsWith("/admin")) page = <AdminPage />;
   else if (path.startsWith("/news/")) page = <StoryPage />;
-  else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path)) page = <InfoPage path={path} />;
+  else if (path === "/sports" || path.startsWith("/sports/")) page = <SportsPage />;
+  else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path))
+    page = <InfoPage path={path} />;
   return <HelmetProvider>{page}</HelmetProvider>;
 }
