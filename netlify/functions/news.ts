@@ -87,12 +87,17 @@ function category(text: string, hint?: string) {
 }
 
 function rssImage(item: any) {
-  return [
+  const candidates = [
     item?.enclosure?.url,
+    item?.enclosure?.link,
     item?.["media:content"]?.url,
+    item?.["media:content"]?.$?.url,
     item?.["media:thumbnail"]?.url,
+    item?.["media:thumbnail"]?.$?.url,
     item?.image?.url,
-  ].find((x) => typeof x === "string" && /^https?:\/\//i.test(x)) || "";
+    item?.image?.link,
+  ];
+  return candidates.find((x) => typeof x === "string" && /^https?:\/\//i.test(x)) || "";
 }
 
 function imageKey(link: string) {
