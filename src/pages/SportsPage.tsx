@@ -16,6 +16,7 @@ type Match = {
   homeLogo?: string;
   awayLogo?: string;
   venue?: string;
+  completed?: boolean;
 };
 
 type Story = {
@@ -89,8 +90,8 @@ export default function SportsPage() {
   const matchId = path.startsWith("/sport/match/") ? decodeURIComponent(path.slice("/sport/match/".length)) : "";
   const mode = path === "/sport/live" ? "live" : path === "/sport/results" ? "results" : path === "/sport/fixtures" ? "fixtures" : "home";
 
-  const [data, setData] = useState<{ live: Match[]; featured: Match[]; upcoming: Match[]; news: Story[]; rumors: Story[]; majorLeagues: {name:string;available:boolean}[]; bySport: Record<string, Match[]>; counts?: {matches:number;live:number;news:number;rumors:number}; providers?: any }>({
-    live: [], featured: [], upcoming: [], news: [], rumors: [], majorLeagues: [], bySport: {},
+  const [data, setData] = useState<{ live: Match[]; featured: Match[]; upcoming: Match[]; results: Match[]; news: Story[]; rumors: Story[]; majorLeagues: {name:string;available:boolean}[]; bySport: Record<string, Match[]>; counts?: {matches:number;live:number;results:number;upcoming:number;news:number;rumors:number}; providers?: any }>({
+    live: [], featured: [], upcoming: [], results: [], news: [], rumors: [], majorLeagues: [], bySport: {},
   });
   const [selectedSport, setSelectedSport] = useState("all");
   const [loading, setLoading] = useState(true);
@@ -101,9 +102,22 @@ export default function SportsPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/sports", { headers: { Accept: "application/json" } });
-      if (!r.ok) throw new Error("Sports feed unavailable");
-      setData(await r.json());
+      const [sportsResponse, newsResponse] = await Promise.all([
+        fetch("/api/sports", { headers: { Accept: "application/json" } }),
+        fetch("/api/news", { headers: { Accept: "application/json" } }),
+      ]);
+      if (!sportsResponse.ok) throw new Error("Sports feed unavailable");
+      const sportsData = await sportsResponse.json();
+      let news: Story[] = [];
+      if (newsResponse.ok) {
+        const newsData = await newsResponse.json();
+        news = Array.isArray(newsData?.articles) ? newsData.articles.filter((a: Story) =>
+          /sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|basketball|baseball|hockey|rugby|boxing|athletics|formula 1|transfer|arsenal|chelsea|liverpool|manchester|barcelona|madrid/i.test(
+            `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
+          ),
+        ) : [];
+      }
+      setData({ ...sportsData, news, rumors: news.filter((a) => /transfer|rumou?r|linked|bid|offer|talks|negotiat|target|loan/i.test(`${a.original_title} ${a.original_description}`)) });
     } finally {
       setLoading(false);
     }
@@ -129,7 +143,7 @@ export default function SportsPage() {
   const filtered = useMemo(() => {
     let source: Match[];
     if (mode === "live") source = data.live;
-    else if (mode === "results") source = [...data.featured].filter(m => !m.live && new Date(m.startTime || 0).getTime() < Date.now());
+    else if (mode === "results") source = data.results;
     else if (mode === "fixtures") source = data.upcoming;
     else source = [...data.live, ...data.featured, ...data.upcoming];
     const unique = source.filter((m, i, arr) => arr.findIndex(x => x.id === m.id) === i);
