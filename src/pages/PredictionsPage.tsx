@@ -11,6 +11,7 @@ type Match = {
   startTime?: string;
   homeLogo?: string;
   awayLogo?: string;
+  completed?: boolean;
 };
 
 type Prediction = {
