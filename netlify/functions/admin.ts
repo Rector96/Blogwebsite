@@ -37,9 +37,6 @@ async function audit(database: any, action: string, entityType?: string, entityI
 }
 
 export default async (req: Request) => {
-  const database = db();
-  if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
-
   if (req.method === "POST") {
     const body = await req.json().catch(() => ({}));
 
@@ -51,6 +48,8 @@ export default async (req: Request) => {
     }
 
     if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
+    const database = db();
+    if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
     if (body.action === "logout") return json({ ok: true }, 200, { "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
 
     if (body.action === "article_image_upload") {
