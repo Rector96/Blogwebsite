@@ -13,6 +13,7 @@ type Dashboard = {
   browsers: Array<{ label: string; value: number }>;
   top_paths: Array<{ label: string; value: number }>;
   top_articles: Array<{ id: string; views: number; article: any }>;
+  engagement?: { recommendation_impressions: number; recommendation_clicks: number; recommendation_ctr: number; engaged_reads: number; return_visits: number; returning_sessions: number; search_events: number; external_source_clicks: number; };
   sponsors: any[];
   leads: any[];
   payments: any[];
@@ -198,6 +199,7 @@ export default function AdminPage() {
       {tab === "dashboard" ? <section className="space-y-6">
         <PageHeading title="Dashboard" subtitle="A live operating view of RWDNEWS." />
         <MetricGrid overview={data.overview} />
+        {data.engagement ? <EngagementPanel data={data.engagement} /> : null}
         <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
           <Panel title="Daily page views" subtitle="Last 30 days"><DailyChart data={data.daily} /></Panel>
           <Panel title="Traffic sources" subtitle="Where readers arrive from"><Bars data={topSources} /></Panel>
@@ -271,6 +273,7 @@ export default function AdminPage() {
       {tab === "analytics" ? <section className="space-y-6">
         <PageHeading title="Analytics" subtitle="Traffic, engagement and acquisition over the recorded period." />
         <MetricGrid overview={data.overview} />
+        {data.engagement ? <EngagementPanel data={data.engagement} /> : null}
         <div className="grid gap-6 lg:grid-cols-2"><Panel title="Daily traffic"><DailyChart data={data.daily} /></Panel><Panel title="Traffic sources"><Bars data={data.sources} /></Panel><Panel title="Countries"><Bars data={data.countries} /></Panel><Panel title="Top pages"><Bars data={data.top_paths} /></Panel></div>
       </section> : null}
 
@@ -302,6 +305,19 @@ function Panel({ title, subtitle, children }: { title: string; subtitle?: string
 function MetricGrid({ overview, moneyMetric }: { overview: Record<string,number>; moneyMetric?: string }) {
   const labels: Array<[string,string]> = [["page_views","Page views"],["unique_sessions","Unique sessions"],["article_opens","Article opens"],["shares","Shares"],["sponsor_clicks","Sponsor clicks"],["advertiser_leads","Advertiser leads"],["newsletter_subscribers","Newsletter subscribers"],["paid_revenue_naira","Paid revenue"]];
   return <div className="grid gap-3 grid-cols-2 md:grid-cols-4 xl:grid-cols-8">{labels.map(([key,label])=><div key={key} className="border bg-white p-4"><p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{label}</p><p className="mt-2 text-2xl font-bold">{moneyMetric===key?money(overview[key], "NGN"):key==="paid_revenue_naira"?money(overview[key], "NGN"):number(overview[key])}</p></div>)}</div>;
+}
+function EngagementPanel({data}:{data:{recommendation_impressions:number;recommendation_clicks:number;recommendation_ctr:number;engaged_reads:number;return_visits:number;returning_sessions:number;search_events:number;external_source_clicks:number}}) {
+  const items = [
+    ["Recommendation impressions", number(data.recommendation_impressions)],
+    ["Recommendation clicks", number(data.recommendation_clicks)],
+    ["Recommendation CTR", data.recommendation_ctr.toFixed(1) + "%"],
+    ["30s engaged reads", number(data.engaged_reads)],
+    ["Return visits", number(data.return_visits)],
+    ["Returning sessions", number(data.returning_sessions)],
+    ["Search events", number(data.search_events)],
+    ["Source clicks", number(data.external_source_clicks)],
+  ];
+  return <Panel title="Growth & retention signal" subtitle="Measures whether the site turns first visits into deeper reading and repeat visits."><div className="grid gap-3 grid-cols-2 md:grid-cols-4">{items.map(([label,value])=><div key={label} className="border bg-neutral-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{label}</p><p className="mt-1 text-xl font-bold">{value}</p></div>)}</div><p className="mt-3 text-xs text-neutral-500">Internal product signals only; they do not guarantee search rankings or traffic growth.</p></Panel>;
 }
 function StatusLine({label,value}:{label:string;value:string}) { return <div className="flex items-center justify-between gap-4 border-b border-neutral-100 py-3 text-sm"><span className="text-neutral-500">{label}</span><span className="text-right font-semibold">{value}</span></div>; }
 function Bars({data}:{data:Array<{label:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="space-y-3">{data.length?data.map(x=><div key={x.label}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate">{x.label}</span><span className="font-bold">{number(x.value)}</span></div><div className="h-2 bg-neutral-100"><div className="h-full bg-neutral-900" style={{width: Math.max(3,(x.value/max)*100)+"%"}} /></div></div>):<p className="text-sm text-neutral-500">No traffic recorded yet.</p>}</div>; }
