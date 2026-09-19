@@ -1,4 +1,6 @@
 import Parser from "rss-parser";
+import { getContext } from "@netlify/functions";
+import { GLOBAL_NEWS_SOURCES } from "./news-sources";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 
@@ -38,42 +40,7 @@ const rss = new Parser({
   timeout: 3000,
 });
 
-const feeds = [
-  ["https://feeds.bbci.co.uk/news/world/rss.xml", "BBC World"],
-  ["https://feeds.bbci.co.uk/news/rss.xml", "BBC News"],
-  ["https://feeds.bbci.co.uk/news/business/rss.xml", "BBC Business"],
-  ["https://feeds.bbci.co.uk/news/technology/rss.xml", "BBC Technology"],
-  ["https://feeds.bbci.co.uk/sport/rss.xml", "BBC Sport"],
-  ["https://www.aljazeera.com/xml/rss/all.xml", "Al Jazeera"],
-  ["https://www.france24.com/en/rss", "France 24"],
-  ["https://rss.dw.com/rdf/rss-en-all", "DW"],
-  ["https://techcrunch.com/feed/", "TechCrunch"],
-  ["https://www.coindesk.com/arc/outboundfeeds/rss/", "CoinDesk"],
-  ["https://finance.yahoo.com/news/rssindex", "Yahoo Finance"],
-  ["https://www.finextra.com/rss/headlines.aspx", "Finextra"],
-  ["https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch"],
-  ["https://www.espn.com/espn/rss/news", "ESPN"],
-  ["https://www.theguardian.com/world/rss", "The Guardian World"],
-  ["https://www.theguardian.com/business/rss", "The Guardian Business"],
-  ["https://www.theguardian.com/technology/rss", "The Guardian Technology"],
-  ["https://www.theguardian.com/sport/rss", "The Guardian Sport"],
-  ["https://www.africanews.com/feed/", "Africanews", "Africa"],
-  ["https://www.premiumtimesng.com/feed", "Premium Times", "Nigeria"],
-  ["https://rss.punchng.com/v1/category/latest_news", "PUNCH", "Nigeria"],
-  ["https://www.vanguardngr.com/feed/", "Vanguard Nigeria", "Nigeria"],
-  ["https://www.channelstv.com/feed/", "Channels TV", "Nigeria"],
-  ["https://dailytrust.com/feed/", "Daily Trust", "Nigeria"],
-  ["https://guardian.ng/feed/", "The Guardian Nigeria", "Nigeria"],
-  ["https://www.thisdaylive.com/feed", "ThisDay", "Nigeria"],
-  ["https://www.myjoyonline.com/feed/", "MyJoyOnline", "Ghana"],
-  ["https://www.citinewsroom.com/feed/", "Citi Newsroom", "Ghana"],
-  ["https://www.ghanaweb.com/GhanaHomePage/rss/", "GhanaWeb", "Ghana"],
-  ["https://feeds.arstechnica.com/arstechnica/index", "Ars Technica"],
-  ["https://www.theverge.com/rss/index.xml", "The Verge"],
-  ["https://www.npr.org/rss/rss.php?id=1001", "NPR World"],
-  ["https://www.npr.org/rss/rss.php?id=1019", "NPR Business"],
-  ["https://www.npr.org/rss/rss.php?id=1045", "NPR Technology"],
-] as const;
+const feeds = GLOBAL_NEWS_SOURCES.map((source) => [source.url, source.name, source.region, source.category] as const);
 
 const queries = [
   [`(breaking OR latest OR developing OR "just in" OR "breaking news")`, "World"],
@@ -155,7 +122,7 @@ async function fetchArticleImage(link: string) {
 }
 async function getRss() {
   const results = await Promise.allSettled(
-    feeds.map(async ([url, source, region]) => {
+    feeds.map(async ([url, source, region, feedCategory]) => {
       try {
         const feed = await rss.parseURL(url);
         return (feed.items || []).slice(0, 10).map((item: any) => ({
@@ -427,7 +394,30 @@ export async function runIngest() {
   return { articles: stored, saved: 0, generatedAt: new Date().toISOString(), fallback: stored.length > 0 };
 }
 
+function personalize(articles: NewsArticle[], country: string) {
+  const map: Record<string, string[]> = {
+    NG:["Nigeria","Africa"], GH:["Ghana","Africa"], KE:["Africa"], ZA:["Africa"], EG:["Africa"],
+    GB:["Europe"], DE:["Europe"], FR:["Europe"], IT:["Europe"], ES:["Europe"], NL:["Europe"],
+    US:["North America"], CA:["North America"], MX:["South America"],
+    IN:["Asia"], JP:["Asia"], CN:["Asia"], KR:["Asia"], SG:["Asia"], AU:["Asia"],
+    AE:["Middle East"], SA:["Middle East"], IL:["Middle East"], QA:["Middle East"], TR:["Middle East"],
+    BR:["South America"], AR:["South America"], CO:["South America"],
+  };
+  const preferred = new Set(map[country] || []);
+  return [...articles].sort((a,b) => {
+    const boost = (x: NewsArticle) => {
+      let score = x.trend_score || 0;
+      if (preferred.has(x.region || "")) score += 28;
+      if (country === "NG" && x.category === "Nigeria") score += 22;
+      if (country === "GH" && x.category === "Ghana") score += 22;
+      return score;
+    };
+    return boost(b)-boost(a);
+  });
+}
+
 export default async (req: Request) => {
+  const geo = (() => { try { return getContext().geo?.country?.code || ""; } catch { return ""; } })();
   const url = new URL(req.url);
   const isCron = url.pathname.includes("/cron-ingest");
   const wantsRefresh = url.searchParams.get("refresh") === "true";
@@ -444,15 +434,15 @@ export default async (req: Request) => {
     // Normal page loads must be fast: serve the latest verified DB feed immediately.
     // Live source refreshes happen separately and on the scheduled ingest.
     const result = (!isCron && !wantsRefresh)
-      ? { articles: await getStoredArticles(), saved: 0, generatedAt: new Date().toISOString() }
+      ? { articles: personalize(await getStoredArticles(), geo), saved: 0, generatedAt: new Date().toISOString() }
       : await runIngest();
     return new Response(JSON.stringify({
-      articles: result.articles,
+      articles: personalize(result.articles, geo),
       count: result.articles.length,
       saved: result.saved,
       generatedAt: result.generatedAt,
     }), {
-      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=30, stale-while-revalidate=300" },
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=30, stale-while-revalidate=300", "Netlify-Vary": "country" },
     });
   } catch (error) {
     console.error("[RWDNEWS] live ingest failed", error);
