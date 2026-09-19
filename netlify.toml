@@ -67,6 +67,20 @@
   status = 200
   force = true
 
+# Static SEO files must win over the SPA fallback
+[[redirects]]
+  from = "/robots.txt"
+  to = "/robots.txt"
+  status = 200
+  force = false
+
+[[redirects]]
+  from = "/googled7fe6a30225300ca.html"
+  to = "/googled7fe6a30225300ca.html"
+  status = 200
+  force = false
+
+# SPA fallback last
 [[redirects]]
   from = "/*"
   to = "/index.html"
