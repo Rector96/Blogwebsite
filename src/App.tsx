@@ -139,7 +139,17 @@ function RwdNewsApp() {
       if (liveArticles.length) {
         try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(liveArticles)); } catch { /* cache is optional */ }
       }
-      setFeedSource(liveArticles.length ? "live" : "unavailable");
+      if (liveArticles.length) {
+        setArticles(liveArticles);
+        try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(liveArticles)); } catch { /* cache is optional */ }
+        setFeedSource("live");
+      } else if (!hadCachedNews && !refresh) {
+        // If the database is empty on first load, immediately try the live wire.
+        void fetchNews(true);
+        return;
+      } else {
+        setFeedSource(hadCachedNews ? "live" : "unavailable");
+      }
     } catch {
       // Keep the last verified live response visible while the live wire reconnects.
       // Never replace it with fabricated/seed content.
@@ -310,7 +320,7 @@ function RwdNewsApp() {
             </div>
             <button
               type="button"
-              onClick={() => void fetchNews()}
+              onClick={() => void fetchNews(true)}
               className="press grid size-9 place-items-center rounded-full border border-neutral-200"
             >
               <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} />
