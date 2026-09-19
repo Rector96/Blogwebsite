@@ -46,6 +46,16 @@ const feeds = [
   ["https://www.finextra.com/rss/headlines.aspx", "Finextra"],
   ["https://feeds.content.dowjones.io/public/rss/mw_topstories", "MarketWatch"],
   ["https://www.espn.com/espn/rss/news", "ESPN"],
+  ["https://www.theguardian.com/world/rss", "The Guardian World"],
+  ["https://www.theguardian.com/business/rss", "The Guardian Business"],
+  ["https://www.theguardian.com/technology/rss", "The Guardian Technology"],
+  ["https://www.theguardian.com/sport/rss", "The Guardian Sport"],
+  ["https://www.africanews.com/feed/", "Africanews"],
+  ["https://feeds.arstechnica.com/arstechnica/index", "Ars Technica"],
+  ["https://www.theverge.com/rss/index.xml", "The Verge"],
+  ["https://www.npr.org/rss/rss.php?id=1001", "NPR World"],
+  ["https://www.npr.org/rss/rss.php?id=1019", "NPR Business"],
+  ["https://www.npr.org/rss/rss.php?id=1045", "NPR Technology"],
 ] as const;
 
 const queries = [
@@ -127,7 +137,7 @@ async function getRss() {
     feeds.map(async ([url, source]) => {
       try {
         const feed = await rss.parseURL(url);
-        return (feed.items || []).slice(0, 7).map((item: any) => ({
+        return (feed.items || []).slice(0, 10).map((item: any) => ({
           title: clean(item.title),
           link: String(item.link || item.guid || ""),
           desc: clean(item.contentSnippet || item.content || item.summary).slice(0, 500),
@@ -277,7 +287,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const items = scoreItems(dedupe([...rssItems, ...gdeltItems]))
     .sort((a, b) => b.trendScore - a.trendScore)
-    .slice(0, 32);
+    .slice(0, 40);
 
   const results = (await Promise.all(items.map(async (item) => {
     const section = category(item.title + " " + item.desc, item.category);
@@ -326,7 +336,7 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       .from("articles")
       .select("id,original_url,image,timestamp,source,original_title,original_description,ai_hook_title,ai_summary,tags,read_time")
       .order("timestamp", { ascending: false })
-      .limit(32);
+      .limit(40);
     if (error || !Array.isArray(data)) return [];
     return data.filter((a: any) => a?.original_url && a?.image).map((a: any) => ({
       id: String(a.id),
