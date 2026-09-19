@@ -6,7 +6,7 @@ type Match = {
 };
 
 export default function SportsPage() {
-  const [data, setData] = useState<{live: Match[]; featured: Match[]; upcoming: Match[]}>({live:[],featured:[],upcoming:[]});
+  const [data, setData] = useState<{live: Match[]; featured: Match[]; upcoming: Match[]; majorLeagues: {name: string; available: boolean}[]}>({live:[],featured:[],upcoming:[],majorLeagues:[]});
   const [loading, setLoading] = useState(true);
   const [outlook, setOutlook] = useState<any>(null);
   const [sport, setSport] = useState("all");
@@ -15,7 +15,7 @@ export default function SportsPage() {
     try {
       const r = await fetch("/api/sports");
       const d = await r.json();
-      setData({ live: d.live || [], featured: d.featured || [], upcoming: d.upcoming || [] });
+      setData({ live: d.live || [], featured: d.featured || [], upcoming: d.upcoming || [], majorLeagues: Array.isArray(d.majorLeagues) ? d.majorLeagues : [] });
     } finally { setLoading(false); }
   };
   useEffect(() => { void load(); const t = window.setInterval(() => void load(), 30000); return () => window.clearInterval(t); }, []);
@@ -60,8 +60,8 @@ export default function SportsPage() {
         </article>)}
       </div>}
 
-      <div className="mt-10 flex flex-wrap gap-2">{["Premier League","UEFA Champions League","La Liga","Bundesliga","Serie A","Ligue 1","NBA","NFL","MLB","NHL","Formula 1","ICC Cricket"].map(x => <span key={x} className="rounded-full border bg-white px-3 py-1.5 text-xs font-semibold">{x}</span>)}</div>
-      <p className="mt-5 text-[10px] leading-relaxed text-neutral-500">Sports data: SportScore. Coverage depends on the provider's current feed; unavailable competitions are not fabricated.</p>
+      <div className="mt-10 flex flex-wrap gap-2">{data.majorLeagues.map(x => <span key={x.name} className={x.available ? "rounded-full border border-teal-200 bg-teal-50 px-3 py-1.5 text-xs font-semibold text-teal-900" : "rounded-full border bg-white px-3 py-1.5 text-xs font-semibold text-neutral-400"}>{x.name}{x.available ? " · live data" : " · no current feed"}</span>)}</div>
+      <p className="mt-5 text-[10px] leading-relaxed text-neutral-500">Sports data: <a href="https://sportscore.com/" target="_blank" rel="dofollow noopener noreferrer" className="font-semibold underline">SportScore</a>. Coverage depends on the provider's current feed; unavailable competitions are not fabricated.</p>
     </div>
   </main>;
 }
