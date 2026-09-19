@@ -225,6 +225,8 @@ export default async (req: Request) => {
   }
 
   if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
+  const database = db();
+  if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
 
   const [sponsors, leads, events, payments, clicks, articles, newsletter] = await Promise.all([
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
