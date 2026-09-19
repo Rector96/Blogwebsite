@@ -238,7 +238,7 @@ function RwdNewsApp() {
       if (a.category) categories.add(a.category);
     });
     const preferred = ["Breaking", "World", "Nigeria", "Ghana", "Africa", "Europe", "Middle East", "Asia", "Sports", "Business", "Tech", "Crypto", "Entertainment"];
-    sportsFeed.live.length || sportsFeed.featured.length || sportsFeed.upcoming.length ? categories.add("Sports") : null;
+    categories.add("Sports");
     return ["All", ...preferred.filter((name) => categories.has(name)), ...Array.from(categories).filter((name) => !preferred.includes(name)).sort()];
   }, [articles]);
 
