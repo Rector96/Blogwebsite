@@ -21,6 +21,13 @@ export type NewsArticle = {
   image_license: string;
   image_source_url: string;
   discovered_via: string[];
+  body?: string;
+  story_type?: string;
+  author_name?: string;
+  subject?: string;
+  editorial_status?: string;
+  featured?: boolean;
+  pinned?: boolean;
 };
 
 const rss = new Parser({
@@ -346,7 +353,10 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
     const db = createClient(url, key);
     const { data, error } = await db
       .from("articles")
-      .select("id,original_url,image,timestamp,source,original_title,original_description,ai_hook_title,ai_summary,tags,read_time")
+       .select("id,original_url,image,timestamp,source,original_title,original_description,ai_hook_title,ai_summary,tags,read_time,body,story_type,author_name,subject,editorial_status,featured,pinned,category,region,image_credit,image_license,image_source_url")
+       .eq("editorial_status", "published")
+      .order("pinned", { ascending: false })
+      .order("featured", { ascending: false })
       .order("timestamp", { ascending: false })
       .limit(40);
     if (error || !Array.isArray(data)) return [];
@@ -362,13 +372,14 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       ai_summary: Array.isArray(a.ai_summary) ? a.ai_summary : [],
       tags: Array.isArray(a.tags) ? a.tags : ["#World"],
       read_time: String(a.read_time || "2 min read"),
-      category: category(String(a.original_title || ""), undefined),
+      category: String(a.category || category(String(a.original_title || ""), undefined)),
       trend_score: 0,
       trend_label: "Fresh",
       image_credit: String(a.source || "Publisher"),
       image_license: "Publisher/source image — verify rights before commercial reuse",
       image_source_url: String(a.original_url),
       discovered_via: [String(a.source || "RWDNEWS")],
+      body: String(a.body || ""), story_type: String(a.story_type || "WIRE"), author_name: String(a.author_name || "RWDNEWS Editorial"), subject: String(a.subject || ""), editorial_status: String(a.editorial_status || "published"), featured: Boolean(a.featured), pinned: Boolean(a.pinned), image_credit: String(a.image_credit || a.source || "Publisher"), image_license: String(a.image_license || "Publisher/source image — verify rights before commercial reuse"), image_source_url: String(a.image_source_url || a.original_url),
     }));
   } catch {
     return [];
