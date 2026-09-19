@@ -44,8 +44,8 @@ export async function handler() {
 
   const staticPaths = [
     "/",
-    "/sports",
-    "/sports/predictions",
+    "/sport",
+    "/sport/predictions",
     "/about",
     "/editorial",
     "/advertise",
