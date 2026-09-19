@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+
+# Sitemap (works on free .netlify.app subdomain)
+Sitemap: https://rwdnews.netlify.app/sitemap.xml
+
+# Optional: be polite to aggressive scrapers
+User-agent: AhrefsBot
+Crawl-delay: 10
+
+User-agent: SemrushBot
+Crawl-delay: 10
