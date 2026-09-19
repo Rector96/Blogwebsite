@@ -607,6 +607,8 @@ function RwdNewsApp() {
             <p className="px-4 pb-4 text-[9px] text-neutral-500 sm:px-5">Live sports data is supplied by SportScore. RWDNEWS match outlooks are informational, not guaranteed results or betting advice.</p>
           </section>
 
+          ) : null}
+
           {sports.length ? (
             <section className="mb-8">
               <div className="mb-3 flex items-center justify-between border-b border-neutral-900 pb-2">
