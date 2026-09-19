@@ -244,6 +244,38 @@ function RwdNewsApp() {
     });
   }, [articles, selectedTag, searchQuery]);
 
+  const recommended = useMemo(() => {
+    const categoryWeight = new Map<string, number>();
+    const sourceWeight = new Map<string, number>();
+    const tagWeight = new Map<string, number>();
+
+    recentlyViewed.forEach((id, index) => {
+      const article = articles.find((a) => a.id === id);
+      if (!article) return;
+      const weight = Math.max(1, 8 - index);
+      if (article.category) categoryWeight.set(article.category, (categoryWeight.get(article.category) || 0) + weight);
+      if (article.source) sourceWeight.set(article.source, (sourceWeight.get(article.source) || 0) + weight);
+      normalizeTags(article.tags).forEach((tag) => tagWeight.set(tag, (tagWeight.get(tag) || 0) + weight));
+    });
+
+    return articles
+      .filter((a) => !recentlyViewed.includes(a.id))
+      .map((a) => {
+        const ageHours = Math.max(0, (Date.now() - new Date(a.timestamp).getTime()) / 3600000);
+        const freshness = Math.max(0, 30 - ageHours * 1.5);
+        const trend = Math.min(35, (a.trend_score || 0) * 0.35);
+        const interest =
+          (categoryWeight.get(a.category || "") || 0) * 3 +
+          (sourceWeight.get(a.source || "") || 0) * 1.5 +
+          normalizeTags(a.tags).reduce((sum, tag) => sum + (tagWeight.get(tag) || 0) * 2, 0);
+        const globalImportance = a.trend_label === "Breaking" ? 18 : a.trend_label === "Trending" ? 10 : 0;
+        return { article: a, score: freshness + trend + interest + globalImportance };
+      })
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 6)
+      .map((item) => item.article);
+  }, [articles, recentlyViewed]);
+
   const hero = filtered[0];
   const secondary = filtered.slice(1, 4);
   const rest = filtered.slice(4);
@@ -427,6 +459,30 @@ function RwdNewsApp() {
                     </article>
                   ))}
                 </div>
+              </div>
+            </section>
+          ) : null}
+
+          {recommended.length > 0 ? (
+            <section className="mb-8 border-y border-neutral-200 py-5">
+              <div className="mb-3 flex items-end justify-between">
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-teal-800 uppercase">Personal signal</p>
+                  <h2 className="font-display text-xl font-semibold">For You</h2>
+                  <p className="text-xs text-neutral-500">Fresh stories shaped by what you read, while keeping major global stories visible.</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {recommended.map((a) => (
+                  <button key={"for-you-" + a.id} type="button" onClick={() => openArticle(a)} className="group overflow-hidden border border-neutral-200 bg-white text-left">
+                    <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
+                    <div className="p-3">
+                      <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">{a.category || "World"} · {a.source}</p>
+                      <p className="font-display mt-1 line-clamp-2 text-base font-semibold leading-snug">{a.ai_hook_title || a.original_title}</p>
+                      <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-neutral-500">{a.ai_summary?.[0] || a.original_description}</p>
+                    </div>
+                  </button>
+                ))}
               </div>
             </section>
           ) : null}
