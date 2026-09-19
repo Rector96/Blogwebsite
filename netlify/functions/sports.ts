@@ -30,8 +30,8 @@ function pick(obj: any, ...keys: string[]) {
 }
 
 function normalizeMatch(item: any, sport: string): SportMatch | null {
-  const home = clean(pick(item, "home", "homeTeam", "home_name")?.name ?? pick(item, "home", "homeTeam", "home_name"));
-  const away = clean(pick(item, "away", "awayTeam", "away_name")?.name ?? pick(item, "away", "awayTeam", "away_name"));
+  const home = clean(pick(item, "home", "homeTeam", "home_name", "home_team"));
+  const away = clean(pick(item, "away", "awayTeam", "away_name", "away_team"));
   if (!home || !away) return null;
   const status = clean(pick(item, "status", "state", "matchStatus")?.type ?? pick(item, "status", "state", "matchStatus") ?? "Scheduled");
   const scores = item?.score || item?.scores || {};
@@ -44,7 +44,7 @@ function normalizeMatch(item: any, sport: string): SportMatch | null {
     item?.league ??
     "International",
   );
-  const startTime = pick(item, "startTime", "start_time", "timestamp", "date", "kickoff");
+  const startTime = pick(item, "startTime", "start_time", "timestamp", "date", "kickoff", "time");
   const live = /live|inprogress|in-progress|playing|1h|ht/i.test(status);
   return {
     id: String(pick(item, "id", "matchId", "eventId") ?? `${sport}-${home}-${away}-${startTime ?? ""}`),
