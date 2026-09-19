@@ -1,35 +1,40 @@
 import { runIngest } from "./news";
 
-export default async (req: Request) => {
-  const secret = Netlify.env.get("CRON_SECRET") || "";
+export async function handler(event: {
+  headers?: Record<string, string | undefined>;
+  queryStringParameters?: Record<string, string | undefined> | null;
+}) {
+  const secret = process.env["CRON_SECRET"] || "";
+  const auth = event.headers?.authorization || event.headers?.Authorization || "";
   const supplied =
-    req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
-    new URL(req.url).searchParams.get("secret") ||
-    "";
+    auth.replace(/^Bearer\s+/i, "") || event.queryStringParameters?.secret || "";
 
   if (!secret || supplied !== secret) {
-    return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json" },
-    });
+    return {
+      statusCode: 401,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ok: false, error: "Unauthorized" }),
+    };
   }
 
   try {
     const result = await runIngest();
-    return new Response(
-      JSON.stringify({
+    return {
+      statusCode: 200,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
         ok: true,
         count: result.articles.length,
         saved: result.saved,
         generatedAt: result.generatedAt,
       }),
-      { headers: { "content-type": "application/json" } },
-    );
+    };
   } catch (error) {
     console.error("[RWDNEWS] cron ingest failed", error);
-    return new Response(JSON.stringify({ ok: false, error: "Ingest failed" }), {
-      status: 500,
-      headers: { "content-type": "application/json" },
-    });
+    return {
+      statusCode: 500,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ok: false, error: "Ingest failed" }),
+    };
   }
-};
+}
