@@ -1,7 +1,10 @@
 [build]
-  command = "npm run build"
+  command = "npm install --no-package-lock && npm run build"
   publish = "dist"
   functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22.14.0"
 
 [functions]
   directory = "netlify/functions"
@@ -61,7 +64,6 @@
   status = 200
   force = true
 
-# Canonical sports URLs
 [[redirects]]
   from = "/sports"
   to = "/sport"
@@ -86,7 +88,6 @@
   status = 200
   force = true
 
-# Static SEO files must win over the SPA fallback
 [[redirects]]
   from = "/robots.txt"
   to = "/robots.txt"
@@ -99,8 +100,8 @@
   status = 200
   force = false
 
-# SPA fallback last
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+  force = true
