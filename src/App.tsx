@@ -306,7 +306,7 @@ function RwdNewsApp() {
   const secondary = filtered.slice(1, 4);
   const rest = filtered.slice(4);
   const sports = selectedTag === "All" ? articles.filter((a) => a.category === "Sports").slice(0, 4) : [];
-  const sportsCards = sportsFeed.live.length ? sportsFeed.live.slice(0, 8) : sportsFeed.featured.slice(0, 8);
+  const sportsCards = sportsFeed.live.length ? sportsFeed.live.slice(0, 8) : sportsFeed.featured.length ? sportsFeed.featured.slice(0, 8) : sportsFeed.upcoming.slice(0, 8);
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
