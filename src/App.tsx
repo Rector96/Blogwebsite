@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import { Bookmark, BookmarkCheck, RefreshCw, Search } from "lucide-react";
+import { Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, RefreshCw, Search } from "lucide-react";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 import {
   fetchSponsors,
@@ -118,6 +118,8 @@ function RwdNewsApp() {
   const [leadName, setLeadName] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
   const [leadMsg, setLeadMsg] = useState<string | null>(null);
+  const [heroIndex, setHeroIndex] = useState(0);
+  const [carouselPaused, setCarouselPaused] = useState(false);
   const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[] }>({ live: [], featured: [], upcoming: [] });
   const [sportsLoading, setSportsLoading] = useState(true);
 
@@ -302,8 +304,21 @@ function RwdNewsApp() {
     );
   }, [recommended]);
 
-  const hero = filtered[0];
+  const heroStories = filtered.slice(0, 5);
+  const hero = heroStories[heroIndex % Math.max(heroStories.length, 1)] || filtered[0];
   const secondary = filtered.slice(1, 4);
+
+  useEffect(() => {
+    setHeroIndex(0);
+  }, [selectedTag, searchQuery]);
+
+  useEffect(() => {
+    if (heroStories.length < 2 || carouselPaused) return;
+    const timer = window.setInterval(() => {
+      setHeroIndex((index) => (index + 1) % heroStories.length);
+    }, 6500);
+    return () => window.clearInterval(timer);
+  }, [heroStories.length, carouselPaused]);
   const rest = filtered.slice(4);
   const sports = selectedTag === "All" ? articles.filter((a) => a.category === "Sports").slice(0, 4) : [];
   const sportsCards = sportsFeed.live.length ? sportsFeed.live.slice(0, 8) : sportsFeed.featured.length ? sportsFeed.featured.slice(0, 8) : sportsFeed.upcoming.slice(0, 8);
@@ -416,20 +431,31 @@ function RwdNewsApp() {
             </button>
           </div>
         </div>
-        <nav className="mx-auto flex max-w-6xl gap-1 overflow-x-auto border-t border-neutral-100 px-4 py-2 sm:px-6" aria-label="News categories">
-          {tags.map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setSelectedTag(t)}
-              className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-semibold ${
-                selectedTag === t ? "bg-neutral-950 text-white" : "text-neutral-600 hover:bg-neutral-100"
-              }`}
-            >
-              {t}
-            </button>
-          ))}
-        </nav>
+        <div className="border-t border-neutral-100 bg-neutral-50/70">
+  <div className="mx-auto max-w-6xl px-4 py-2.5 sm:px-6">
+    <div className="flex items-center gap-3">
+      <span className="hidden shrink-0 text-[10px] font-extrabold tracking-[0.18em] text-neutral-400 uppercase sm:inline">Explore</span>
+      <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="News categories">
+        {tags.map((t) => (
+          <button key={t} type="button" onClick={() => setSelectedTag(t)} className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${selectedTag === t ? "border-neutral-950 bg-neutral-950 text-white shadow-sm" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400 hover:text-neutral-950"}`}>
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+    <div className="mt-2 flex items-center gap-2 md:hidden">
+      <div className="relative min-w-0 flex-1">
+        <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-neutral-400" />
+        <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search global news" className="h-9 w-full rounded-full border border-neutral-200 bg-white pr-3 pl-9 text-xs outline-none focus:border-neutral-400" />
+      </div>
+      {searchQuery ? <button type="button" onClick={() => setSearchQuery("")} className="rounded-full border border-neutral-200 bg-white px-3 py-2 text-[10px] font-bold text-neutral-600">Clear</button> : null}
+    </div>
+    <div className="mt-2 hidden items-center justify-between text-[10px] text-neutral-400 sm:flex">
+      <span>{selectedTag === "All" ? "All global coverage" : selectedTag + " coverage"} · {filtered.length} stories</span>
+      {searchQuery ? <span>Searching: “{searchQuery}”</span> : <span>Source-backed wire</span>}
+    </div>
+  </div>
+</div>
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
@@ -441,30 +467,27 @@ function RwdNewsApp() {
           {hero ? (
             <section className="border-b border-neutral-200 pb-8">
               <div className="grid gap-6 lg:grid-cols-12">
-                <article className="group cursor-pointer lg:col-span-7" onClick={() => openArticle(hero)}>
-                  <div className="overflow-hidden bg-neutral-100">
-                    <img
-                      src={hero.image}
-                      alt=""
-                      className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
-                    />
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-[0.14em] uppercase">
-                    <span className="text-amber-800">{hero.source}</span>
-                    {hero.category ? <span className="text-neutral-400">· {hero.category}</span> : null}
-                    <span className="text-neutral-400">· {formatRelativeTime(hero.timestamp)}</span>
-                    {hero.trend_label && hero.trend_label !== "Fresh" ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-900">{hero.trend_label}</span>
-                    ) : null}
-                  </div>
-                  <h1 className="font-display mt-1 text-2xl leading-[1.15] font-semibold sm:text-3xl lg:text-[2.15rem]">
-                    {hero.ai_hook_title || hero.original_title}
-                  </h1>
-                  <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
-                    {hero.ai_summary?.[0] || hero.original_description}
-                  </p>
-                  <p className="mt-2 text-xs font-bold text-teal-800">Read full briefing on RWDNEWS →</p>
-                </article>
+                <article className="group relative cursor-pointer overflow-hidden bg-neutral-950 lg:col-span-7" onClick={() => openArticle(hero)} onMouseEnter={() => setCarouselPaused(true)} onMouseLeave={() => setCarouselPaused(false)} onTouchStart={() => setCarouselPaused(true)} onTouchEnd={() => setCarouselPaused(false)} aria-roledescription="carousel" aria-label="Top stories">
+  <img key={hero.id} src={hero.image} alt="" className="aspect-[16/10] w-full object-cover transition duration-700 group-hover:scale-[1.02]" />
+  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
+  <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-6">
+    <div className="flex flex-wrap items-center gap-2 text-[10px] font-bold tracking-[0.14em] uppercase">
+      <span className="text-amber-300">{hero.source}</span>{hero.category ? <span className="text-white/65">· {hero.category}</span> : null}<span className="text-white/65">· {formatRelativeTime(hero.timestamp)}</span>
+      {hero.trend_label && hero.trend_label !== "Fresh" ? <span className="rounded-full bg-white/15 px-2 py-1 text-amber-200">{hero.trend_label}</span> : null}
+    </div>
+    <h1 className="font-display mt-2 max-w-3xl text-2xl leading-[1.08] font-semibold sm:text-3xl lg:text-[2.25rem]">{hero.ai_hook_title || hero.original_title}</h1>
+    <p className="mt-2 max-w-2xl line-clamp-2 text-sm leading-relaxed text-white/80 sm:text-[15px]">{hero.ai_summary?.[0] || hero.original_description}</p>
+    <div className="mt-4 flex items-center justify-between gap-3">
+      <span className="text-xs font-bold text-teal-300">Read full briefing →</span>
+      {heroStories.length > 1 ? <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+        <button type="button" aria-label="Previous top story" onClick={() => setHeroIndex((index) => (index - 1 + heroStories.length) % heroStories.length)} className="grid size-8 place-items-center rounded-full border border-white/25 bg-black/20 backdrop-blur transition hover:bg-white/15"><ChevronLeft className="size-4" /></button>
+        <span className="px-1 text-[10px] font-bold tabular-nums text-white/70">{(heroIndex % heroStories.length) + 1}/{heroStories.length}</span>
+        <button type="button" aria-label="Next top story" onClick={() => setHeroIndex((index) => (index + 1) % heroStories.length)} className="grid size-8 place-items-center rounded-full border border-white/25 bg-black/20 backdrop-blur transition hover:bg-white/15"><ChevronRight className="size-4" /></button>
+      </div> : null}
+    </div>
+  </div>
+  {heroStories.length > 1 ? <div className="absolute top-4 left-4 flex gap-1.5">{heroStories.map((story, index) => <button key={story.id} type="button" aria-label={`Show top story ${index + 1}`} onClick={(e) => { e.stopPropagation(); setHeroIndex(index); }} className={`h-1.5 rounded-full transition-all ${index === heroIndex % heroStories.length ? "w-7 bg-white" : "w-2 bg-white/45 hover:bg-white/75"}`} />)}</div> : null}
+</article>
                 <div className="flex flex-col divide-y divide-neutral-200 lg:col-span-5">
                   {secondary.map((a) => (
                     <article
