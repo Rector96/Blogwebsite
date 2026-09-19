@@ -123,7 +123,7 @@ export default async (req: Request) => {
         const { data: sponsor, error } = await database.from("sponsors").insert({
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
           why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rwdnews.netlify.app", 500),
-          rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement === "newsletter" ? "sidebar" : (payment.placement || "sidebar"),
+          rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement || "sidebar",
           active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, starts_at: starts, ends_at: ends,
         }).select("id").single();
         if (error) return json({ error: error.message }, 400);
