@@ -9,6 +9,7 @@ export default function SportsPage() {
   const [data, setData] = useState<{live: Match[]; featured: Match[]; upcoming: Match[]}>({live:[],featured:[],upcoming:[]});
   const [loading, setLoading] = useState(true);
   const [outlook, setOutlook] = useState<any>(null);
+  const [sport, setSport] = useState("all");
 
   const load = async () => {
     try {
@@ -25,7 +26,7 @@ export default function SportsPage() {
     setOutlook(d);
   };
 
-  const cards = [...data.live, ...data.featured, ...data.upcoming].filter((m, i, arr) => arr.findIndex(x => x.id === m.id) === i).slice(0, 40);
+  const cards = [...data.live, ...data.featured, ...data.upcoming].filter((m, i, arr) => arr.findIndex(x => x.id === m.id) === i).filter(m => sport === "all" || m.sport === sport).slice(0, 60);
 
   return <main className="min-h-dvh bg-neutral-50 text-neutral-950">
     <header className="border-b bg-neutral-950 text-white">
@@ -37,7 +38,8 @@ export default function SportsPage() {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <p className="text-[10px] font-extrabold tracking-[0.2em] text-teal-800 uppercase">Live sports centre</p>
       <h1 className="font-display mt-1 text-3xl font-semibold sm:text-4xl">Scores, major leagues & match outlooks</h1>
-      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600">Live scores and fixtures across football, basketball, cricket and tennis, with major competitions highlighted. Data refreshes automatically.</p>
+      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600">Live scores, major competitions, fixtures and cautious data-based match outlooks. Refreshes automatically.</p>
+      <div className="mt-5 flex flex-wrap gap-2">{[["all","All"],["football","Football"],["basketball","Basketball"],["cricket","Cricket"],["tennis","Tennis"]].map(([id,label]) => <button key={id} onClick={() => setSport(id)} className={sport === id ? "rounded-full bg-neutral-950 px-3 py-1.5 text-xs font-bold text-white" : "rounded-full border bg-white px-3 py-1.5 text-xs font-semibold"}>{label}</button>)}</div>
 
       {outlook ? <section className="mt-6 border border-teal-200 bg-white p-5">
         <div className="flex items-center justify-between gap-3">
@@ -58,8 +60,8 @@ export default function SportsPage() {
         </article>)}
       </div>}
 
-      <div className="mt-10 flex flex-wrap gap-2">{["Premier League","UEFA Champions League","La Liga","Bundesliga","Serie A","Ligue 1","NBA","NFL","MLB","NHL"].map(x => <span key={x} className="rounded-full border bg-white px-3 py-1.5 text-xs font-semibold">{x}</span>)}</div>
-      <p className="mt-5 text-[10px] leading-relaxed text-neutral-500">Sports data: SportScore. Coverage depends on the provider's current feed. Major-league badges identify competitions RWDNEWS plans to surface as data is available.</p>
+      <div className="mt-10 flex flex-wrap gap-2">{["Premier League","UEFA Champions League","La Liga","Bundesliga","Serie A","Ligue 1","NBA","NFL","MLB","NHL","Formula 1","ICC Cricket"].map(x => <span key={x} className="rounded-full border bg-white px-3 py-1.5 text-xs font-semibold">{x}</span>)}</div>
+      <p className="mt-5 text-[10px] leading-relaxed text-neutral-500">Sports data: SportScore. Coverage depends on the provider's current feed; unavailable competitions are not fabricated.</p>
     </div>
   </main>;
 }
