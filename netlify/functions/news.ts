@@ -54,7 +54,7 @@ const queries = [
   ["(\"Premier League\" OR \"Champions League\" OR \"Europa League\" OR \"La Liga\" OR Bundesliga OR \"Serie A\" OR \"Ligue 1\")", "Sports"],
   ["(NBA OR NFL OR MLB OR NHL OR \"Major League Baseball\" OR \"National Football League\")", "Sports"],
   ["(finance OR markets OR banking OR economy OR companies OR stocks OR oil OR trade)", "Business"],
-  ['("artificial intelligence" OR AI OR technology OR cybersecurity OR chips OR software OR robotics)', "Tech"],
+  ['(\"artificial intelligence\" OR AI OR technology OR cybersecurity OR chips OR software OR robotics)', "Tech"],
 ] as const;
 
 const stop = new Set([
@@ -75,13 +75,19 @@ const words = (text: string) =>
     .filter((x) => x.length >= 4 && !stop.has(x));
 
 function category(text: string, hint?: string) {
-  if (hint) return hint;
   const x = text.toLowerCase();
+  if (/\b(sport|sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|formula\s?1|f1|olympics|athletics|basketball|baseball|rugby|boxing|ufc|transfer)\b/.test(x)) return "Sports";
+  if (/\b(bitcoin|crypto|ethereum|blockchain|token)\b/.test(x)) return "Crypto";
   if (/\b(ai|artificial intelligence|chip|semiconductor|software|cyber|robot|technology|tech)\b/.test(x)) return "Tech";
-  if (/\b(africa|nigeria|kenya|ghana|south africa|egypt|lagos|abuja)\b/.test(x)) return "Africa";
-  if (/\b(bitcoin|crypto|ethereum|blockchain)\b/.test(x)) return "Crypto";
+  if (/\b(movie|film|celebrity|actor|actress|music|nollywood|wedding|marriage)\b/.test(x)) return "Entertainment";
+  if (hint && hint !== "Business") return hint;
+  if (/\b(nigeria|nigerian|lagos|abuja)\b/.test(x)) return "Nigeria";
+  if (/\b(ghana|ghanaian|accra)\b/.test(x)) return "Ghana";
+  if (/\b(africa|kenya|south africa|egypt)\b/.test(x)) return "Africa";
+  if (/\b(market|stock|bank|economy|finance|oil|trade|gdp|inflation)\b/.test(x)) return "Business";
   if (/\b(election|president|government|minister|parliament|diplomacy|war|conflict|sanction)\b/.test(x)) return "World";
-  return "Business";
+  if (hint) return hint;
+  return "World";
 }
 
 function rssImage(item: any) {
@@ -103,10 +109,6 @@ function rssImage(item: any) {
   const html = clean(item?.content || item?.["content:encoded"] || item?.summary || item?.description);
   const match = html.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"' >]+)["']/i);
   return match?.[1] || "";
-}
-
-function imageKey(link: string) {
-  return Buffer.from(link).toString("base64url").slice(0, 48);
 }
 
 async function fetchArticleImage(link: string) {
@@ -132,7 +134,8 @@ async function getRss() {
           date: item.isoDate || item.pubDate,
           source,
           image: rssImage(item),
-          category: feedCategory || category(clean(item.title) + " " + clean(item.contentSnippet || ""), undefined),
+          category: category(clean(item.title) + " " + clean(item.contentSnippet || ""), feedCategory || undefined),
+          region: region || "Global",
         }));
       } catch {
         return [];
@@ -217,9 +220,9 @@ async function aiBrief(title: string, desc: string) {
     const ai = new GoogleGenAI({ apiKey: key });
     const response = await Promise.race([
       ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.0-flash",
         contents:
-          "RWDNEWS editorial assistant. Create an original, factual RWDNEWS news briefing from ONLY the supplied title and description. Never invent or infer facts, numbers, names, dates, quotes, motives, causes or outcomes. Do not copy source wording. Write a clear non-clickbait headline and exactly four medium-detail factual briefing points. Each point should be 1-2 sentences and together should help a reader understand what happened, the key context supplied by the source, why the development matters only when the source supports that context, and what is known next. If the source does not provide a detail, say that it is not specified rather than guessing. Return JSON. TITLE: " +
+          "RWDNEWS editorial assistant. Create an original, factual RWDNEWS news briefing from ONLY the supplied title and description. Never invent facts. Return JSON. TITLE: " +
           title +
           " DESCRIPTION: " +
           desc,
@@ -349,7 +352,7 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       category: String(a.category || category(String(a.original_title || ""), undefined)),
       region: String(a.region || "Global"),
       trend_score: 0,
-      trend_label: "Fresh",
+      trend_label: "Fresh" as const,
       discovered_via: [String(a.source || "RWDNEWS")],
       body: String(a.body || ""), story_type: String(a.story_type || "WIRE"), author_name: String(a.author_name || "RWDNEWS Editorial"), subject: String(a.subject || ""), editorial_status: String(a.editorial_status || "published"), featured: Boolean(a.featured), pinned: Boolean(a.pinned), image_credit: String(a.image_credit || a.source || "Publisher"), image_license: String(a.image_license || "Publisher/source image — verify rights before commercial reuse"), image_source_url: String(a.image_source_url || a.original_url),
     }));
@@ -382,6 +385,7 @@ async function persist(articles: NewsArticle[]) {
       image_credit: a.image_credit,
       image_license: a.image_license,
       image_source_url: a.image_source_url,
+      editorial_status: "published",
     }, { onConflict: "original_url" });
     if (!error) saved++;
   }
@@ -398,30 +402,7 @@ export async function runIngest() {
   return { articles: stored, saved: 0, generatedAt: new Date().toISOString(), fallback: stored.length > 0 };
 }
 
-function personalize(articles: NewsArticle[], country: string) {
-  const map: Record<string, string[]> = {
-    NG:["Nigeria","Africa"], GH:["Ghana","Africa"], KE:["Africa"], ZA:["Africa"], EG:["Africa"],
-    GB:["Europe"], DE:["Europe"], FR:["Europe"], IT:["Europe"], ES:["Europe"], NL:["Europe"],
-    US:["North America"], CA:["North America"], MX:["South America"],
-    IN:["Asia"], JP:["Asia"], CN:["Asia"], KR:["Asia"], SG:["Asia"], AU:["Asia"],
-    AE:["Middle East"], SA:["Middle East"], IL:["Middle East"], QA:["Middle East"], TR:["Middle East"],
-    BR:["South America"], AR:["South America"], CO:["South America"],
-  };
-  const preferred = new Set(map[country] || []);
-  return [...articles].sort((a,b) => {
-    const boost = (x: NewsArticle) => {
-      let score = x.trend_score || 0;
-      if (preferred.has(x.region || "")) score += 28;
-      if (country === "NG" && x.category === "Nigeria") score += 22;
-      if (country === "GH" && x.category === "Ghana") score += 22;
-      return score;
-    };
-    return boost(b)-boost(a);
-  });
-}
-
 export default async (req: Request) => {
-  const geo = req.headers.get("x-nf-geo-country") || req.headers.get("x-country") || "";
   const url = new URL(req.url);
   const isCron = url.pathname.includes("/cron-ingest");
   const wantsRefresh = url.searchParams.get("refresh") === "true";
@@ -430,35 +411,33 @@ export default async (req: Request) => {
     const secret = Netlify.env.get("CRON_SECRET") || "";
     const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || url.searchParams.get("secret") || "";
     if (!secret || supplied !== secret) {
-      return new Response(JSON.stringify({ ok: false, error: "Unauthorized" }), { status: 401 });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
     }
   }
 
   try {
-    // Normal page loads must be fast: serve the latest verified DB feed immediately.
-    // Live source refreshes happen separately and on the scheduled ingest.
-    const result = (!isCron && !wantsRefresh)
-      ? { articles: personalize(await getStoredArticles(), geo), saved: 0, generatedAt: new Date().toISOString() }
-      : await runIngest();
-    return new Response(JSON.stringify({
-      articles: personalize(result.articles, geo),
-      count: result.articles.length,
-      saved: result.saved,
-      generatedAt: result.generatedAt,
-    }), {
-      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=30, stale-while-revalidate=300", "Netlify-Vary": "country" },
+    if (wantsRefresh || isCron) {
+      const result = await runIngest();
+      return new Response(JSON.stringify({ ok: true, count: result.articles.length, saved: result.saved, generatedAt: result.generatedAt, articles: result.articles }), {
+        headers: { "content-type": "application/json", "cache-control": "no-store" },
+      });
+    }
+    const stored = await getStoredArticles();
+    if (stored.length) {
+      return new Response(JSON.stringify({ ok: true, articles: stored, generatedAt: new Date().toISOString() }), {
+        headers: { "content-type": "application/json", "cache-control": "public, max-age=60" },
+      });
+    }
+    const result = await runIngest();
+    return new Response(JSON.stringify({ ok: true, count: result.articles.length, saved: result.saved, articles: result.articles, generatedAt: result.generatedAt }), {
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
     });
-  } catch (error) {
-    console.error("[RWDNEWS] live ingest failed", error);
-    return new Response(JSON.stringify({
-      articles: [],
-      error: "Live news sources are temporarily unavailable.",
-    }), {
-      status: 503,
-      headers: { "content-type": "application/json; charset=utf-8" },
+  } catch (e) {
+    return new Response(JSON.stringify({ ok: false, error: e instanceof Error ? e.message : "News error", articles: [] }), {
+      status: 500,
+      headers: { "content-type": "application/json" },
     });
   }
 };
 
-
-
+export const config = { path: "/api/news" };
