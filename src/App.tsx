@@ -110,7 +110,7 @@ function RwdNewsApp() {
   });
   const [refreshing, setRefreshing] = useState(false);
   const initialCategory = typeof window !== "undefined"
-    ? new URLSearchParams(window.location.search).get("category")
+    ? (window.location.pathname !== "/" ? window.location.pathname.replace(/^\//, "").split("/")[0] : new URLSearchParams(window.location.search).get("category"))
     : null;
   const [selectedTag, setSelectedTag] = useState(initialCategory ? (initialCategory.charAt(0).toUpperCase() + initialCategory.slice(1).toLowerCase()) : "All");
   const [searchQuery, setSearchQuery] = useState("");
@@ -457,7 +457,7 @@ function RwdNewsApp() {
                   type="button"
                   onClick={() => {
                     setSelectedTag(t);
-                    const target = t === "All" ? "/" : `/?category=${encodeURIComponent(t.toLowerCase())}`;
+                    const target = t === "All" ? "/" : `/${t.toLowerCase()}`;
                     window.history.pushState({ category: t }, "", target);
                   }}
                   className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
