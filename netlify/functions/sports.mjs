@@ -32,9 +32,15 @@ function clean(value) {
   return String(value ?? "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function getEspnBoard(board) {
+function dateKey(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return d.toISOString().slice(0, 10).replaceAll("-", "");
+}
+
+async function getEspnBoard(board, offsetDays = 0) {
   try {
-    const url = `https://site.api.espn.com/apis/site/v2/sports/${board.path}/scoreboard`;
+    const url = new URL(`https://site.api.espn.com/apis/site/v2/sports/${board.path}/scoreboard`);
+    url.searchParams.set("dates", dateKey(offsetDays));
     const response = await fetch(url, {
       headers: { Accept: "application/json", "User-Agent": "RWDNEWS/2.0" },
       signal: AbortSignal.timeout(8000),
@@ -45,11 +51,12 @@ async function getEspnBoard(board) {
       .map((event) => {
         const competition = event?.competitions?.[0];
         const competitors = competition?.competitors || [];
-        const home = competitors.find((c) => c.homeAway === "home") || competitors[0];
-        const away = competitors.find((c) => c.homeAway === "away") || competitors[1];
+        const home = competitors.find((x) => x.homeAway === "home") || competitors[0];
+        const away = competitors.find((x) => x.homeAway === "away") || competitors[1];
         if (!home || !away) return null;
-        const status = clean(event?.status?.type?.description || event?.status?.type?.name || "Scheduled");
-        const state = String(event?.status?.type?.state || "").toLowerCase();
+        const statusType = event?.status?.type || competition?.status?.type || {};
+        const state = String(statusType.state || "").toLowerCase();
+        const completed = Boolean(statusType.completed) || state === "post";
         return {
           id: `espn-${event.id}`,
           providerId: String(event.id),
@@ -62,18 +69,17 @@ async function getEspnBoard(board) {
           away: clean(away.team?.displayName || away.team?.name),
           homeScore: home.score !== "" && home.score != null ? Number(home.score) : null,
           awayScore: away.score !== "" && away.score != null ? Number(away.score) : null,
-          status,
+          status: clean(statusType.description || statusType.name || "Scheduled"),
+          statusState: state,
+          completed,
           startTime: event.date ? new Date(event.date).toISOString() : undefined,
-          live: state === "in" || /live|in progress/i.test(status),
+          live: state === "in" || /live|in progress/i.test(String(statusType.description || "")),
           homeLogo: home.team?.logo || "",
           awayLogo: away.team?.logo || "",
           venue: clean(competition?.venue?.fullName || competition?.venue?.address?.city || ""),
         };
       })
       .filter((m) => m?.home && m?.away);
-  } catch {
-    return [];
-  }
 }
 
 async function getApiFootballFootball() {
@@ -111,11 +117,14 @@ async function getApiFootballFootball() {
 }
 
 async function getAllMatches() {
-  const [espnResults, apiFootballLive] = await Promise.all([
-    Promise.allSettled(ESPN_BOARDS.map(getEspnBoard)),
-    getApiFootballFootball(),
-  ]);
-  const espn = espnResults.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+  const offsets = [0, 1, 2, 3, -1];
+  const espnResults = await Promise.all(
+    offsets.flatMap((offset) =>
+      ESPN_BOARDS.map((board) => getEspnBoard(board, offset)),
+    ),
+  );
+  const espn = espnResults.flatMap((items) => items);
+  const apiFootballLive = await getApiFootballFootball();
   const all = [...apiFootballLive, ...espn];
   const seen = new Set();
   return all.filter((m) => {
@@ -282,7 +291,8 @@ export async function handler(event) {
     const news = Array.from(newsMap.values()).sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, 100);
 
     const live = matches.filter((m) => m.live).slice(0, 80);
-    const upcoming = matches.filter((m) => !m.live).sort((a, b) => new Date(a.startTime || 0) - new Date(b.startTime || 0)).slice(0, 100);
+    const upcoming = matches.filter((m) => !m.live && !m.completed && new Date(m.startTime || 0).getTime() >= Date.now() - 3600000).sort((a, b) => new Date(a.startTime || 0) - new Date(b.startTime || 0)).slice(0, 100);
+    const results = matches.filter((m) => m.completed || (m.homeScore != null && m.awayScore != null && new Date(m.startTime || 0).getTime() < Date.now())).sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0)).slice(0, 100);
     const featured = matches.filter((m) => /premier league|champions league|la liga|bundesliga|serie a|ligue 1|nba|wnba|nfl|mlb|nhl|atp|mls/i.test(m.league)).slice(0, 100);
     const rumors = news.filter(isRumor).slice(0, 50);
     const majorLeagues = [
@@ -298,8 +308,8 @@ export async function handler(event) {
       statusCode: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=30, stale-while-revalidate=120" },
       body: JSON.stringify({
-        live, featured, upcoming, news, rumors, majorLeagues, bySport,
-        counts: { matches: matches.length, live: live.length, news: news.length, rumors: rumors.length },
+        live, featured, upcoming, results, news, rumors, majorLeagues, bySport,
+        counts: { matches: matches.length, live: live.length, results: results.length, upcoming: upcoming.length, news: news.length, rumors: rumors.length },
         providers: { scoreboard: process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY ? "API-Football + ESPN" : "ESPN public boards", news: "Supabase + GDELT" },
         generatedAt: new Date().toISOString(),
       }),
