@@ -49,7 +49,7 @@ const feeds = [
 ] as const;
 
 const queries = [
-  ["(breaking OR latest OR developing OR "just in" OR "breaking news")", "World"],
+  [`(breaking OR latest OR developing OR "just in" OR "breaking news")`, "World"],
   ["(Europe OR European OR UK OR Britain OR France OR Germany OR Italy OR Spain OR Poland OR Ukraine OR Russia)", "Europe"],
   ["(Middle East OR Israel OR Palestine OR Gaza OR Lebanon OR Iran OR Iraq OR Syria OR Gulf OR Saudi Arabia OR UAE)", "Middle East"],
   ["(Asia OR China OR Japan OR India OR Korea OR Pakistan OR Indonesia OR Philippines OR Australia)", "Asia"],
