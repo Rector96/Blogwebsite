@@ -390,7 +390,10 @@ export async function runIngest() {
 
 export default async (req: Request) => {
   const url = new URL(req.url);
-  if (url.pathname.includes("/cron-ingest")) {
+  const isCron = url.pathname.includes("/cron-ingest");
+  const wantsRefresh = url.searchParams.get("refresh") === "true";
+
+  if (isCron) {
     const secret = Netlify.env.get("CRON_SECRET") || "";
     const supplied = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || url.searchParams.get("secret") || "";
     if (!secret || supplied !== secret) {
@@ -399,14 +402,18 @@ export default async (req: Request) => {
   }
 
   try {
-    const result = await runIngest();
+    // Normal page loads must be fast: serve the latest verified DB feed immediately.
+    // Live source refreshes happen separately and on the scheduled ingest.
+    const result = (!isCron && !wantsRefresh)
+      ? { articles: await getStoredArticles(), saved: 0, generatedAt: new Date().toISOString() }
+      : await runIngest();
     return new Response(JSON.stringify({
       articles: result.articles,
       count: result.articles.length,
       saved: result.saved,
       generatedAt: result.generatedAt,
     }), {
-      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=60, stale-while-revalidate=300" },
+      headers: { "content-type": "application/json; charset=utf-8", "cache-control": "public, max-age=30, stale-while-revalidate=300" },
     });
   } catch (error) {
     console.error("[RWDNEWS] live ingest failed", error);
