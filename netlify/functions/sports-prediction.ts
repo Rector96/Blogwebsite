@@ -46,7 +46,8 @@ function probabilityTotal(p: any) {
 }
 
 async function makePrediction(match: Match) {
-  const key = env("OPENAI_API_KEY");
+  // Accept the intended variable and the existing legacy typo so the configured key works immediately.
+  const key = env("OPENAI_API_KEY") || env("OPENAl_KEY");
   if (!key) {
     return {
       configured: false,
