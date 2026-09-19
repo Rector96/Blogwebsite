@@ -94,7 +94,7 @@ export default function PredictionsPage() {
       if (!r.ok) throw new Error("Prediction unavailable");
       const d = await r.json();
       setPrediction(d);
-      window.history.replaceState({}, "", `/sports/predictions?id=${encodeURIComponent(id)}`);
+      window.history.replaceState({}, "", `/sport/predictions?id=${encodeURIComponent(id)}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Prediction failed");
     } finally {
