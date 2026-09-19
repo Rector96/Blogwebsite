@@ -83,7 +83,9 @@ const queries = [
   ["(Africa OR Nigeria OR Kenya OR Ghana OR SouthAfrica OR Egypt OR Ethiopia OR Sudan OR Morocco)", "Africa"],
   ["(Nigeria OR Nigerian OR Lagos OR Abuja OR Kano OR Rivers OR Kaduna OR Enugu OR Oyo)", "Nigeria"],
   ["(Ghana OR Ghanaian OR Accra OR Kumasi OR Tamale OR Tema)", "Ghana"],
-  ["(football OR soccer OR Premier League OR Champions League OR UEFA OR FIFA OR NBA OR NFL OR tennis OR athletics OR Olympics)", "Sports"],
+  ["(football OR soccer OR Premier League OR Champions League OR UEFA OR FIFA OR NBA OR NFL OR MLB OR baseball OR NHL OR tennis OR cricket OR Formula 1 OR athletics OR Olympics)", "Sports"],
+  ["(\"Premier League\" OR \"Champions League\" OR \"Europa League\" OR \"La Liga\" OR Bundesliga OR \"Serie A\" OR \"Ligue 1\")", "Sports"],
+  ["(NBA OR NFL OR MLB OR NHL OR \"Major League Baseball\" OR \"National Football League\")", "Sports"],
   ["(finance OR markets OR banking OR economy OR companies OR stocks OR oil OR trade)", "Business"],
   ['("artificial intelligence" OR AI OR technology OR cybersecurity OR chips OR software OR robotics)', "Tech"],
 ] as const;
