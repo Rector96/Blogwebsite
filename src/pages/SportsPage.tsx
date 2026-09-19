@@ -76,7 +76,7 @@ export default function SportsPage() {
     <header className="border-b bg-neutral-950 text-white">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
         <a href="/" className="font-display text-xl font-bold">RWDNEWS</a>
-        <a href="/" className="text-xs font-semibold text-neutral-300">← Back to news</a>
+        <div className="flex items-center gap-3"><a href="/sports/predictions" className="text-xs font-bold text-amber-400">AI Predictions →</a><a href="/" className="text-xs font-semibold text-neutral-300">← Back to news</a></div>
       </div>
     </header>
 
