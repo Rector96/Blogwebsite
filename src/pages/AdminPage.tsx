@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
-import { BarChart3, Copy, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Settings, Share2, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, Copy, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Settings, Share2, ShieldCheck, Users, Search } from "lucide-react";
 
 type Dashboard = {
   generated_at: string;
@@ -23,6 +23,7 @@ type Dashboard = {
 const tabs = [
   ["dashboard", "Dashboard", BarChart3],
   ["news", "News", Newspaper],
+  ["research", "Research", Search],
   ["social", "Social", Share2],
   ["analytics", "Analytics", Globe2],
   ["monetization", "Monetization", DollarSign],
@@ -56,6 +57,9 @@ export default function AdminPage() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState("");
+  const [researchTopic, setResearchTopic] = useState("");
+  const [researchMode, setResearchMode] = useState<"news" | "documentary">("news");
+  const [researchResult, setResearchResult] = useState<any>(null);
   const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", disclosure: "Sponsored · Paid placement" });
   const [storyForm, setStoryForm] = useState({
     headline: "", description: "", body: "", category: "Business", region: "Global",
@@ -119,6 +123,18 @@ export default function AdminPage() {
       const result = await api({ method: "POST", body: JSON.stringify({ action: "article_image_upload", filename: file.name, mime_type: file.type, data }) });
       setStoryForm(v => ({ ...v, image: String(result.url || "") }));
     } catch (e) { setError(e instanceof Error ? e.message : "Image upload failed"); }
+    finally { setBusy(false); }
+  };
+
+  const runResearch = async () => {
+    if (!researchTopic.trim()) { setError("Enter a topic to research."); return; }
+    setBusy(true); setError(""); setResearchResult(null);
+    try {
+      const response = await fetch("/api/research?topic=" + encodeURIComponent(researchTopic.trim()) + "&mode=" + researchMode, { credentials: "same-origin" });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Research failed.");
+      setResearchResult(result);
+    } catch (e) { setError(e instanceof Error ? e.message : "Research failed."); }
     finally { setBusy(false); }
   };
 
@@ -191,6 +207,26 @@ export default function AdminPage() {
           <Panel title="Top stories"><div className="divide-y">{data.top_articles.slice(0,8).map((x) => <div key={x.id} className="py-3"><p className="text-xs text-neutral-500">{number(x.views)} views</p><p className="font-semibold">{x.article?.ai_hook_title || x.article?.original_title || x.id}</p></div>)}</div></Panel>
           <Panel title="Operations"><div className="space-y-3 text-sm"><StatusLine label="Active sponsors" value={number(activeSponsors)} /><StatusLine label="New advertiser leads" value={number(pendingLeads)} /><StatusLine label="Pending payments" value={number(pendingPayments)} /><StatusLine label="Newsletter subscribers" value={number(data.overview.newsletter_subscribers)} /></div></Panel>
         </div>
+      </section> : null}
+
+      {tab === "research" ? <section className="space-y-6">
+        <PageHeading title="Research desk" subtitle="Research live topics before turning them into an RWDNEWS report or documentary. Only the admin can run this desk." />
+        <Panel title="Research a topic" subtitle="The desk collects current source reports, then creates a source-bounded draft. It does not invent facts or treat headlines as proof.">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+            <input value={researchTopic} onChange={e=>setResearchTopic(e.target.value)} placeholder="Example: Dangote investment / Mossad history" className="h-11 border px-3 text-sm" onKeyDown={e=>{if(e.key==="Enter") void runResearch()}} />
+            <select value={researchMode} onChange={e=>setResearchMode(e.target.value as "news" | "documentary")} className="h-11 border px-3 text-sm"><option value="news">Current news</option><option value="documentary">Documentary / explainer</option></select>
+            <button type="button" disabled={busy} onClick={()=>void runResearch()} className="h-11 bg-neutral-950 px-5 text-xs font-bold text-white disabled:opacity-50">{busy ? "Researching…" : "Research now"}</button>
+          </div>
+        </Panel>
+        {researchResult ? <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+          <Panel title={researchResult.report?.headline || researchResult.topic} subtitle={researchResult.report?.confidence || "Research draft"}>
+            <p className="text-sm leading-relaxed text-neutral-700">{researchResult.report?.summary}</p>
+            <div className="mt-5 space-y-5">{(researchResult.report?.sections || []).map((s:any,i:number)=><article key={i} className="border-t pt-4"><h3 className="font-display text-lg font-semibold">{s.title}</h3><p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-neutral-700">{s.body}</p><p className="mt-2 text-[10px] font-bold uppercase tracking-wider text-neutral-400">Sources: {(s.source_refs || []).join(", ") || "Not specified"}</p></article>)}</div>
+          </Panel>
+          <Panel title={researchResult.sourceCount + " source reports"} subtitle="Open the original source before publishing.">
+            <div className="max-h-[650px] space-y-3 overflow-auto">{(researchResult.sources || []).map((s:any,i:number)=><a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="block border-b pb-3"><p className="text-xs font-semibold">{i+1}. {s.title}</p><p className="mt-1 text-[10px] text-neutral-500">{s.source} · {s.date || "date not supplied"}</p></a>)}</div>
+          </Panel>
+        </div> : null}
       </section> : null}
 
       {tab === "news" ? <section className="space-y-6">
