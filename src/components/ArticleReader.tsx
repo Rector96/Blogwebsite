@@ -1,5 +1,5 @@
 import React from "react";
-import { Bookmark, BookmarkCheck, ExternalLink, Share2, X } from "lucide-react";
+import { Bookmark, BookmarkCheck, Share2, X } from "lucide-react";
 import { Helmet } from "react-helmet-async";
 
 export type ReaderArticle = {
@@ -48,9 +48,14 @@ export function ArticleReader({
     ? article.ai_summary
     : [article.original_description].filter(Boolean);
 
+  const paragraphs = [
+    article.original_description || bullets[0] || "",
+    bullets.length > 1 ? "Key points: " + bullets.slice(0, 4).join(" ") : "",
+    "This is the RWDNEWS briefing so you can understand the story without leaving the site.",
+  ].filter(Boolean);
+
   const share = async () => {
-    const url =
-      typeof window !== "undefined" ? window.location.href : article.original_url;
+    const url = typeof window !== "undefined" ? window.location.href : article.original_url;
     try {
       if (navigator.share) {
         await navigator.share({ title, url, text: title });
@@ -83,29 +88,6 @@ export function ArticleReader({
       <Helmet>
         <title>{title} · RWDNEWS</title>
         <meta name="description" content={bullets[0] || article.original_description} />
-        <meta property="og:title" content={title} />
-        <meta property="og:image" content={article.image} />
-        <meta property="og:type" content="article" />
-        <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content={title} />
-        <meta name="twitter:description" content={bullets[0] || article.original_description} />
-        <meta name="twitter:image" content={article.image} />
-        <script type="application/ld+json">
-          {JSON.stringify({
-            "@context": "https://schema.org",
-            "@type": "NewsArticle",
-            headline: title,
-            image: [article.image],
-            datePublished: article.timestamp,
-            author: { "@type": "Organization", name: article.source },
-            publisher: {
-              "@type": "Organization",
-              name: "RWDNEWS",
-              logo: { "@type": "ImageObject", url: "/rwdnews-logo.svg" },
-            },
-            description: bullets[0] || article.original_description,
-          })}
-        </script>
       </Helmet>
 
       <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -131,8 +113,7 @@ export function ArticleReader({
               type="button"
               className="grid size-9 place-items-center border border-neutral-200"
               onClick={() => void share()}
-              aria-label="Share story"
-              title="Share story"
+              aria-label="Share"
             >
               <Share2 className="size-4" />
             </button>
@@ -147,12 +128,9 @@ export function ArticleReader({
         </div>
 
         <div className="flex-1 overflow-y-auto">
-          <img src={article.image} alt="" className="aspect-[16/9] w-full object-cover" />
-          <div className="flex flex-wrap items-center gap-2 border-b border-neutral-100 px-5 py-2.5 text-[10px] text-neutral-400 sm:px-8">
-            <span>Source: {article.source}</span>
-            {article.image_credit ? <span>· Image: {article.image_credit}</span> : null}
-            {article.image_license ? <span>· {article.image_license}</span> : null}
-          </div>
+          {article.image ? (
+            <img src={article.image} alt="" className="aspect-[16/9] w-full object-cover" />
+          ) : null}
 
           <div className="px-5 py-6 sm:px-8">
             <p className="text-[11px] font-bold tracking-[0.14em] text-amber-800 uppercase">
@@ -166,11 +144,7 @@ export function ArticleReader({
             </p>
 
             <div className="mt-6 space-y-4 text-[16px] leading-[1.75] text-neutral-800">
-              {article.original_description ? (
-                <p className="text-lg text-neutral-700">{article.original_description}</p>
-              ) : null}
-
-              <h2 className="font-display pt-2 text-lg font-semibold">Key points</h2>
+              <h2 className="font-display text-lg font-semibold">What you should know</h2>
               <ul className="space-y-3">
                 {bullets.map((b, i) => (
                   <li key={i} className="flex gap-3">
@@ -180,14 +154,9 @@ export function ArticleReader({
                 ))}
               </ul>
 
-              <div className="border-l-2 border-teal-700 bg-teal-50/40 py-3 pr-3 pl-4 text-sm text-neutral-700">
-                <p className="font-semibold text-neutral-900">Stay on RWDNEWS</p>
-                <p className="mt-1">
-                  This page is your full briefing. You do not need to leave the site to
-                  understand the story. The publisher link is optional if you want their
-                  original long-form article.
-                </p>
-              </div>
+              {paragraphs.map((p, i) => (
+                <p key={i}>{p}</p>
+              ))}
 
               {article.tags?.length ? (
                 <div className="flex flex-wrap gap-2 pt-2">
@@ -204,7 +173,9 @@ export function ArticleReader({
             </div>
 
             <div className="border-t border-neutral-200 pt-6">
-              <p className="mb-2 text-[10px] font-bold tracking-[0.14em] text-neutral-500 uppercase">Share this briefing</p>
+              <p className="mb-2 text-[10px] font-bold tracking-[0.14em] text-neutral-500 uppercase">
+                Share
+              </p>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
                 {[
                   ["whatsapp", "WhatsApp"],
@@ -225,7 +196,7 @@ export function ArticleReader({
               </div>
             </div>
 
-            <div className="mt-8 flex flex-col gap-3 border-t border-neutral-200 pt-6">
+            <div className="mt-8 border-t border-neutral-200 pt-6">
               <button
                 type="button"
                 onClick={onClose}
@@ -233,21 +204,7 @@ export function ArticleReader({
               >
                 Back to RWDNEWS feed
               </button>
-              <a
-                href={article.original_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="press inline-flex h-11 w-full items-center justify-center gap-2 border border-neutral-300 text-sm font-semibold text-neutral-700"
-              >
-                Optional: open original on {article.source}
-                <ExternalLink className="size-3.5" />
-              </a>
             </div>
-
-            <p className="mt-6 text-[11px] leading-relaxed text-neutral-400">
-              Source credited to {article.source}. RWDNEWS provides independent briefings
-              for information only — not investment advice.
-            </p>
           </div>
         </div>
       </article>
