@@ -19,7 +19,8 @@ export default async (req: Request) => {
 
   if (currency === "USD" && env("PAYSTACK_USD_ENABLED").toLowerCase() !== "true") {
     return json({ error: "USD sponsorship payments are not enabled yet. Please choose NGN." }, 400);
-  }\n  if (!pkg || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+  }
+  if (!pkg || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return json({ error: "Choose a valid sponsorship package and enter a valid email." }, 400);
   }
   if (ctaUrl && !/^https?:\/\//i.test(ctaUrl)) return json({ error: "Website URL must start with http:// or https://." }, 400);
