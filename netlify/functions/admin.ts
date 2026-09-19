@@ -53,6 +53,26 @@ export default async (req: Request) => {
     if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
     if (body.action === "logout") return json({ ok: true }, 200, { "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
 
+    if (body.action === "article_image_upload") {
+      const filename = clean(body.filename || "image", 120).replace(/[^a-zA-Z0-9._-]/g, "-");
+      const mime = clean(body.mime_type, 80).toLowerCase();
+      const allowed = ["image/jpeg", "image/png", "image/webp", "image/avif"];
+      if (!allowed.includes(mime)) return json({ error: "Only JPG, PNG, WebP or AVIF images are allowed." }, 400);
+      const raw = String(body.data || "");
+      const match = raw.match(/^data:([^;]+);base64,(.+)$/);
+      const base64 = match ? match[2] : raw;
+      if (!base64) return json({ error: "Image data is missing." }, 400);
+      const bytes = Buffer.from(base64, "base64");
+      if (bytes.length > 5 * 1024 * 1024) return json({ error: "Image is too large. Maximum size is 5 MB." }, 400);
+      const ext = mime.split("/")[1] === "jpeg" ? "jpg" : mime.split("/")[1];
+      const path = "articles/" + new Date().toISOString().slice(0,10) + "/" + Date.now().toString(36) + "-" + filename.replace(/.[^.]+$/, "") + "." + ext;
+      const { error } = await database.storage.from("rwdnews-images").upload(path, bytes, { contentType: mime, cacheControl: "31536000", upsert: false });
+      if (error) return json({ error: error.message }, 400);
+      const { data: pub } = database.storage.from("rwdnews-images").getPublicUrl(path);
+      await audit(database, "article_image_uploaded", "article_image", path, { mime, bytes: bytes.length });
+      return json({ ok: true, url: pub.publicUrl, path });
+    }
+
     if (body.action === "sponsor_create") {
       const sponsorName = clean(body.sponsor_name, 120);
       const headline = clean(body.headline, 180);
