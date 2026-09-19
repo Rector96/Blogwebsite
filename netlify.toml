@@ -39,6 +39,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/track"
+  to = "/.netlify/functions/track"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/admin"
   to = "/.netlify/functions/admin"
   status = 200
