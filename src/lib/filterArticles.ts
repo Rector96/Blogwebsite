@@ -11,7 +11,7 @@ export type FilterableArticle = {
   ai_summary?: string[];
 };
 
-/** All = everything. Other tabs = only that category (Sports, Business, Tech, ...). */
+/** All = everything. Other tabs = only that category. */
 export function filterArticlesByTab<
   T extends FilterableArticle,
 >(articles: T[], selectedTag: string, searchQuery = ""): T[] {
