@@ -47,6 +47,7 @@ export interface EnrichedArticle {
 
 const SAVED_KEY = "rwdnews_saved_v1";
 const NEWS_CACHE_KEY = "rwdnews_news_cache_v1";
+const VISIT_KEY = "rwdnews_last_visit_v1";
 
 function formatRelativeTime(iso: string) {
   try {
@@ -119,6 +120,17 @@ function RwdNewsApp() {
   const [leadMsg, setLeadMsg] = useState<string | null>(null);
   const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[] }>({ live: [], featured: [], upcoming: [] });
   const [sportsLoading, setSportsLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const now = Date.now();
+      const last = Number(localStorage.getItem(VISIT_KEY) || 0);
+      if (last && now - last > 30 * 60 * 1000) {
+        void logRwdNewsEvent({ event: "return_visit", placement: "homepage" });
+      }
+      localStorage.setItem(VISIT_KEY, String(now));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     try {
@@ -275,6 +287,20 @@ function RwdNewsApp() {
       .slice(0, 6)
       .map((item) => item.article);
   }, [articles, recentlyViewed]);
+
+  useEffect(() => {
+    if (!recommended.length) return;
+    void Promise.all(
+      recommended.map((a) =>
+        logRwdNewsEvent({
+          event: "recommendation_impression",
+          articleId: a.id,
+          articleUrl: a.original_url,
+          placement: "for_you",
+        }),
+      ),
+    );
+  }, [recommended]);
 
   const hero = filtered[0];
   const secondary = filtered.slice(1, 4);
@@ -474,7 +500,7 @@ function RwdNewsApp() {
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {recommended.map((a) => (
-                  <button key={"for-you-" + a.id} type="button" onClick={() => openArticle(a)} className="group overflow-hidden border border-neutral-200 bg-white text-left">
+                  <button key={"for-you-" + a.id} type="button" onClick={() => { void logRwdNewsEvent({ event: "recommendation_click", articleId: a.id, articleUrl: a.original_url, placement: "for_you" }); openArticle(a); }} className="group overflow-hidden border border-neutral-200 bg-white text-left">
                     <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover transition duration-500 group-hover:scale-[1.02]" />
                     <div className="p-3">
                       <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">{a.category || "World"} · {a.source}</p>
