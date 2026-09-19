@@ -14,6 +14,7 @@ import AdminPage from "./pages/AdminPage";
 import { InfoPage } from "./pages/InfoPage";
 import StoryPage from "./pages/StoryPage";
 import SportsPage from "./pages/SportsPage";
+import SportsPredictionsPage from "./pages/SportsPredictionsPage";
 import { logRwdNewsEvent } from "./lib/analytics";
 import { filterArticlesByTab, withInferredCategory } from "./lib/filterArticles";
 import { matchesCategory } from "./lib/categories";
@@ -694,6 +695,7 @@ export default function App() {
   let page: React.ReactNode = <RwdNewsApp />;
   if (path.startsWith("/admin")) page = <AdminPage />;
   else if (path.startsWith("/news/")) page = <StoryPage />;
+  else if (path === "/sports/predictions") page = <SportsPredictionsPage />;
   else if (path === "/sports" || path.startsWith("/sports/")) page = <SportsPage />;
   else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path))
     page = <InfoPage path={path} />;
