@@ -50,6 +50,10 @@ export default function StoryPage() {
   useEffect(() => {
     if (!article) return;
     void logRwdNewsEvent({ event: "article_open", articleId: article.id, articleUrl: article.original_url, placement: "story_page" });
+    const timer = window.setTimeout(() => {
+      void logRwdNewsEvent({ event: "reading_engaged", articleId: article.id, articleUrl: article.original_url, placement: "30s" });
+    }, 30_000);
+    return () => window.clearTimeout(timer);
   }, [article]);
 
   const title = article?.ai_hook_title || article?.original_title || "RWDNEWS story";
