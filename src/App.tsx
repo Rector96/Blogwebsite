@@ -530,7 +530,7 @@ function RwdNewsApp() {
               {sportsCards.slice(0, 4).map((m: any) => (
                 <a
                   key={m.id}
-                  href={`/sports/predictions?id=${encodeURIComponent(m.id)}`}
+                  href={`/sport/predictions?id=${encodeURIComponent(m.id)}`}
                   className="bg-neutral-950 p-3 transition hover:bg-neutral-900"
                 >
                   <div className="flex items-center justify-between gap-2 text-[9px] font-bold uppercase">
