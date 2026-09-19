@@ -59,12 +59,13 @@ export default function PredictionsPage() {
 
     (async () => {
       try {
-        const r = await fetch("/api/sports-prediction", {
-          headers: { Accept: "application/json" },
-        });
-        if (!r.ok) throw new Error("Could not load matches");
+        const r = await fetch("/api/sports", { headers: { Accept: "application/json" } });
+        if (!r.ok) throw new Error("Could not load sports fixtures");
         const d = await r.json();
-        const list = [...(d.matches || []), ...(d.live || [])];
+        const list = [...(d.upcoming || []), ...(d.featured || [])]
+          .filter((m: Match) => !m.live && m.completed !== true)
+          .filter((m: Match, i: number, arr: Match[]) => arr.findIndex((x) => x.id === m.id) === i)
+          .sort((a: Match, b: Match) => new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime());
         setMatches(list);
         if (id && list.some((m: Match) => m.id === id)) {
           setSelectedId(id);
@@ -119,7 +120,7 @@ export default function PredictionsPage() {
             RWDNEWS
           </a>
           <nav className="flex items-center gap-3">
-            <a href="/sports" className="text-xs font-semibold text-neutral-300">
+            <a href="/sport" className="text-xs font-semibold text-neutral-300">
               ← Sports desk
             </a>
           </nav>
