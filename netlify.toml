@@ -7,7 +7,6 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Function first — must be above SPA fallback
 [[redirects]]
   from = "/api/news"
   to = "/.netlify/functions/news"
