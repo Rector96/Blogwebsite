@@ -32,6 +32,22 @@ function formatTime(iso: string) {
   }
 }
 
+function cleanPoints(article: ReaderArticle) {
+  const raw = article.ai_summary?.length
+    ? article.ai_summary
+    : [article.original_description].filter(Boolean);
+  return raw
+    .map(String)
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .filter(
+      (x) =>
+        !/limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this story from the published source/i.test(
+          x,
+        ),
+    );
+}
+
 export function ArticleReader({
   article,
   saved,
@@ -44,15 +60,10 @@ export function ArticleReader({
   onToggleSave: () => void;
 }) {
   const title = article.ai_hook_title || article.original_title;
-  const bullets = article.ai_summary?.length
-    ? article.ai_summary
-    : [article.original_description].filter(Boolean);
-
-  const paragraphs = [
-    article.original_description || bullets[0] || "",
-    bullets.length > 1 ? "Key points: " + bullets.slice(0, 4).join(" ") : "",
-    "This is the RWDNEWS briefing so you can understand the story without leaving the site.",
-  ].filter(Boolean);
+  const bullets = cleanPoints(article);
+  if (!bullets.length && article.original_description) {
+    bullets.push(article.original_description);
+  }
 
   const share = async () => {
     const url = typeof window !== "undefined" ? window.location.href : article.original_url;
@@ -95,7 +106,7 @@ export function ArticleReader({
       <article className="relative z-10 flex h-full w-full max-w-2xl flex-col bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-3">
           <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 uppercase">
-            Read on RWDNEWS
+            RWDNEWS
           </p>
           <div className="flex items-center gap-1">
             <button
@@ -139,9 +150,7 @@ export function ArticleReader({
             <h1 className="font-display mt-2 text-2xl leading-tight font-semibold sm:text-3xl">
               {title}
             </h1>
-            <p className="mt-2 text-sm text-neutral-500">
-              {article.read_time || "3 min read"} · RWDNEWS briefing
-            </p>
+            <p className="mt-2 text-sm text-neutral-500">{article.read_time || "3 min read"}</p>
 
             <div className="mt-6 space-y-4 text-[16px] leading-[1.75] text-neutral-800">
               <h2 className="font-display text-lg font-semibold">What you should know</h2>
@@ -153,10 +162,6 @@ export function ArticleReader({
                   </li>
                 ))}
               </ul>
-
-              {paragraphs.map((p, i) => (
-                <p key={i}>{p}</p>
-              ))}
 
               {article.tags?.length ? (
                 <div className="flex flex-wrap gap-2 pt-2">
@@ -202,7 +207,7 @@ export function ArticleReader({
                 onClick={onClose}
                 className="press h-12 w-full bg-neutral-950 text-sm font-bold text-white"
               >
-                Back to RWDNEWS feed
+                Back to feed
               </button>
             </div>
           </div>
