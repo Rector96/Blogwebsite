@@ -116,6 +116,8 @@ function RwdNewsApp() {
   const [leadName, setLeadName] = useState("");
   const [leadCompany, setLeadCompany] = useState("");
   const [leadMsg, setLeadMsg] = useState<string | null>(null);
+  const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[] }>({ live: [], featured: [], upcoming: [] });
+  const [sportsLoading, setSportsLoading] = useState(true);
 
   useEffect(() => {
     try {
@@ -165,6 +167,28 @@ function RwdNewsApp() {
   };
 
   useEffect(() => {
+    const loadSports = async () => {
+      try {
+        const response = await fetch("/api/sports", { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("Sports feed unavailable");
+        const data = await response.json();
+        setSportsFeed({
+          live: Array.isArray(data.live) ? data.live : [],
+          featured: Array.isArray(data.featured) ? data.featured : [],
+          upcoming: Array.isArray(data.upcoming) ? data.upcoming : [],
+        });
+      } catch {
+        setSportsFeed({ live: [], featured: [], upcoming: [] });
+      } finally {
+        setSportsLoading(false);
+      }
+    };
+    void loadSports();
+    const sportsTimer = window.setInterval(() => void loadSports(), 30_000);
+    return () => window.clearInterval(sportsTimer);
+  }, []);
+
+  useEffect(() => {
     // Load the latest verified feed from the database immediately.
     void fetchNews(false);
     // Refresh from live sources shortly after first paint without blocking the page.
@@ -199,6 +223,7 @@ function RwdNewsApp() {
       if (a.category) categories.add(a.category);
     });
     const preferred = ["Breaking", "World", "Nigeria", "Ghana", "Africa", "Europe", "Middle East", "Asia", "Sports", "Business", "Tech", "Crypto", "Entertainment"];
+    sportsFeed.live.length || sportsFeed.featured.length || sportsFeed.upcoming.length ? categories.add("Sports") : null;
     return ["All", ...preferred.filter((name) => categories.has(name)), ...Array.from(categories).filter((name) => !preferred.includes(name)).sort()];
   }, [articles]);
 
@@ -222,6 +247,7 @@ function RwdNewsApp() {
   const secondary = filtered.slice(1, 4);
   const rest = filtered.slice(4);
   const sports = selectedTag === "All" ? articles.filter((a) => a.category === "Sports").slice(0, 4) : [];
+  const sportsCards = sportsFeed.live.length ? sportsFeed.live.slice(0, 8) : sportsFeed.featured.slice(0, 8);
 
   const toggleSave = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
@@ -439,6 +465,41 @@ function RwdNewsApp() {
                   </button>
                 ))}
             </div>
+          </section>
+
+          <section className="mb-8 border border-neutral-200 bg-neutral-950 text-white">
+            <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-5">
+              <div>
+                <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">Live sports</p>
+                <h2 className="font-display text-xl font-semibold">Scores & major leagues</h2>
+              </div>
+              <span className="text-[10px] font-semibold text-neutral-400">{sportsFeed.live.length ? "● LIVE" : "Fixtures & results"}</span>
+            </div>
+            {sportsLoading ? (
+              <div className="p-5 text-sm text-neutral-400">Loading live scores…</div>
+            ) : sportsCards.length ? (
+              <div className="grid gap-px bg-neutral-800 sm:grid-cols-2 lg:grid-cols-4">
+                {sportsCards.map((m: any) => (
+                  <div key={m.id} className="bg-neutral-950 p-4">
+                    <div className="flex items-center justify-between gap-2 text-[9px] font-bold tracking-wider uppercase">
+                      <span className="truncate text-amber-400">{m.league}</span>
+                      <span className={m.live ? "text-red-400" : "text-neutral-500"}>{m.live ? "LIVE" : m.status}</span>
+                    </div>
+                    <div className="mt-3 space-y-2 text-sm">
+                      <div className="flex items-center justify-between gap-3"><span className="truncate">{m.home}</span><strong>{m.homeScore ?? "–"}</strong></div>
+                      <div className="flex items-center justify-between gap-3"><span className="truncate">{m.away}</span><strong>{m.awayScore ?? "–"}</strong></div>
+                    </div>
+                    <button type="button" onClick={() => window.location.assign("/sports")} className="mt-3 text-[10px] font-bold text-teal-300">Match centre →</button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="p-5 text-sm text-neutral-400">No live matches right now. Check the major-league fixtures below.</div>
+            )}
+            <div className="flex flex-wrap gap-2 border-t border-neutral-800 px-4 py-3 text-[10px] font-semibold text-neutral-300 sm:px-5">
+              {["Premier League", "Champions League", "La Liga", "NBA", "NFL", "MLB", "Bundesliga", "Serie A"].map((league) => <span key={league} className="rounded-full border border-neutral-700 px-2.5 py-1">{league}</span>)}
+            </div>
+            <p className="px-4 pb-4 text-[9px] text-neutral-500 sm:px-5">Live sports data is supplied by SportScore. RWDNEWS match outlooks are informational, not guaranteed results or betting advice.</p>
           </section>
 
           {sports.length ? (
