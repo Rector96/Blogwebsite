@@ -49,7 +49,7 @@ export default async (req: Request, context: Context) => {
   const referrer = String(body.referrer || req.headers.get("referer") || "").slice(0, 500);
   const utmSource = String(body.utm_source || url.searchParams.get("utm_source") || "").slice(0, 80);
   const ip = context.ip || "";
-  const ipHash = ip ? createHash("sha256").update(ip + (Netlify.env.get("ADMIN_SESSION_SECRET") || "rwdnews")).digest("hex").slice(0, 32) : null;
+  const ipHash = ip ? createHash("sha256").update(ip + (process.env.ADMIN_SESSION_SECRET || "rwdnews")).digest("hex").slice(0, 32) : null;
 
   const { error } = await db.from("rwdnews_events").insert({
     event_name: event,
