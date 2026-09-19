@@ -30,7 +30,7 @@ const BUSINESS_RE =
   /\b(market|markets|stock|stocks|bank|banking|economy|economic|finance|financial|oil|trade|company|companies|revenue|profit|gdp|inflation|interest rate|central bank)\b/i;
 
 const ENTERTAINMENT_RE =
-  /\b(movie|film|music|celebrity|actor|actress|nollywood|hollywood|wedding|marriage|divorce|award|oscar|grammy|netflix|series|tv show)\b/i;
+  /\b(movie|film|music|celebrity|actor|actress|nollywood|actress|wedding|marriage|divorce|award|oscar|grammy|netflix|series|tv show)\b/i;
 
 function blobOf(article: {
   category?: string;
@@ -65,7 +65,6 @@ export function inferCategory(article: {
   const raw = String(article.category || "").trim();
   const blob = blobOf(article);
 
-  // Prefer explicit sports signals even over a bad stored category
   if (SPORT_RE.test(blob) || /espn|bbc sport|guardian sport/i.test(article.source || ""))
     return "Sports";
   if (CRYPTO_RE.test(blob)) return "Crypto";
@@ -104,14 +103,12 @@ export function matchesCategory(
   const inferred = inferCategory(article);
   if (inferred === selected) return true;
 
-  // Allow exact stored category match after normalization
   const stored = String(article.category || "").trim();
   if (stored.toLowerCase() === selected.toLowerCase()) return true;
 
   const tags = (article.tags || []).map((t) => String(t).replace(/^#/, "").toLowerCase());
   if (tags.includes(selected.toLowerCase())) return true;
 
-  // Sports tab: keyword backup if metadata failed
   if (selected === "Sports") return SPORT_RE.test(blobOf(article));
 
   return false;
