@@ -1,5 +1,10 @@
 function env(name) { return process.env[name] || ""; }
 
+function dateKey(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return d.toISOString().slice(0, 10).replaceAll("-", "");
+}
+
 async function loadMatches() {
   const boards = [
     { sport: "football", path: "soccer/eng.1", league: "Premier League" },
@@ -16,8 +21,10 @@ async function loadMatches() {
     { sport: "hockey", path: "hockey/nhl", league: "NHL" },
     { sport: "tennis", path: "tennis/atp", league: "ATP" },
   ];
-  const results = await Promise.allSettled(boards.map(async (b) => {
-    const r = await fetch(`https://site.api.espn.com/apis/site/v2/sports/${b.path}/scoreboard`, { headers: { Accept: "application/json", "User-Agent": "RWDNEWS/2.0" }, signal: AbortSignal.timeout(7000) });
+  const results = await Promise.allSettled([0, 1, 2, 3].flatMap(offset => boards.map(async (b) => {
+    const u = new URL(`https://site.api.espn.com/apis/site/v2/sports/${b.path}/scoreboard`);
+    u.searchParams.set("dates", dateKey(offset));
+    const r = await fetch(u, { headers: { Accept: "application/json", "User-Agent": "RWDNEWS/2.0" }, signal: AbortSignal.timeout(7000) });
     if (!r.ok) return [];
     const d = await r.json();
     return (Array.isArray(d?.events) ? d.events : []).map((event) => {
@@ -35,7 +42,7 @@ async function loadMatches() {
         awayScore: away.score !== "" && away.score != null ? Number(away.score) : null,
         status: event?.status?.type?.description || "Scheduled",
         startTime: event.date ? new Date(event.date).toISOString() : undefined,
-        live: state === "in", homeLogo: home.team?.logo || "", awayLogo: away.team?.logo || ""
+        live: state === "in", completed: Boolean(statusType.completed) || state === "post", homeLogo: home.team?.logo || "", awayLogo: away.team?.logo || ""
       };
     }).filter(Boolean);
   }));
@@ -116,7 +123,8 @@ export async function handler(event) {
   try {
     const qs = event.queryStringParameters || {};
     const matches = [...(await loadApiFootballLive()), ...(await loadMatches())];
-    const unique = matches.filter((m, i, a) => a.findIndex(x => x.id === m.id) === i);
+    const unique = matches.filter((m, i, a) => a.findIndex(x => x.id === m.id) === i)
+      .filter(m => m.home && m.away);
     const id = qs.id || "";
     if (!id) {
       return { statusCode: 200, headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=30" }, body: JSON.stringify({
