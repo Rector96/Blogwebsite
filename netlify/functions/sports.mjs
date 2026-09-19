@@ -64,10 +64,8 @@ function mapEspnEvent(event, board) {
   const home = competitors.find((x) => x.homeAway === "home") || competitors[0];
   const away = competitors.find((x) => x.homeAway === "away") || competitors[1];
   if (!home || !away) return null;
-
   const statusType = event?.status?.type || competition?.status?.type || {};
   const state = String(statusType.state || "").toLowerCase();
-
   return {
     id: `espn-${event.id}`,
     providerId: String(event.id),
@@ -112,8 +110,6 @@ async function fetchEspnBoard(board, dates) {
 }
 
 async function getAllMatches() {
-  // 1) Default boards (provider "today")
-  // 2) Explicit date windows
   const jobs = [];
   for (const board of ESPN_BOARDS) {
     jobs.push(fetchEspnBoard(board, null));
@@ -121,11 +117,9 @@ async function getAllMatches() {
       jobs.push(fetchEspnBoard(board, dateKey(offset)));
     }
   }
-
   const settled = await Promise.allSettled(jobs);
   const all = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 
-  // Optional API-Football live
   const apiKey = process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY || "";
   if (apiKey) {
     try {
@@ -176,11 +170,9 @@ async function getAllMatches() {
 function rssImage(item) {
   const candidates = [
     item?.enclosure?.url,
-    item?.["media:content"]?.$
-      ?.url,
+    item?.["media:content"]?.$?.url,
     item?.["media:content"]?.url,
-    item?.["media:thumbnail"]?.$
-      ?.url,
+    item?.["media:thumbnail"]?.$?.url,
     item?.image?.url,
   ];
   const hit = candidates.find((x) => typeof x === "string" && /^https?:\/\//i.test(x));
@@ -307,6 +299,7 @@ export async function handler(event) {
   try {
     const qs = event.queryStringParameters || {};
     const action = qs.action || "hub";
+    const hasApiFootball = Boolean(process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY);
 
     const [matches, dbNews, rssNews, discovered] = await Promise.all([
       getAllMatches(),
@@ -407,7 +400,7 @@ export async function handler(event) {
           rumors: rumors.length,
         },
         providers: {
-          scoreboard: apiKey ? "API-Football + ESPN" : "ESPN public boards",
+          scoreboard: hasApiFootball ? "API-Football + ESPN" : "ESPN public boards",
           news: "RSS + Supabase + GDELT",
         },
         generatedAt: new Date().toISOString(),
