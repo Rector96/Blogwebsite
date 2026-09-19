@@ -50,7 +50,17 @@ const feeds = [
   ["https://www.theguardian.com/business/rss", "The Guardian Business"],
   ["https://www.theguardian.com/technology/rss", "The Guardian Technology"],
   ["https://www.theguardian.com/sport/rss", "The Guardian Sport"],
-  ["https://www.africanews.com/feed/", "Africanews"],
+  ["https://www.africanews.com/feed/", "Africanews", "Africa"],
+  ["https://www.premiumtimesng.com/feed", "Premium Times", "Nigeria"],
+  ["https://rss.punchng.com/v1/category/latest_news", "PUNCH", "Nigeria"],
+  ["https://www.vanguardngr.com/feed/", "Vanguard Nigeria", "Nigeria"],
+  ["https://www.channelstv.com/feed/", "Channels TV", "Nigeria"],
+  ["https://dailytrust.com/feed/", "Daily Trust", "Nigeria"],
+  ["https://guardian.ng/feed/", "The Guardian Nigeria", "Nigeria"],
+  ["https://www.thisdaylive.com/feed", "ThisDay", "Nigeria"],
+  ["https://www.myjoyonline.com/feed/", "MyJoyOnline", "Ghana"],
+  ["https://www.citinewsroom.com/feed/", "Citi Newsroom", "Ghana"],
+  ["https://www.ghanaweb.com/GhanaHomePage/rss/", "GhanaWeb", "Ghana"],
   ["https://feeds.arstechnica.com/arstechnica/index", "Ars Technica"],
   ["https://www.theverge.com/rss/index.xml", "The Verge"],
   ["https://www.npr.org/rss/rss.php?id=1001", "NPR World"],
@@ -64,6 +74,8 @@ const queries = [
   ["(Middle East OR Israel OR Palestine OR Gaza OR Lebanon OR Iran OR Iraq OR Syria OR Gulf OR Saudi Arabia OR UAE)", "Middle East"],
   ["(Asia OR China OR Japan OR India OR Korea OR Pakistan OR Indonesia OR Philippines OR Australia)", "Asia"],
   ["(Africa OR Nigeria OR Kenya OR Ghana OR SouthAfrica OR Egypt OR Ethiopia OR Sudan OR Morocco)", "Africa"],
+  ["(Nigeria OR Nigerian OR Lagos OR Abuja OR Kano OR Rivers OR Kaduna OR Enugu OR Oyo)", "Nigeria"],
+  ["(Ghana OR Ghanaian OR Accra OR Kumasi OR Tamale OR Tema)", "Ghana"],
   ["(football OR soccer OR Premier League OR Champions League OR UEFA OR FIFA OR NBA OR NFL OR tennis OR athletics OR Olympics)", "Sports"],
   ["(finance OR markets OR banking OR economy OR companies OR stocks OR oil OR trade)", "Business"],
   ['("artificial intelligence" OR AI OR technology OR cybersecurity OR chips OR software OR robotics)', "Tech"],
@@ -134,7 +146,7 @@ async function fetchArticleImage(link: string) {
 }
 async function getRss() {
   const results = await Promise.allSettled(
-    feeds.map(async ([url, source]) => {
+    feeds.map(async ([url, source, region]) => {
       try {
         const feed = await rss.parseURL(url);
         return (feed.items || []).slice(0, 10).map((item: any) => ({
@@ -144,7 +156,7 @@ async function getRss() {
           date: item.isoDate || item.pubDate,
           source,
           image: rssImage(item),
-          category: category(clean(item.title) + " " + clean(item.contentSnippet || ""), undefined),
+          category: region || category(clean(item.title) + " " + clean(item.contentSnippet || ""), undefined),
         }));
       } catch {
         return [];
@@ -160,7 +172,7 @@ async function getGdelt() {
       const u = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
       u.searchParams.set("query", query);
       u.searchParams.set("mode", "artlist");
-      u.searchParams.set("maxrecords", "15");
+      u.searchParams.set("maxrecords", "20");
       u.searchParams.set("timespan", "6h");
       u.searchParams.set("sort", "datedesc");
       u.searchParams.set("format", "json");
@@ -438,4 +450,4 @@ export default async (req: Request) => {
 };
 
 
-export const config = { schedule: "*/5 * * * *" };
+
