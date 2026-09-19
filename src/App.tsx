@@ -572,7 +572,8 @@ function RwdNewsApp() {
             </div>
           </section>
 
-          {(selectedTag === "All" || selectedTag === "Sports") ? <section className="mb-8 border border-neutral-200 bg-neutral-950 text-white">
+          {(selectedTag === "All" || selectedTag === "Sports") ? (
+            <section className="mb-8 border border-neutral-200 bg-neutral-950 text-white">
             <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3 sm:px-5">
               <div>
                 <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">Live sports</p>
