@@ -4,6 +4,15 @@ function env(name: string) {
   return process.env[name] || "";
 }
 
+function escapeXml(value: string) {
+  return value
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/"/g, """)
+    .replace(/'/g, "'");
+}
+
 export async function handler() {
   const site = (env("PUBLIC_SITE_URL") || "https://rwdnews.netlify.app").replace(/\/$/, "");
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
@@ -57,13 +66,4 @@ export async function handler() {
     },
     body: xml,
   };
-}
-
-function escapeXml(value: string) {
-  return value
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, """)
-    .replace(/'/g, "'");
 }
