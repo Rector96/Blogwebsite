@@ -80,11 +80,23 @@ export default async (req: Request) => {
     const results = await Promise.allSettled(sports.map(getSport));
     const matches = results.flatMap((r) => r.status === "fulfilled" ? r.value : []);
     const live = matches.filter((m) => m.live);
-    const majorLeaguePatterns: Record<string, string[]> = {\n      "Premier League":["premier league"], "UEFA Champions League":["champions league"], "La Liga":["la liga"],\n      "Bundesliga":["bundesliga"], "Serie A":["serie a"], "Ligue 1":["ligue 1"],\n      "Europa League":["europa league"], "NBA":["nba"], "NFL":["nfl"], "MLB":["mlb","major league baseball"],\n      "NHL":["nhl"], "Formula 1":["formula 1","f1"], "ICC Cricket":["icc","test match","odi","t20"]\n    };\n    const featuredLeagues = Object.values(majorLeaguePatterns).flat();
-      "Premier League", "La Liga", "UEFA Champions League", "Champions League",
-      "NBA", "NFL", "MLB", "NHL", "Bundesliga", "Serie A", "Ligue 1",
-      "Copa Libertadores", "Europa League",
-    ];
+    const majorLeaguePatterns: Record<string, string[]> = {
+      "Premier League": ["premier league"],
+      "UEFA Champions League": ["champions league"],
+      "La Liga": ["la liga"],
+      "Bundesliga": ["bundesliga"],
+      "Serie A": ["serie a"],
+      "Ligue 1": ["ligue 1"],
+      "Europa League": ["europa league"],
+      "NBA": ["nba"],
+      "NFL": ["nfl"],
+      "MLB": ["mlb", "major league baseball"],
+      "NHL": ["nhl"],
+      "Formula 1": ["formula 1", "f1"],
+      "ICC Cricket": ["icc", "test match", "odi", "t20"],
+    };
+    const featuredLeagues = Object.values(majorLeaguePatterns).flat();
+
     const featured = matches
       .filter((m) => featuredLeagues.some((league) => m.league.toLowerCase().includes(league.toLowerCase())))
       .slice(0, 30);
