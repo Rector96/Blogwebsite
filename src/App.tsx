@@ -34,6 +34,14 @@ export interface EnrichedArticle {
   image_license?: string;
   image_source_url?: string;
   discovered_via?: string[];
+  body?: string;
+  story_type?: string;
+  author_name?: string;
+  subject?: string;
+  editorial_status?: string;
+  featured?: boolean;
+  pinned?: boolean;
+  region?: string;
 }
 
 const SAVED_KEY = "rwdnews_saved_v1";
