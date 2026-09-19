@@ -508,9 +508,7 @@ function RwdNewsApp() {
                   </p>
                   <h2 className="font-display text-xl font-semibold">Scores & major leagues</h2>
                 </div>
-                <a href="/sports" className="text-[11px] font-semibold text-neutral-300">
-                  Full centre →
-                </a>
+                <div className="flex items-center gap-3"><a href="/sports/predictions" className="text-[11px] font-bold text-amber-400">AI Predictions →</a><a href="/sports" className="text-[11px] font-semibold text-neutral-300">Full centre →</a></div>
               </div>
               {sportsLoading ? (
                 <div className="p-5 text-sm text-neutral-400">Loading scores…</div>
