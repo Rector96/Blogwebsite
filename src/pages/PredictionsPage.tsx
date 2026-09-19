@@ -60,17 +60,31 @@ export default function PredictionsPage() {
 
     (async () => {
       try {
-        const r = await fetch("/api/sports", { headers: { Accept: "application/json" } });
-        if (!r.ok) throw new Error("Could not load sports fixtures");
-        const d = await r.json();
-        const list = [...(d.upcoming || []), ...(d.featured || [])]
-          .filter((m: Match) => !m.live && m.completed !== true)
-          .filter((m: Match, i: number, arr: Match[]) => arr.findIndex((x) => x.id === m.id) === i)
-          .sort((a: Match, b: Match) => new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime());
-        setMatches(list);
-        if (id && list.some((m: Match) => m.id === id)) {
-          setSelectedId(id);
+        const [sportsRes, predRes] = await Promise.all([
+          fetch("/api/sports", { headers: { Accept: "application/json" } }),
+          fetch("/api/sports-prediction", { headers: { Accept: "application/json" } }),
+        ]);
+
+        const list: Match[] = [];
+        if (sportsRes.ok) {
+          const d = await sportsRes.json();
+          list.push(...(d.upcoming || []), ...(d.featured || []), ...(d.live || []));
         }
+        if (predRes.ok) {
+          const d = await predRes.json();
+          list.push(...(d.matches || []), ...(d.live || []));
+        }
+
+        const unique = list
+          .filter((m) => m?.id && m.home && m.away && m.completed !== true)
+          .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i)
+          .sort(
+            (a, b) =>
+              new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime(),
+          );
+
+        setMatches(unique);
+        if (id && unique.some((m) => m.id === id)) setSelectedId(id);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load");
       } finally {
@@ -93,7 +107,7 @@ export default function PredictionsPage() {
       const r = await fetch(`/api/sports-prediction?id=${encodeURIComponent(id)}`, {
         headers: { Accept: "application/json" },
       });
-      if (!r.ok) throw new Error("Prediction unavailable");
+      if (!r.ok) throw new Error("Prediction unavailable for this fixture");
       const d = await r.json();
       setPrediction(d);
       window.history.replaceState({}, "", `/sport/predictions?id=${encodeURIComponent(id)}`);
@@ -131,12 +145,11 @@ export default function PredictionsPage() {
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
         <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-neutral-950 to-neutral-900 p-5 text-white shadow-lg sm:p-8">
           <p className="text-[10px] font-extrabold tracking-[0.2em] text-amber-400 uppercase">
-            AI match outlooks
+            Match outlooks
           </p>
           <h1 className="font-display mt-1 text-3xl font-semibold sm:text-4xl">Predictions</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-300">
-            Pick a fixture. Get a clear, cautious outlook — probabilities, confidence, and what is
-            still unknown. Not betting advice.
+            Pick a fixture for probabilities and a clear, cautious outlook. Not betting advice.
           </p>
         </div>
 
@@ -147,7 +160,6 @@ export default function PredictionsPage() {
         ) : null}
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]">
-          {/* Match list */}
           <section>
             <h2 className="font-display text-xl font-semibold">Choose a match</h2>
             <p className="mt-1 text-sm text-neutral-500">Tap any card for an instant outlook.</p>
@@ -156,7 +168,7 @@ export default function PredictionsPage() {
               <p className="mt-6 text-sm text-neutral-500">Loading fixtures…</p>
             ) : matches.length ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                {matches.slice(0, 40).map((m) => (
+                {matches.slice(0, 48).map((m) => (
                   <button
                     key={m.id}
                     type="button"
@@ -181,13 +193,24 @@ export default function PredictionsPage() {
                 ))}
               </div>
             ) : (
-              <div className="mt-6 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
-                No fixtures available right now.
+              <div className="mt-6 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-neutral-600">
+                <p className="font-display text-lg font-semibold text-neutral-900">
+                  No fixtures on the board right now
+                </p>
+                <p className="mt-2">
+                  When leagues publish the next set of matches, they will appear here automatically.
+                  You can still follow sports news on the Sports desk.
+                </p>
+                <a
+                  href="/sport"
+                  className="mt-4 inline-flex rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white"
+                >
+                  Open Sports desk →
+                </a>
               </div>
             )}
           </section>
 
-          {/* Result panel */}
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-md">
               <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-700 uppercase">
@@ -198,9 +221,7 @@ export default function PredictionsPage() {
                 <p className="mt-4 text-sm text-neutral-500">Building outlook…</p>
               ) : p && selected ? (
                 <>
-                  <h3 className="font-display mt-2 text-xl font-semibold leading-snug">
-                    {p.headline}
-                  </h3>
+                  <h3 className="font-display mt-2 text-xl font-semibold leading-snug">{p.headline}</h3>
                   <p className="mt-1 text-sm text-neutral-600">
                     {selected.home} vs {selected.away}
                   </p>
@@ -230,9 +251,7 @@ export default function PredictionsPage() {
                     <span className="rounded-full bg-neutral-100 px-2 py-1">
                       Confidence: {p.confidence}
                     </span>
-                    <span className="rounded-full bg-neutral-100 px-2 py-1">
-                      Data: {p.dataQuality}
-                    </span>
+                    <span className="rounded-full bg-neutral-100 px-2 py-1">Data: {p.dataQuality}</span>
                   </div>
 
                   <p className="mt-4 text-sm leading-relaxed text-neutral-700">{p.analysis}</p>
