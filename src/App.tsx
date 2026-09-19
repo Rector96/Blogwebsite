@@ -457,7 +457,7 @@ function RwdNewsApp() {
                   type="button"
                   onClick={() => {
                     setSelectedTag(t);
-                    const target = t === "All" ? "/" : `/${t.toLowerCase()}`;
+                    const target = t === "All" ? "/" : t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
                     window.history.pushState({ category: t }, "", target);
                   }}
                   className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
