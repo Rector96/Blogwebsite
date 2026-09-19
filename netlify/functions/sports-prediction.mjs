@@ -33,7 +33,8 @@ async function loadMatches() {
       const home = teams.find(x => x.homeAway === "home") || teams[0];
       const away = teams.find(x => x.homeAway === "away") || teams[1];
       if (!home || !away) return null;
-      const state = String(event?.status?.type?.state || "").toLowerCase();
+      const statusType = event?.status?.type || c?.status?.type || {};
+      const state = String(statusType.state || "").toLowerCase();
       return {
         id: `espn-${event.id}`, providerId: String(event.id), provider: "ESPN", boardPath: b.path,
         sport: b.sport, league: b.league, home: home.team?.displayName || home.team?.name,
