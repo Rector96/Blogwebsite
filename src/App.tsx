@@ -72,6 +72,7 @@ function normalizeTags(tags?: string[]) {
 
 function RwdNewsApp() {
   const [articles, setArticles] = useState<EnrichedArticle[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const raw = localStorage.getItem(NEWS_CACHE_KEY);
       const cached = raw ? JSON.parse(raw) : [];
