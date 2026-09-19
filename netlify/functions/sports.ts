@@ -11,6 +11,7 @@ type SportMatch = {
   status: string;
   startTime?: string;
   live: boolean;
+  source?: string;
 };
 
 function clean(value: unknown) {
@@ -56,6 +57,7 @@ function normalizeMatch(item: any, sport: string): SportMatch | null {
     status,
     startTime: startTime ? new Date(Number(startTime) > 2_000_000_000 ? Number(startTime) : String(startTime)).toISOString() : undefined,
     live,
+    source: "SportScore",
   };
 }
 
@@ -78,7 +80,7 @@ export default async (req: Request) => {
     const results = await Promise.allSettled(sports.map(getSport));
     const matches = results.flatMap((r) => r.status === "fulfilled" ? r.value : []);
     const live = matches.filter((m) => m.live);
-    const featuredLeagues = [
+    const majorLeaguePatterns: Record<string, string[]> = {\n      "Premier League":["premier league"], "UEFA Champions League":["champions league"], "La Liga":["la liga"],\n      "Bundesliga":["bundesliga"], "Serie A":["serie a"], "Ligue 1":["ligue 1"],\n      "Europa League":["europa league"], "NBA":["nba"], "NFL":["nfl"], "MLB":["mlb","major league baseball"],\n      "NHL":["nhl"], "Formula 1":["formula 1","f1"], "ICC Cricket":["icc","test match","odi","t20"]\n    };\n    const featuredLeagues = Object.values(majorLeaguePatterns).flat();
       "Premier League", "La Liga", "UEFA Champions League", "Champions League",
       "NBA", "NFL", "MLB", "NHL", "Bundesliga", "Serie A", "Ligue 1",
       "Copa Libertadores", "Europa League",
@@ -120,6 +122,7 @@ export default async (req: Request) => {
       live,
       featured,
       upcoming,
+      majorLeagues: Object.entries(majorLeaguePatterns).map(([name, patterns]) => ({ name, available: matches.some(m => patterns.some(p => m.league.toLowerCase().includes(p))) })),
       provider: "SportScore",
       generatedAt: new Date().toISOString(),
     }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=30, stale-while-revalidate=120" } });
