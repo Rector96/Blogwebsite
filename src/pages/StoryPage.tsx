@@ -17,6 +17,7 @@ export default function StoryPage() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [sponsor, setSponsor] = useState<SponsoredOffer | null>(null);
+  const [related, setRelated] = useState<EnrichedArticle[]>([]);
 
   useEffect(() => {
     void logRwdNewsEvent({ event: "page_view", placement: "story_page" });
@@ -35,7 +36,29 @@ export default function StoryPage() {
           const found = Array.isArray(payload.articles) ? payload.articles.find((x: EnrichedArticle) => x.id === id) : null;
           if (found) foundArticle = found;
         }
-        if (foundArticle && !cancelled) setArticle(foundArticle);
+        if (foundArticle && !cancelled) {
+          setArticle(foundArticle);
+          try {
+            const response = await fetch("/api/news");
+            const payload = await response.json();
+            const pool = Array.isArray(payload.articles) ? payload.articles as EnrichedArticle[] : [];
+            const tagSet = new Set((foundArticle.tags || []).map((t) => String(t).replace(/^#/, "").toLowerCase()));
+            const candidates = pool
+              .filter((x) => x.id !== foundArticle!.id)
+              .map((x) => {
+                const sameCategory = x.category && x.category === foundArticle!.category ? 8 : 0;
+                const sharedTags = (x.tags || []).filter((t) => tagSet.has(String(t).replace(/^#/, "").toLowerCase())).length * 4;
+                const sameSource = x.source === foundArticle!.source ? 2 : 0;
+                const freshness = Math.max(0, 8 - ((Date.now() - new Date(x.timestamp).getTime()) / 3600000));
+                const breaking = x.trend_label === "Breaking" ? 4 : x.trend_label === "Trending" ? 2 : 0;
+                return { x, score: sameCategory + sharedTags + sameSource + freshness + breaking };
+              })
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 6)
+              .map(({ x }) => x);
+            if (!cancelled) setRelated(candidates);
+          } catch {}
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -89,8 +112,21 @@ export default function StoryPage() {
     } catch {}
   };
 
-  return <div className="min-h-dvh bg-white text-neutral-950"><Helmet><title>{title} — RWDNEWS</title><meta name="description" content={description} /><link rel="canonical" href={canonical} /><meta property="og:title" content={`RWDNEWS — ${title}`} /><meta property="og:description" content={`RWDNEWS briefing: ${description}`} /><meta property="og:url" content={canonical} /><meta property="og:type" content="article" /><meta property="og:site_name" content="RWDNEWS" /><meta property="og:image" content={article.image} /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={`RWDNEWS — ${title}`} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={article.image} /><script type="application/ld+json">{JSON.stringify(jsonLd)}</script></Helmet>
-    <header className="border-b border-neutral-200"><div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-5 sm:px-6"><a href="/" className="font-display text-2xl font-bold">RWDNEWS</a><a href="/" className="text-sm font-semibold text-teal-800">Back to news</a></div></header>
+  return <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950"><Helmet><title>{title} — RWDNEWS</title><meta name="description" content={description} /><link rel="canonical" href={canonical} /><meta property="og:title" content={`RWDNEWS — ${title}`} /><meta property="og:description" content={`RWDNEWS briefing: ${description}`} /><meta property="og:url" content={canonical} /><meta property="og:type" content="article" /><meta property="og:site_name" content="RWDNEWS" /><meta property="og:image" content={article.image} /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={`RWDNEWS — ${title}`} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={article.image} /><script type="application/ld+json">{JSON.stringify(jsonLd)}</script></Helmet>
+    <div className="border-b border-neutral-900 bg-[#071a2d] text-white">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+        <a href="/" className="text-[10px] font-extrabold tracking-[0.18em] text-amber-300 uppercase">Global News · RWDNEWS</a>
+        <a href="/sports" className="text-[10px] font-bold text-white/80 hover:text-white">Sports Desk →</a>
+      </div>
+    </div>
+    <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+        <a href="/" aria-label="RWDNEWS home">
+          <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[170px] sm:w-[210px]" />
+        </a>
+        <a href="/" className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-bold text-teal-800 hover:border-teal-300">← Back to news</a>
+      </div>
+    </header>
     <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12"><p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">{article.source} · {article.category || "World"}</p><h1 className="font-display mt-3 text-4xl leading-tight font-semibold sm:text-5xl">{title}</h1><p className="mt-3 text-lg leading-relaxed text-neutral-600">{description}</p><p className="mt-3 text-xs text-neutral-400">{article.read_time || "3 min read"} · Published {new Date(article.timestamp).toLocaleString()}</p>
       <img src={article.image} alt="" className="mt-8 aspect-[16/9] w-full object-cover bg-neutral-100" /><p className="mt-2 text-[10px] text-neutral-400">{article.image_credit ? "Image: " + article.image_credit : ""}{article.image_license ? " · " + article.image_license : ""}</p>
       <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_250px]"><article className="min-w-0">
@@ -139,7 +175,37 @@ export default function StoryPage() {
         <p className="mt-2 text-sm leading-relaxed text-neutral-600">Read the full report, original quotes, documents and any subsequent updates directly from the publisher.</p>
         <p className="mt-3 text-xs font-bold text-neutral-500">Source: {article.source}</p>
         <a href={article.original_url} target="_blank" rel="noopener noreferrer" onClick={() => void logRwdNewsEvent({ event: "external_source_click", articleId: article.id, articleUrl: article.original_url, placement: "story_source" })} className="mt-4 inline-flex items-center gap-2 bg-neutral-950 px-4 py-3 text-sm font-semibold text-white">Read the full report at {article.source} <ExternalLink className="size-3.5" /></a>
-      </div></article></div>
+      </div>
+      <section className="mt-10">
+        <div className="mb-4 flex items-end justify-between gap-3 border-b border-neutral-900 pb-3">
+          <div>
+            <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">Continue reading</p>
+            <h2 className="font-display mt-1 text-2xl font-semibold">Keep following the story</h2>
+          </div>
+          <a href="/" className="text-xs font-bold text-teal-800">Latest news →</a>
+        </div>
+        {related.length ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {related.slice(0, 4).map((item) => (
+              <a key={item.id} href={"/news/" + (item.ai_hook_title || item.original_title).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) + "--" + encodeURIComponent(item.id)}
+                className="group overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
+                <div className="grid grid-cols-[108px_1fr]">
+                  <img src={item.image} alt="" className="h-full min-h-[108px] w-full object-cover" />
+                  <div className="p-3">
+                    <p className="text-[9px] font-extrabold tracking-wider text-amber-800 uppercase">{item.source} · {item.category || "News"}</p>
+                    <h3 className="font-display mt-1 line-clamp-3 text-base font-semibold leading-snug group-hover:text-teal-800">{item.ai_hook_title || item.original_title}</h3>
+                    <p className="mt-1 text-[11px] text-neutral-400">{item.read_time || "3 min read"}</p>
+                  </div>
+                </div>
+              </a>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-sm text-neutral-500">More verified stories will appear here as the live wire updates.</div>
+        )}
+      </section>
+
+      </article></div>
     </main>
   </div>;
 }
