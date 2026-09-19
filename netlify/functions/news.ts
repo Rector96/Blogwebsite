@@ -17,6 +17,7 @@ export type NewsArticle = {
   tags: string[];
   read_time: string;
   category: string;
+  region?: string;
   trend_score: number;
   trend_label: "Breaking" | "Trending" | "Developing" | "Fresh";
   image_credit: string;
@@ -346,6 +347,7 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       tags: Array.isArray(a.tags) ? a.tags : ["#World"],
       read_time: String(a.read_time || "2 min read"),
       category: String(a.category || category(String(a.original_title || ""), undefined)),
+      region: String(a.region || "Global"),
       trend_score: 0,
       trend_label: "Fresh",
       image_credit: String(a.source || "Publisher"),
@@ -378,6 +380,11 @@ async function persist(articles: NewsArticle[]) {
       image: a.image,
       read_time: a.read_time,
       timestamp: a.timestamp,
+      category: a.category,
+      region: a.region || "Global",
+      image_credit: a.image_credit,
+      image_license: a.image_license,
+      image_source_url: a.image_source_url,
     }, { onConflict: "original_url" });
     if (!error) saved++;
   }
