@@ -1,4 +1,3 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 
 type SportMatch = {
@@ -226,47 +225,84 @@ async function fetchSourceText(url: string) {
 
 async function generateEditorial(story: SportsStory) {
   const sourceText = story.body || await fetchSourceText(story.original_url);
-  const key = env("GEMINI_API_KEY");
+  const key = env("OPENAI_API_KEY");
   if (!key) {
     return {
       headline: story.ai_hook_title || story.original_title,
       summary: story.original_description || story.ai_summary?.[0] || "RWDNEWS is tracking this source-backed sports report.",
       sections: [
         { title: "What is reported", body: story.original_description || "The source headline is the available verified material." },
-        { title: "What to watch", body: "RWDNEWS will not add facts, figures, injuries, quotes or outcomes that are not present in the supplied source material." },
+        { title: "What to watch", body: "OpenAI editorial generation is not configured yet. RWDNEWS will not add facts, figures, injuries, quotes or outcomes that are not present in the supplied source material." },
       ],
       source: story.source,
       sourceUrl: story.original_url,
       generated: false,
+      provider: "OpenAI",
     };
   }
+
+  const model = env("OPENAI_MODEL") || "gpt-5.6-luna";
   try {
-    const ai = new GoogleGenAI({ apiKey: key });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: `Write a detailed RWDNEWS sports editorial using ONLY the supplied source record and extracted source text. Aim for 500-800 words when the evidence supports it. This is not a copy of the publisher article. Do not invent names, scores, statistics, injuries, quotes, dates, motives, transfer fees, contract terms, outcomes or predictions. Clearly distinguish reported claims from established facts. For transfer/rumor stories, explicitly label them as reports/rumors and say that they are not confirmed unless the source text provides confirmation. Use 4-6 sections with concise headings. End with "What we know next" and only include supported next steps. Return JSON with headline, summary, sections [{title,body}]. SOURCE RECORD: ${JSON.stringify(story)} SOURCE TEXT: ${sourceText.slice(0, 14000)}`,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            headline: { type: Type.STRING },
-            summary: { type: Type.STRING },
-            sections: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: { title: { type: Type.STRING }, body: { type: Type.STRING } },
-                required: ["title", "body"],
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        store: false,
+        input: [
+          {
+            role: "system",
+            content:
+              "You are the RWDNEWS Sports Editorial Engine. Write an original detailed sports editorial using ONLY the supplied source record and extracted source text. Aim for 500-800 words when evidence supports it. Never invent names, scores, statistics, injuries, quotes, dates, motives, transfer fees, contract terms, outcomes or predictions. Clearly distinguish reported claims from established facts. For transfer/rumor stories, explicitly label them as reports/rumors and never present them as confirmed without source evidence. Use 4-6 sections and end with What we know next. Do not copy publisher wording.",
+          },
+          {
+            role: "user",
+            content: JSON.stringify({
+              sourceRecord: story,
+              sourceText: sourceText.slice(0, 14000),
+            }),
+          },
+        ],
+        max_output_tokens: 1800,
+        text: {
+          format: {
+            type: "json_schema",
+            name: "rwdnews_sports_editorial",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                headline: { type: "string" },
+                summary: { type: "string" },
+                sections: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    additionalProperties: false,
+                    properties: {
+                      title: { type: "string" },
+                      body: { type: "string" },
+                    },
+                    required: ["title", "body"],
+                  },
+                },
               },
+              required: ["headline", "summary", "sections"],
             },
           },
-          required: ["headline", "summary", "sections"],
         },
-      },
+      }),
+      signal: AbortSignal.timeout(30000),
     });
-    const parsed = JSON.parse((response as any)?.text || "{}");
-    return { ...parsed, source: story.source, sourceUrl: story.original_url, generated: true };
+
+    if (!response.ok) throw new Error(`OpenAI editorial request failed: ${response.status}`);
+    const data: any = await response.json();
+    const parsed = JSON.parse(String(data?.output_text || "{}"));
+    return { ...parsed, source: story.source, sourceUrl: story.original_url, generated: true, provider: "OpenAI", model };
   } catch {
     return {
       headline: story.ai_hook_title || story.original_title,
@@ -275,10 +311,10 @@ async function generateEditorial(story: SportsStory) {
       source: story.source,
       sourceUrl: story.original_url,
       generated: false,
+      provider: "OpenAI",
     };
   }
 }
-
 export default async (req: Request) => {
   if (req.method !== "GET") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
   const url = new URL(req.url);
