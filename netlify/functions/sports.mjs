@@ -25,7 +25,7 @@ async function getEspnBoard(path, sport, leagueFallback) {
     const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard`;
     const response = await fetch(url, {
       headers: { Accept: "application/json", "User-Agent": "RWDNEWS/1.0" },
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return [];
     const data = await response.json();
@@ -83,16 +83,23 @@ async function getDbSportsNews() {
   if (!url || !key) return [];
   try {
     const db = createClient(url, key);
+    // Prefer category=Sports; also pull recent rows that look like sports
     const { data, error } = await db
       .from("articles")
       .select(
         "id,original_url,image,timestamp,source,original_title,original_description,ai_hook_title,ai_summary,category,region,body,story_type",
       )
-      .eq("category", "Sports")
       .order("timestamp", { ascending: false })
-      .limit(40);
+      .limit(80);
     if (error || !Array.isArray(data)) return [];
+    const sportRe =
+      /\b(sport|sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|transfer|arsenal|chelsea|liverpool|manchester|barcelona|real madrid|basketball|baseball)\b/i;
     return data
+      .filter((a) => {
+        if (String(a.category || "").toLowerCase() === "sports") return true;
+        const blob = `${a.original_title || ""} ${a.ai_hook_title || ""} ${a.source || ""}`;
+        return sportRe.test(blob) || /espn|bbc sport|sky sports|goal\.com|marca|complete sports/i.test(a.source || "");
+      })
       .map((a) => ({
         id: String(a.id),
         original_url: String(a.original_url || ""),
@@ -108,33 +115,36 @@ async function getDbSportsNews() {
         body: String(a.body || ""),
         story_type: String(a.story_type || "WIRE"),
       }))
-      .filter((a) => a.original_url && a.original_title);
+      .filter((a) => a.original_url && a.original_title)
+      .slice(0, 48);
   } catch {
     return [];
   }
 }
 
 async function gdeltSports() {
-  try {
-    const u = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
-    u.searchParams.set(
-      "query",
-      "(football OR soccer OR basketball OR tennis OR cricket OR NBA OR NFL OR FIFA OR UEFA OR Premier League OR transfer OR Champions League)",
-    );
-    u.searchParams.set("mode", "artlist");
-    u.searchParams.set("maxrecords", "40");
-    u.searchParams.set("timespan", "48h");
-    u.searchParams.set("sort", "datedesc");
-    u.searchParams.set("format", "json");
-    const r = await fetch(u, {
-      headers: { "User-Agent": "RWDNEWS/1.0 sports" },
-      signal: AbortSignal.timeout(7000),
-    });
-    if (!r.ok) return [];
-    const data = await r.json();
-    return (Array.isArray(data?.articles) ? data.articles : [])
-      .map((a, i) => ({
-        id: `gdelt-s-${i}-${Buffer.from(String(a.url || i)).toString("base64url").slice(0, 16)}`,
+  const queries = [
+    "(football OR soccer OR Premier League OR Champions League OR UEFA OR FIFA OR transfer)",
+    "(NBA OR basketball OR NFL OR MLB OR NHL OR tennis OR cricket)",
+    "(Nigeria football OR Ghana football OR AFCON OR CAF Champions OR Super Eagles)",
+  ];
+  const results = await Promise.allSettled(
+    queries.map(async (query) => {
+      const u = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
+      u.searchParams.set("query", query);
+      u.searchParams.set("mode", "artlist");
+      u.searchParams.set("maxrecords", "25");
+      u.searchParams.set("timespan", "72h");
+      u.searchParams.set("sort", "datedesc");
+      u.searchParams.set("format", "json");
+      const r = await fetch(u, {
+        headers: { "User-Agent": "RWDNEWS/1.0 sports" },
+        signal: AbortSignal.timeout(7000),
+      });
+      if (!r.ok) return [];
+      const data = await r.json();
+      return (Array.isArray(data?.articles) ? data.articles : []).map((a, i) => ({
+        id: `gdelt-s-${Buffer.from(String(a.url || i)).toString("base64url").slice(0, 18)}`,
         original_url: String(a.url || ""),
         image: String(a.socialimage || a.urlsocialimage || ""),
         timestamp: a.seendate ? new Date(a.seendate).toISOString() : new Date().toISOString(),
@@ -145,11 +155,12 @@ async function gdeltSports() {
         ai_summary: ["Live sports report from the global news index."],
         category: "Sports",
         story_type: "WIRE",
-      }))
-      .filter((a) => a.original_url && a.original_title);
-  } catch {
-    return [];
-  }
+      }));
+    }),
+  );
+  return results
+    .flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+    .filter((a) => a.original_url && a.original_title);
 }
 
 function isRumor(story) {
@@ -215,7 +226,6 @@ export async function handler(event) {
     }
 
     const live = matches.filter((m) => m.live).slice(0, 40);
-    const now = Date.now();
     const upcoming = matches
       .filter((m) => !m.live)
       .sort(
