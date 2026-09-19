@@ -5,12 +5,13 @@ function env(name: string) {
 }
 
 function escapeXml(value: string) {
+  // Split/join avoids entity corruption during tooling/deploy
   return value
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, """)
-    .replace(/'/g, "'");
+    .split("&").join("&" + "amp;")
+    .split("<").join("&" + "lt;")
+    .split(">").join("&" + "gt;")
+    .split('"').join("&" + "quot;")
+    .split("'").join("&" + "apos;");
 }
 
 export async function handler() {
@@ -52,9 +53,9 @@ export async function handler() {
     "/terms",
   ];
   const urls = [...staticPaths.map((p) => site + p), ...storyUrls];
-  const xml =
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' +
+  const body =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +
     urls.map((u) => "<url><loc>" + escapeXml(u) + "</loc></url>").join("") +
     "</urlset>";
 
@@ -64,6 +65,6 @@ export async function handler() {
       "Content-Type": "application/xml; charset=utf-8",
       "Cache-Control": "public, max-age=900, stale-while-revalidate=3600",
     },
-    body: xml,
+    body,
   };
 }
