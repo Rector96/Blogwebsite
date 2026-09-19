@@ -34,6 +34,7 @@ const tabs = [
 
 async function api(options?: RequestInit) {
   const response = await fetch("/api/admin", {
+    credentials: "same-origin",
     ...options,
     headers: { "content-type": "application/json", ...(options?.headers || {}) },
   });
@@ -64,14 +65,18 @@ export default function AdminPage() {
     featured: false, pinned: false,
   });
 
-  const load = async () => {
+  const load = async (showError = false) => {
     try {
       const result = await api();
       setData(result);
       setAuthed(true);
       setError("");
-    } catch {
+      return true;
+    } catch (e) {
       setAuthed(false);
+      setData(null);
+      if (showError) setError(e instanceof Error ? e.message : "The admin dashboard could not be loaded.");
+      return false;
     }
   };
   useEffect(() => { void load(); }, []);
@@ -87,7 +92,9 @@ export default function AdminPage() {
     e.preventDefault(); setBusy(true); setError("");
     try {
       await api({ method: "POST", body: JSON.stringify({ action: "login", password }) });
-      setPassword(""); await load();
+      setPassword("");
+      const loaded = await load(true);
+      if (!loaded) setError((current) => current || "Sign-in succeeded, but the admin dashboard session could not be loaded. Please refresh and try again.");
     } catch (e) { setError(e instanceof Error ? e.message : "Login failed"); }
     finally { setBusy(false); }
   };
