@@ -129,10 +129,11 @@ function RwdNewsApp() {
   const [leadMsg, setLeadMsg] = useState<string | null>(null);
   const [heroIndex, setHeroIndex] = useState(0);
   const [carouselPaused, setCarouselPaused] = useState(false);
-  const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[] }>({
+  const [sportsFeed, setSportsFeed] = useState<{ live: any[]; featured: any[]; upcoming: any[]; news: any[] }>({
     live: [],
     featured: [],
     upcoming: [],
+    news: [],
   });
   const [sportsLoading, setSportsLoading] = useState(true);
 
@@ -202,9 +203,10 @@ function RwdNewsApp() {
           live: Array.isArray(data.live) ? data.live : [],
           featured: Array.isArray(data.featured) ? data.featured : [],
           upcoming: Array.isArray(data.upcoming) ? data.upcoming : [],
+          news: Array.isArray(data.news) ? data.news : [],
         });
       } catch {
-        setSportsFeed({ live: [], featured: [], upcoming: [] });
+        setSportsFeed({ live: [], featured: [], upcoming: [], news: [] });
       } finally {
         setSportsLoading(false);
       }
@@ -284,7 +286,9 @@ function RwdNewsApp() {
   const hero = heroStories[heroIndex % Math.max(heroStories.length, 1)] || filtered[0];
   const secondary = filtered.slice(1, 4);
   const rest = filtered.slice(4);
-  const sports = articles.filter((a) => matchesCategory(a, "Sports")).slice(0, 12);
+  const sports = [...articles.filter((a) => matchesCategory(a, "Sports")), ...sportsFeed.news]
+    .filter((a, index, arr) => arr.findIndex((x) => x.id === a.id) === index)
+    .slice(0, 12);
   const sportsCards = sportsFeed.live.length
     ? sportsFeed.live.slice(0, 12)
     : sportsFeed.featured.length
@@ -347,7 +351,7 @@ function RwdNewsApp() {
   };
 
   const emptyForTab =
-    selectedTag !== "All" && filtered.length === 0 && !refreshing
+    selectedTag !== "All" && filtered.length === 0 && !(selectedTag === "Sports" && sports.length > 0) && !refreshing
       ? `No ${selectedTag} stories in the live wire right now. Try All, or pull to refresh.`
       : null;
 
@@ -540,7 +544,7 @@ function RwdNewsApp() {
             </section>
           )}
 
-          {selectedTag === "All" && sports.length > 0 ? (
+          {(selectedTag === "All" || selectedTag === "Sports") && sports.length > 0 ? (
             <section className="mb-8">
               <div className="mb-3 flex items-baseline justify-between border-b border-neutral-900 pb-2">
                 <h2 className="text-sm font-extrabold tracking-wide uppercase">Sports pulse</h2>
