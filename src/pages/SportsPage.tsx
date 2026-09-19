@@ -98,7 +98,7 @@ export default function SportsPage() {
     return source.filter((m) => sport === "all" || m.sport === sport).slice(0, 48);
   }, [data, sport]);
 
-  const stories = storyTab === "rumors" ? data.rumors : data.news;
+  const stories = (storyTab === "rumors" ? data.rumors : data.news).slice(0, 6);
 
   return (
     <main className="min-h-dvh bg-[#f4f4f2] text-neutral-950">
@@ -110,7 +110,7 @@ export default function SportsPage() {
           </a>
           <nav className="flex items-center gap-2 sm:gap-3">
             <a
-              href="/sports/predictions"
+              href="/sport/predictions"
               className="rounded-full bg-amber-500 px-3 py-1.5 text-[11px] font-extrabold text-neutral-950 sm:px-4 sm:text-xs"
             >
               AI Predictions
@@ -137,7 +137,7 @@ export default function SportsPage() {
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <a
-              href="/sports/predictions"
+              href="/sport/predictions"
               className="inline-flex h-11 items-center rounded-full bg-amber-500 px-5 text-sm font-extrabold text-neutral-950"
             >
               Open AI Predictions →
@@ -198,7 +198,7 @@ export default function SportsPage() {
               </p>
               <h2 className="font-display text-2xl font-semibold">Match centre</h2>
             </div>
-            <a href="/sports/predictions" className="text-xs font-bold text-amber-700">
+            <a href="/sport/predictions" className="text-xs font-bold text-amber-700">
               Predict a match →
             </a>
           </div>
