@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
-import { BarChart3, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Settings, ShieldCheck, Users } from "lucide-react";
+import { BarChart3, Clipboard, Copy, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Settings, Share2, ShieldCheck, Users } from "lucide-react";
 
 type Dashboard = {
   generated_at: string;
@@ -23,6 +23,7 @@ type Dashboard = {
 const tabs = [
   ["dashboard", "Dashboard", BarChart3],
   ["news", "News", Newspaper],
+  ["social", "Social", Share2],
   ["analytics", "Analytics", Globe2],
   ["monetization", "Monetization", DollarSign],
   ["audience", "Audience", Users],
@@ -53,6 +54,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState("dashboard");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState("");
   const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", disclosure: "Sponsored · Paid placement" });
 
   const load = async () => {
@@ -148,7 +150,7 @@ export default function AdminPage() {
         <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured })} className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
       </section> : null}
 
-      {tab === "analytics" ? <section className="space-y-6">
+      {tab === "social" ? <SocialPanel articles={data.articles} copied={copied} onCopy={async (label, text) => { try { await navigator.clipboard.writeText(text); setCopied(label); window.setTimeout(() => setCopied(""), 1800); } catch { setCopied("Copy failed"); } }} />}\n\n      {tab === "analytics" ? <section className="space-y-6">
         <PageHeading title="Analytics" subtitle="Traffic, engagement and acquisition over the recorded period." />
         <MetricGrid overview={data.overview} />
         <div className="grid gap-6 lg:grid-cols-2"><Panel title="Daily traffic"><DailyChart data={data.daily} /></Panel><Panel title="Traffic sources"><Bars data={data.sources} /></Panel><Panel title="Countries"><Bars data={data.countries} /></Panel><Panel title="Top pages"><Bars data={data.top_paths} /></Panel></div>
@@ -168,7 +170,7 @@ export default function AdminPage() {
         <Panel title="Advertiser leads"><div className="divide-y">{data.leads.map(l=><div key={l.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="font-semibold">{l.company || l.name || "Unnamed lead"}</p><p className="text-sm">{l.email}</p><p className="text-xs text-neutral-500">{l.message || "Sponsorship inquiry"} · {new Date(l.created_at).toLocaleString()}</p></div><select value={l.status} disabled={busy} onChange={e=>void post({action:"lead_status",id:l.id,status:e.target.value})} className="h-9 border px-2 text-xs"><option>new</option><option>contacted</option><option>won</option><option>lost</option></select></div>)}</div></Panel>
       </section> : null}
 
-      {tab === "newsletter" ? <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Your audience list is ready for growth and future sponsorship." /><MetricGrid overview={{newsletter_subscribers:data.overview.newsletter_subscribers}} /><Panel title="Next operating data"><p className="text-sm leading-relaxed text-neutral-600">Subscriber emails remain protected in Supabase. This dashboard exposes aggregate counts rather than the private email list.</p></Panel></section> : null}
+      {tab === "newsletter" ? <NewsletterPanel articles={data.articles} subscribers={data.overview.newsletter_subscribers} copied={copied} onCopy={async (label, text) => { try { await navigator.clipboard.writeText(text); setCopied(label); window.setTimeout(() => setCopied(""), 1800); } catch { setCopied("Copy failed"); } }} /> : null}
 
       {tab === "security" ? <section className="space-y-6"><PageHeading title="Security & audit" subtitle="Track administrative changes and keep the private area separate from public analytics." /><Panel title="Recent admin actions"><div className="divide-y">{data.audit_logs.map(log=><div key={log.id} className="py-3"><p className="text-xs font-bold">{log.action}</p><p className="text-xs text-neutral-500">{log.entity_type || "system"} · {log.entity_id || "—"} · {new Date(log.created_at).toLocaleString()}</p></div>)}</div></Panel></section> : null}
 
@@ -186,3 +188,14 @@ function MetricGrid({ overview, moneyMetric }: { overview: Record<string,number>
 function StatusLine({label,value}:{label:string;value:string}) { return <div className="flex items-center justify-between gap-4 border-b border-neutral-100 py-3 text-sm"><span className="text-neutral-500">{label}</span><span className="text-right font-semibold">{value}</span></div>; }
 function Bars({data}:{data:Array<{label:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="space-y-3">{data.length?data.map(x=><div key={x.label}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate">{x.label}</span><span className="font-bold">{number(x.value)}</span></div><div className="h-2 bg-neutral-100"><div className="h-full bg-neutral-900" style={{width: Math.max(3,(x.value/max)*100)+"%"}} /></div></div>):<p className="text-sm text-neutral-500">No traffic recorded yet.</p>}</div>; }
 function DailyChart({data}:{data:Array<{day:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="flex h-44 items-end gap-1 overflow-x-auto">{data.map(x=><div key={x.day} className="flex min-w-4 flex-1 flex-col items-center justify-end gap-1"><div title={x.day+" · "+number(x.value)} className="w-full min-w-2 bg-neutral-900" style={{height:Math.max(3,(x.value/max)*130)+"px"}} /><span className="hidden text-[8px] text-neutral-400 sm:block">{x.day.slice(5)}</span></div>)}</div>; }
+
+function titleOf(a:any){ return a?.ai_hook_title || a?.original_title || "RWDNEWS story"; }
+function briefOf(a:any){ return Array.isArray(a?.ai_summary) ? a.ai_summary.slice(0,2).join(" ") : String(a?.original_description || "Read the latest RWDNEWS briefing."); }
+function SocialPanel({articles,copied,onCopy}:{articles:any[];copied:string;onCopy:(label:string,text:string)=>void}){
+ const items=articles.slice(0,8);
+ return <section className="space-y-6"><PageHeading title="Social publishing" subtitle="Turn the latest source-backed RWDNEWS stories into ready-to-post social copy." /><Panel title="Today's social desk" subtitle="Copy the text, then post it from the official RWDNEWS account."><div className="space-y-5">{items.map(a=>{const title=titleOf(a); const brief=briefOf(a); const url=a.original_url || ""; const text=`RWDNEWS — ${title}\n\n${brief}\n\nRead the briefing: ${url}`; return <div key={a.id} className="border border-neutral-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source || "RWDNEWS"} · {a.category || "News"}</p><h3 className="mt-1 font-display text-lg font-semibold">{title}</h3></div><Share2 className="size-4 shrink-0 text-neutral-400" /></div><textarea readOnly value={text} className="mt-3 min-h-28 w-full resize-y border bg-neutral-50 p-3 text-xs leading-relaxed" /><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>onCopy("X:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy X</button><button onClick={()=>onCopy("WhatsApp:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy WhatsApp</button><button onClick={()=>onCopy("Telegram:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy Telegram</button>{copied.includes(a.id)?<span className="px-2 py-2 text-xs font-semibold text-teal-800">Copied</span>:null}</div></div>})}</div></Panel></section>;
+}
+function NewsletterPanel({articles,subscribers,copied,onCopy}:{articles:any[];subscribers:number;copied:string;onCopy:(label:string,text:string)=>void}){
+ const top=articles.slice(0,5); const subject=`RWDNEWS Brief — ${new Date().toLocaleDateString()}`; const body=[`RWDNEWS BRIEF`, `\\nThe latest source-backed global stories from RWDNEWS.`, ...top.map((a,i)=>`\\n${i+1}. ${titleOf(a)}\\n${briefOf(a)}\\n${a.original_url || ""}`), `\\nRWDNEWS — Source-backed first.`].join("\n");
+ return <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Build a newsletter draft from the latest RWDNEWS stories. Subscriber emails stay private." /><MetricGrid overview={{newsletter_subscribers:subscribers}} /><Panel title="RWDNEWS Brief draft" subtitle="This creates copy for your email provider; it does not pretend to send email."><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Subject</p><p className="font-semibold">{subject}</p></div><button onClick={()=>onCopy("newsletter",`Subject: ${subject}\n\n${body}`)} className="inline-flex items-center justify-center gap-2 bg-neutral-950 px-4 py-2 text-xs font-bold text-white"><Copy className="size-3.5"/>{copied==="newsletter"?"Copied":"Copy newsletter"}</button></div><textarea readOnly value={body} className="mt-4 min-h-80 w-full border bg-neutral-50 p-4 text-sm leading-relaxed" /><p className="mt-3 text-xs text-neutral-500">Next delivery step is connecting an email sending provider. Until that is connected, RWDNEWS should only collect subscribers and prepare drafts.</p></Panel></section>;
+}
