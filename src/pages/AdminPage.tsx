@@ -98,6 +98,23 @@ export default function AdminPage() {
     setSponsorForm({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", disclosure: "Sponsored · Paid placement" });
   };
 
+  const uploadStoryImage = async (file: File) => {
+    if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) { setError("Use JPG, PNG, WebP or AVIF."); return; }
+    if (file.size > 5 * 1024 * 1024) { setError("Image must be 5 MB or smaller."); return; }
+    setBusy(true); setError("");
+    try {
+      const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Could not read image."));
+        reader.readAsDataURL(file);
+      });
+      const result = await api({ method: "POST", body: JSON.stringify({ action: "article_image_upload", filename: file.name, mime_type: file.type, data }) });
+      setStoryForm(v => ({ ...v, image: String(result.url || "") }));
+    } catch (e) { setError(e instanceof Error ? e.message : "Image upload failed"); }
+    finally { setBusy(false); }
+  };
+
   const createStory = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -181,7 +198,13 @@ export default function AdminPage() {
             <select value={storyForm.story_type} onChange={e=>setStoryForm(v=>({...v,story_type:e.target.value}))} className="h-11 border px-3 text-sm"><option>RWDNEWS ORIGINAL</option><option>DEVELOPING</option><option>WIRE</option></select>
             <input placeholder="Person / company / event" value={storyForm.subject} onChange={e=>setStoryForm(v=>({...v,subject:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input placeholder="Author" value={storyForm.author_name} onChange={e=>setStoryForm(v=>({...v,author_name:e.target.value}))} className="h-11 border px-3 text-sm" />
-            <input required type="url" placeholder="Main image URL" value={storyForm.image} onChange={e=>setStoryForm(v=>({...v,image:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <div className="space-y-2 md:col-span-2">
+              <label className="block text-xs font-bold uppercase tracking-wide text-neutral-500">Main image</label>
+              <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" disabled={busy} onChange={e=>{const f=e.target.files?.[0]; if(f) void uploadStoryImage(f)}} className="block w-full border p-3 text-sm" />
+              <input required type="url" placeholder="Or paste an image URL" value={storyForm.image} onChange={e=>setStoryForm(v=>({...v,image:e.target.value}))} className="h-11 w-full border px-3 text-sm" />
+              {storyForm.image ? <img src={storyForm.image} alt="Story preview" className="max-h-56 w-full rounded object-cover" /> : null}
+              <p className="text-xs text-neutral-500">Maximum 5 MB. Use only images you own, licensed, or have permission to publish.</p>
+            </div>
             <input placeholder="Image credit" value={storyForm.image_credit} onChange={e=>setStoryForm(v=>({...v,image_credit:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input placeholder="Image licence / rights note" value={storyForm.image_license} onChange={e=>setStoryForm(v=>({...v,image_license:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input type="url" placeholder="Image source URL (optional)" value={storyForm.image_source_url} onChange={e=>setStoryForm(v=>({...v,image_source_url:e.target.value}))} className="h-11 border px-3 text-sm" />
