@@ -135,10 +135,6 @@ function RwdNewsApp() {
         articles?: EnrichedArticle[];
       };
       const liveArticles = Array.isArray(payload.articles) ? payload.articles : [];
-      setArticles(liveArticles);
-      if (liveArticles.length) {
-        try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(liveArticles)); } catch { /* cache is optional */ }
-      }
       if (liveArticles.length) {
         setArticles(liveArticles);
         try { localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify(liveArticles)); } catch { /* cache is optional */ }
