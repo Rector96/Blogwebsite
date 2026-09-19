@@ -97,12 +97,12 @@ export default function StoryPage() {
           </div>
           <h2 className="font-display mt-2 text-2xl font-semibold">What you need to know</h2>
           <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
-            RWDNEWS gives you the key information first, then keeps the original report one tap away.
+            A source-backed RWDNEWS explanation of the report, written from the published information below. For the complete story, quotes, documents and ongoing updates, follow the original publisher.
           </p>
-          <ul className="mt-5 space-y-4">
+          <ul className="mt-5 space-y-5">
             {(article.ai_summary?.length ? article.ai_summary : [article.original_description]).map((point, i) => (
-              <li key={i} className="flex gap-3 text-[16px] leading-relaxed text-neutral-800">
-                <span className="mt-2 size-1.5 shrink-0 rounded-full bg-neutral-950" />
+              <li key={i} className="flex gap-3 text-[16px] leading-[1.7] text-neutral-800">
+                <span className="mt-[0.65rem] size-1.5 shrink-0 rounded-full bg-neutral-950" />
                 <span>{point}</span>
               </li>
             ))}
@@ -110,20 +110,32 @@ export default function StoryPage() {
         </section>
         {sponsor ? <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6"><p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p><p className="mt-1 text-xs font-semibold text-neutral-500">{sponsor.sponsorName}</p><h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>{sponsor.whyMatters?.[0] ? <p className="mt-2 text-sm leading-relaxed text-neutral-600">{sponsor.whyMatters[0]}</p> : null}<a href={sponsor.ctaUrl} target="_blank" rel="noopener noreferrer sponsored" onClick={() => void logSponsorClick(sponsor, "story_page")} className="mt-4 inline-flex items-center border border-neutral-900 bg-neutral-950 px-4 py-2.5 text-xs font-bold text-white">{sponsor.ctaText} →</a></section> : null}
         <div className="mt-8 space-y-4 text-[17px] leading-[1.8] text-neutral-800">
-          {article.original_description ? <p className="text-xl text-neutral-700">{article.original_description}</p> : null}
-          <h2 className="font-display pt-4 text-2xl font-semibold">Why it matters</h2>
-          <p className="text-neutral-700">This story is part of the wider news picture. Follow the original publisher for additional context, live updates and the full report.</p>
-          <div className="border-l-2 border-teal-700 bg-teal-50 p-4 text-sm leading-relaxed text-neutral-700">
-            {article.story_type === "RWDNEWS ORIGINAL"
-              ? "This is an original RWDNEWS report. Information is published by RWDNEWS and may include direct reporting, interviews, analysis or verified announcements."
-              : "RWDNEWS is a briefing layer. We use source reports for the facts and AI only to organize and explain the information; the original publisher remains the reference for the full report and updates."}
-          </div>
-          {article.body ? <div className="mt-8 whitespace-pre-wrap text-[17px] leading-[1.8] text-neutral-800">{article.body}</div> : null}
-          {article.story_type === "RWDNEWS ORIGINAL" && article.author_name ? <p className="mt-6 text-xs font-semibold text-neutral-500">By {article.author_name}</p> : null}
+          {article.story_type === "RWDNEWS ORIGINAL" ? (
+            <>
+              {article.body ? <div className="whitespace-pre-wrap text-[17px] leading-[1.8] text-neutral-800">{article.body}</div> : null}
+              {article.author_name ? <p className="mt-6 text-xs font-semibold text-neutral-500">By {article.author_name}</p> : null}
+            </>
+          ) : (
+            <>
+              <h2 className="font-display pt-2 text-2xl font-semibold">Source & context</h2>
+              <p className="text-neutral-700">
+                <strong>{article.source}</strong> is the credited source for this report. RWDNEWS has reorganized the supplied reporting into a concise explanation; the original publisher remains the place to read the complete report and any later updates.
+              </p>
+              <div className="border-l-2 border-teal-700 bg-teal-50 p-4 text-sm leading-relaxed text-neutral-700">
+                <strong>Source-backed reporting:</strong> The RWDNEWS briefing is based on the published source material available to our news wire. AI is used to organize and summarize those facts; it is not used to create unsupported details.
+              </div>
+            </>
+          )}
           <div className="flex flex-wrap gap-2 pt-2">{article.tags.map(t => <span key={t} className="bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">{String(t).replace(/^#/, "")}</span>)}</div>
         </div>
       <div className="mt-10 border-y border-neutral-200 py-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 uppercase">Share this story</p><h2 className="mt-1 font-display text-xl font-semibold">Send the briefing to someone</h2><p className="mt-1 text-sm text-neutral-500">Share the RWDNEWS story with the original source one tap away.</p></div><Share2 className="mt-1 size-5 shrink-0 text-neutral-400" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3"><button onClick={() => share("whatsapp")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white"><MessageCircle className="size-4" /> WhatsApp</button><button onClick={() => share("telegram")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#229ED9] px-3 text-xs font-bold text-white"><Send className="size-4" /> Telegram</button><button onClick={() => share("x")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-black px-3 text-xs font-bold text-white">𝕏 <span>Post on X</span></button><button onClick={() => share("facebook")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#1877F2] px-3 text-xs font-bold text-white">f <span>Facebook</span></button><button onClick={() => share("linkedin")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#0A66C2] px-3 text-xs font-bold text-white">in <span>LinkedIn</span></button><button onClick={() => void copyLink()} className="flex h-11 items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 text-xs font-bold text-neutral-800 hover:bg-neutral-50">{copied ? <Check className="size-4" /> : <Copy className="size-4" />} {copied ? "Copied" : "Copy link"}</button></div></div>
-      <a href={article.original_url} target="_blank" rel="noopener noreferrer" onClick={() => void logRwdNewsEvent({ event: "external_source_click", articleId: article.id, articleUrl: article.original_url, placement: "story_source" })} className="mt-8 inline-flex items-center gap-2 border px-4 py-3 text-sm font-semibold">Read original source <ExternalLink className="size-3.5" /></a></article></div>
+      <div className="mt-10 border border-teal-200 bg-teal-50/60 p-5 sm:p-6">
+        <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">Original source</p>
+        <h2 className="mt-1 font-display text-xl font-semibold">Want the complete story?</h2>
+        <p className="mt-2 text-sm leading-relaxed text-neutral-600">Read the full report, original quotes, documents and any subsequent updates directly from the publisher.</p>
+        <p className="mt-3 text-xs font-bold text-neutral-500">Source: {article.source}</p>
+        <a href={article.original_url} target="_blank" rel="noopener noreferrer" onClick={() => void logRwdNewsEvent({ event: "external_source_click", articleId: article.id, articleUrl: article.original_url, placement: "story_source" })} className="mt-4 inline-flex items-center gap-2 bg-neutral-950 px-4 py-3 text-sm font-semibold text-white">Read the full report at {article.source} <ExternalLink className="size-3.5" /></a>
+      </div></article></div>
     </main>
   </div>;
 }
