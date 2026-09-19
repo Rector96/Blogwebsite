@@ -91,7 +91,7 @@ export default function SportsPredictionsPage() {
     <main className="min-h-dvh bg-neutral-50 text-neutral-950">
       <header className="border-b bg-neutral-950 text-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-5 sm:px-6">
-          <a href="/sports" className="font-display text-xl font-bold">RWDNEWS Sports</a>
+          <a href="/sport" className="font-display text-xl font-bold">RWDNEWS Sports</a>
           <a href="/" className="text-xs font-semibold text-neutral-300">← News</a>
         </div>
       </header>
@@ -100,21 +100,8 @@ export default function SportsPredictionsPage() {
         <p className="text-[10px] font-extrabold tracking-[0.2em] text-teal-800 uppercase">RWDNEWS AI</p>
         <h1 className="font-display mt-1 text-3xl font-semibold sm:text-5xl">Sports Predictions</h1>
         <p className="mt-3 max-w-3xl text-sm leading-relaxed text-neutral-600">
-          Transparent, source-data-driven match commentary. OpenAI handles the reasoning layer; RWDNEWS supplies the verified sports data and publishes the result with uncertainty clearly shown.
+          Transparent match commentary based on verified fixtures. Not betting advice.
         </p>
-
-        <div className="mt-5 border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
-          <strong>Important:</strong> RWDNEWS will not promise 90% accuracy or present predictions as guaranteed results. We will track predictions against actual results so users can see the real performance over time.
-        </div>
-
-        {!aiConfigured ? (
-          <div className="mt-5 border border-neutral-200 bg-white p-5">
-            <p className="text-sm font-bold">OpenAI engine is waiting for an API key.</p>
-            <p className="mt-1 text-sm text-neutral-600">
-              The page and sports data are already live-ready. When an OpenAI API key with available API credit is added to the server environment, AI predictions can run without exposing the key to visitors.
-            </p>
-          </div>
-        ) : null}
 
         {error ? <div className="mt-5 border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div> : null}
 
@@ -129,7 +116,7 @@ export default function SportsPredictionsPage() {
             </div>
 
             {loading ? (
-              <p className="mt-6 text-sm text-neutral-500">Loading verified fixtures…</p>
+              <p className="mt-6 text-sm text-neutral-500">Loading fixtures…</p>
             ) : matches.length ? (
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {matches.map((m) => (
@@ -154,6 +141,9 @@ export default function SportsPredictionsPage() {
             ) : (
               <div className="mt-5 border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
                 No verified upcoming matches are available right now.
+                <div className="mt-4">
+                  <a href="/sport" className="font-bold text-teal-800">Open Sports desk →</a>
+                </div>
               </div>
             )}
           </section>
@@ -162,17 +152,16 @@ export default function SportsPredictionsPage() {
             <div className="border border-neutral-200 bg-white p-5">
               {!selected ? (
                 <div className="py-8 text-center">
-                  <p className="font-display text-xl font-semibold">AI Match Analysis</p>
+                  <p className="font-display text-xl font-semibold">Match analysis</p>
                   <p className="mt-2 text-sm text-neutral-500">Select a fixture to generate the RWDNEWS prediction.</p>
                 </div>
               ) : predictionLoading ? (
                 <div className="py-8 text-center">
-                  <p className="font-display text-xl font-semibold">OpenAI is analyzing…</p>
-                  <p className="mt-2 text-sm text-neutral-500">Using only the verified match record supplied to RWDNEWS.</p>
+                  <p className="font-display text-xl font-semibold">Analyzing…</p>
                 </div>
               ) : prediction ? (
                 <div>
-                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-teal-800 uppercase">RWDNEWS AI prediction</p>
+                  <p className="text-[10px] font-extrabold tracking-[0.18em] text-teal-800 uppercase">RWDNEWS prediction</p>
                   <h2 className="font-display mt-1 text-2xl font-semibold">{prediction.headline}</h2>
                   <div className="mt-4 border bg-neutral-50 p-4">
                     <p className="text-[10px] font-bold uppercase text-neutral-500">Most likely outcome</p>
@@ -188,7 +177,7 @@ export default function SportsPredictionsPage() {
                     <div className="border p-3"><span className="block text-neutral-400">Data quality</span><strong>{prediction.dataQuality}</strong></div>
                   </div>
                   <div className="mt-5">
-                    <h3 className="font-display text-lg font-semibold">AI commentary</h3>
+                    <h3 className="font-display text-lg font-semibold">Commentary</h3>
                     <p className="mt-2 text-sm leading-7 text-neutral-700">{prediction.analysis}</p>
                   </div>
                   <div className="mt-5">
@@ -210,14 +199,11 @@ export default function SportsPredictionsPage() {
         </div>
 
         <section className="mt-8 border border-neutral-200 bg-neutral-950 p-5 text-white sm:p-6">
-          <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">RWDNEWS methodology</p>
-          <h2 className="font-display mt-1 text-2xl font-semibold">Facts first. Commentary second.</h2>
-          <p className="mt-2 max-w-4xl text-sm leading-7 text-neutral-300">
-            RWDNEWS provides the verified fixture and score data. OpenAI produces original commentary from that data. The model is instructed to disclose missing information rather than fill gaps with guesses. Prediction accuracy will be measured against real results instead of being promised in advance.
+          <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">Disclaimer</p>
+          <p className="mt-2 text-xs leading-6 text-neutral-300">
+            RWDNEWS predictions are informational commentary only — not betting or financial advice.
           </p>
-          <p className="mt-4 text-xs leading-6 text-neutral-400">
-            Disclaimer: RWDNEWS predictions are AI-assisted statistical commentary based on available verified sports data. They are not guarantees of match results and are not betting, financial or gambling advice. Sports outcomes are inherently uncertain.
-          </p>
+          <a href="/sport" className="mt-4 inline-block text-xs font-bold text-amber-300">← Back to Sports desk</a>
         </section>
       </div>
     </main>
