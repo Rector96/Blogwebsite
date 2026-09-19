@@ -235,8 +235,10 @@ async function aiBrief(title: string, desc: string) {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
     ai_summary: [
-      clean(desc).split(/(?<=[.!?])\s+/)[0] || "RWDNEWS is tracking this story from published reports.",
-      "The original source remains the reference for the full report and additional context.",
+      clean(desc) || "RWDNEWS is tracking this story from the published source.",
+      "This briefing is limited to facts available in the supplied source material.",
+      "The source report remains the reference for additional context, quotes and details.",
+      "RWDNEWS will not add facts that are not supported by the source material.",
     ],
     tags: ["#World"],
   };
@@ -248,7 +250,7 @@ async function aiBrief(title: string, desc: string) {
       ai.models.generateContent({
         model: "gemini-3.5-flash",
         contents:
-          "RWDNEWS editorial assistant. Use ONLY the supplied title and description. Never invent facts, numbers, names, dates or causes. Write a clear non-clickbait headline and exactly two concise factual bullets. Return JSON. TITLE: " +
+          "RWDNEWS editorial assistant. Create an original, factual RWDNEWS news briefing from ONLY the supplied title and description. Never invent or infer facts, numbers, names, dates, quotes, motives, causes or outcomes. Do not copy source wording. Write a clear non-clickbait headline and exactly four medium-detail factual briefing points. Each point should be 1-2 sentences and together should help a reader understand what happened, the key context supplied by the source, why the development matters only when the source supports that context, and what is known next. If the source does not provide a detail, say that it is not specified rather than guessing. Return JSON. TITLE: " +
           title +
           " DESCRIPTION: " +
           desc,
@@ -272,10 +274,12 @@ async function aiBrief(title: string, desc: string) {
     const parsed = JSON.parse(text);
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
-      ai_summary: [
-        clean(parsed.ai_summary?.[0]) || fallback.ai_summary[0],
-        clean(parsed.ai_summary?.[1]) || fallback.ai_summary[1],
-      ],
+      ai_summary: (Array.isArray(parsed.ai_summary) ? parsed.ai_summary : [])
+        .map((x: string) => clean(x))
+        .filter(Boolean)
+        .slice(0, 4)
+        .concat(fallback.ai_summary)
+        .slice(0, 4),
       tags: (Array.isArray(parsed.tags) ? parsed.tags : fallback.tags).map((x: string) =>
         x.startsWith("#") ? x : "#" + x,
       ).slice(0, 4),
