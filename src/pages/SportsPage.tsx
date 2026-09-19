@@ -108,16 +108,35 @@ export default function SportsPage() {
       ]);
       if (!sportsResponse.ok) throw new Error("Sports feed unavailable");
       const sportsData = await sportsResponse.json();
-      let news: Story[] = [];
+      let externalNews: Story[] = [];
       if (newsResponse.ok) {
         const newsData = await newsResponse.json();
-        news = Array.isArray(newsData?.articles) ? newsData.articles.filter((a: Story) =>
+        externalNews = Array.isArray(newsData?.articles) ? newsData.articles.filter((a: Story) =>
           /sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|basketball|baseball|hockey|rugby|boxing|athletics|formula 1|transfer|arsenal|chelsea|liverpool|manchester|barcelona|madrid/i.test(
             `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
           ),
         ) : [];
       }
-      setData({ ...sportsData, news, rumors: news.filter((a) => /transfer|rumou?r|linked|bid|offer|talks|negotiat|target|loan/i.test(`${a.original_title} ${a.original_description}`)) });
+      const combined = [...(Array.isArray(sportsData?.news) ? sportsData.news : []), ...externalNews];
+      const seen = new Set<string>();
+      const news = combined
+        .filter((a: Story) => {
+          const key = a.original_url || a.id;
+          if (!key || seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a: Story, b: Story) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+        .slice(0, 100);
+      setData({
+        ...sportsData,
+        news,
+        rumors: news.filter((a) =>
+          /transfer|rumou?r|linked|bid|offer|talks|negotiat|target|loan|interest|set to join/i.test(
+            `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
+          ),
+        ),
+      });
     } finally {
       setLoading(false);
     }
@@ -192,7 +211,17 @@ export default function SportsPage() {
     );
   }
 
-  const stories = (storyTab === "rumors" ? data.rumors : data.news).slice(0, 24);
+  const sportStoryRe: Record<string, RegExp> = {
+    football: /football|soccer|premier league|champions league|uefa|fifa|transfer|arsenal|chelsea|liverpool|manchester|barcelona|real madrid|nfl/i,
+    basketball: /basketball|nba|wnba/i,
+    tennis: /tennis|atp|wta/i,
+    baseball: /baseball|mlb/i,
+    hockey: /hockey|nhl/i,
+  };
+  const storyPool = storyTab === "rumors" ? data.rumors : data.news;
+  const stories = storyPool
+    .filter((s) => selectedSport === "all" || sportStoryRe[selectedSport]?.test(`${s.original_title} ${s.original_description} ${s.ai_hook_title}`))
+    .slice(0, 24);
   const title = mode === "live" ? "Live Scores" : mode === "fixtures" ? "Fixtures" : mode === "results" ? "Results" : "Sports";
   const description = mode === "home" ? "Live scores, fixtures, results, sports news and match details across major competitions." : `${title} from RWDNEWS Sports, with scores and verified match information.`;
 
@@ -224,7 +253,7 @@ export default function SportsPage() {
         </section>
 
         {mode === "home" ? <section className="mt-12">
-          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-900 pb-3"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-teal-800">Sports desk</p><h2 className="font-display text-2xl font-black">Latest sports news</h2></div><div className="flex gap-2"><button onClick={()=>setStoryTab("news")} className={storyTab==="news"?"rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"rounded-full border bg-white px-3 py-2 text-xs font-bold"}>Latest</button><button onClick={()=>setStoryTab("rumors")} className={storyTab==="rumors"?"rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"rounded-full border bg-white px-3 py-2 text-xs font-bold"}>Transfers</button></div></div>
+          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-900 pb-3"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-teal-800">Sports desk</p><h2 className="font-display text-2xl font-black">{selectedSport === "all" ? "Latest sports news" : `${sports.find(([id]) => id === selectedSport)?.[1] || "Sports"} news`}</h2></div><div className="flex gap-2"><button onClick={()=>setStoryTab("news")} className={storyTab==="news"?"rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"rounded-full border bg-white px-3 py-2 text-xs font-bold"}>Latest</button><button onClick={()=>setStoryTab("rumors")} className={storyTab==="rumors"?"rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"rounded-full border bg-white px-3 py-2 text-xs font-bold"}>Transfers</button></div></div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{stories.map(s=><article key={s.id} className="overflow-hidden rounded-2xl border bg-white shadow-sm">{s.image?<img src={s.image} alt="" className="aspect-[16/10] w-full object-cover"/>:<div className="aspect-[16/10] bg-neutral-100"/>}<div className="p-4"><p className="text-[10px] font-bold uppercase text-neutral-500">{s.source}</p><h3 className="font-display mt-2 text-lg font-bold leading-snug">{s.ai_hook_title||s.original_title}</h3><p className="mt-2 line-clamp-3 text-sm leading-6 text-neutral-600">{s.ai_summary?.[0]||s.original_description}</p><a href={s.original_url} target="_blank" rel="noreferrer" className="mt-3 inline-block text-xs font-black text-teal-800">Read source report →</a></div></article>)}</div>
         </section> : null}
 
