@@ -61,6 +61,25 @@
   status = 200
   force = true
 
+# Canonical sports URLs
+[[redirects]]
+  from = "/sports"
+  to = "/sport"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/sports/predictions"
+  to = "/sport/predictions"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/sports/predictions/*"
+  to = "/sport/predictions/:splat"
+  status = 301
+  force = true
+
 [[redirects]]
   from = "/sitemap.xml"
   to = "/.netlify/functions/sitemap"
