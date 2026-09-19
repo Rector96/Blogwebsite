@@ -1,15 +1,57 @@
 import { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { Check, Copy, ExternalLink, MessageCircle, Send, Share2 } from "lucide-react";
+import { Check, Copy, MessageCircle, Send, Share2 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { logRwdNewsEvent } from "../lib/analytics";
 import { fetchSponsors, logSponsorClick, type SponsoredOffer } from "../lib/sponsors";
+import { AdSlot } from "../components/AdSlot";
 import type { EnrichedArticle } from "../App";
 
 function currentStoryId() {
   const path = window.location.pathname.replace(/^\/news\//, "");
   const marker = path.lastIndexOf("--");
   return marker >= 0 ? decodeURIComponent(path.slice(marker + 2)) : "";
+}
+
+function storyHref(item: EnrichedArticle) {
+  const title = (item.ai_hook_title || item.original_title)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 90);
+  return "/news/" + title + "--" + encodeURIComponent(item.id);
+}
+
+function buildBriefing(article: EnrichedArticle) {
+  const points = (article.ai_summary?.length
+    ? article.ai_summary
+    : [article.original_description].filter(Boolean)
+  ).map(String).filter(Boolean);
+
+  const lead =
+    article.original_description ||
+    points[0] ||
+    "RWDNEWS is tracking this developing story from the live wire.";
+
+  const paragraphs: string[] = [lead];
+
+  if (points.length > 1) {
+    paragraphs.push(
+      "Here is the situation in plain terms: " +
+        points.slice(0, 3).join(" "),
+    );
+  }
+
+  if (points.length > 3) {
+    paragraphs.push("Additional points from the report: " + points.slice(3).join(" "));
+  }
+
+  paragraphs.push(
+    `This briefing is meant to be read on RWDNEWS so you can understand the story quickly. Category: ${article.category || "News"}. Source wire: ${article.source}.`,
+  );
+
+  return { points, paragraphs };
 }
 
 export default function StoryPage() {
@@ -23,17 +65,26 @@ export default function StoryPage() {
     void logRwdNewsEvent({ event: "page_view", placement: "story_page" });
     const id = currentStoryId();
     let cancelled = false;
+
     async function load() {
       try {
         let foundArticle: EnrichedArticle | null = null;
         if (supabase && id) {
           const { data } = await supabase.from("articles").select("*").eq("id", id).maybeSingle();
-          if (data) foundArticle = { ...data, ai_summary: Array.isArray(data.ai_summary) ? data.ai_summary : [], tags: Array.isArray(data.tags) ? data.tags : [] } as EnrichedArticle;
+          if (data) {
+            foundArticle = {
+              ...data,
+              ai_summary: Array.isArray(data.ai_summary) ? data.ai_summary : [],
+              tags: Array.isArray(data.tags) ? data.tags : [],
+            } as EnrichedArticle;
+          }
         }
         if (!foundArticle && id) {
           const response = await fetch("/api/news");
           const payload = await response.json();
-          const found = Array.isArray(payload.articles) ? payload.articles.find((x: EnrichedArticle) => x.id === id) : null;
+          const found = Array.isArray(payload.articles)
+            ? payload.articles.find((x: EnrichedArticle) => x.id === id)
+            : null;
           if (found) foundArticle = found;
         }
         if (foundArticle && !cancelled) {
@@ -41,65 +92,142 @@ export default function StoryPage() {
           try {
             const response = await fetch("/api/news");
             const payload = await response.json();
-            const pool = Array.isArray(payload.articles) ? payload.articles as EnrichedArticle[] : [];
-            const tagSet = new Set((foundArticle.tags || []).map((t) => String(t).replace(/^#/, "").toLowerCase()));
+            const pool = Array.isArray(payload.articles)
+              ? (payload.articles as EnrichedArticle[])
+              : [];
+            const tagSet = new Set(
+              (foundArticle.tags || []).map((t) => String(t).replace(/^#/, "").toLowerCase()),
+            );
             const candidates = pool
               .filter((x) => x.id !== foundArticle!.id)
+              .filter((x) => !foundArticle!.category || x.category === foundArticle!.category)
               .map((x) => {
-                const sameCategory = x.category && x.category === foundArticle!.category ? 8 : 0;
-                const sharedTags = (x.tags || []).filter((t) => tagSet.has(String(t).replace(/^#/, "").toLowerCase())).length * 4;
-                const sameSource = x.source === foundArticle!.source ? 2 : 0;
-                const freshness = Math.max(0, 8 - ((Date.now() - new Date(x.timestamp).getTime()) / 3600000));
-                const breaking = x.trend_label === "Breaking" ? 4 : x.trend_label === "Trending" ? 2 : 0;
-                return { x, score: sameCategory + sharedTags + sameSource + freshness + breaking };
+                const sameCategory =
+                  x.category && x.category === foundArticle!.category ? 10 : 0;
+                const sharedTags =
+                  (x.tags || []).filter((t) =>
+                    tagSet.has(String(t).replace(/^#/, "").toLowerCase()),
+                  ).length * 4;
+                const freshness = Math.max(
+                  0,
+                  8 - (Date.now() - new Date(x.timestamp).getTime()) / 3600000,
+                );
+                return { x, score: sameCategory + sharedTags + freshness };
               })
               .sort((a, b) => b.score - a.score)
               .slice(0, 6)
               .map(({ x }) => x);
             if (!cancelled) setRelated(candidates);
-          } catch {}
+          } catch {
+            /* ignore */
+          }
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
+
     void load();
     void fetchSponsors().then((items) => {
-      if (!cancelled) setSponsor(items.find((item) => item.placement === "both" || item.placement === "in_feed") || items[0] || null);
+      if (!cancelled) {
+        setSponsor(
+          items.find((item) => item.placement === "both" || item.placement === "in_feed") ||
+            items[0] ||
+            null,
+        );
+      }
     });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!article) return;
-    void logRwdNewsEvent({ event: "article_open", articleId: article.id, articleUrl: article.original_url, placement: "story_page" });
-    const timer = window.setTimeout(() => {
-      void logRwdNewsEvent({ event: "reading_engaged", articleId: article.id, articleUrl: article.original_url, placement: "30s" });
-    }, 30_000);
-    return () => window.clearTimeout(timer);
+    void logRwdNewsEvent({
+      event: "article_open",
+      articleId: article.id,
+      articleUrl: article.original_url,
+      placement: "story_page",
+    });
   }, [article]);
 
   const title = article?.ai_hook_title || article?.original_title || "RWDNEWS story";
-  const canonical = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "https://rwdnews.netlify.app/";
-  const description = article?.ai_summary?.[0] || article?.original_description || "Source-backed global news briefing from RWDNEWS.";
-  const jsonLd = useMemo(() => article ? { "@context": "https://schema.org", "@type": "NewsArticle", headline: title, description, datePublished: article.timestamp, dateModified: article.timestamp, mainEntityOfPage: canonical, url: canonical, image: article.image ? [article.image] : undefined, author: { "@type": "Organization", name: "RWDNEWS" }, isBasedOn: article.original_url, publisher: { "@type": "Organization", name: "RWDNEWS", logo: { "@type": "ImageObject", url: new URL("/rwdnews-logo.svg", canonical).toString() } } } : null, [article, title, description, canonical]);
+  const canonical =
+    typeof window !== "undefined"
+      ? window.location.origin + window.location.pathname
+      : "https://rwdnews.netlify.app/";
+  const description =
+    article?.ai_summary?.[0] ||
+    article?.original_description ||
+    "Clear news briefing from RWDNEWS.";
+  const briefing = article ? buildBriefing(article) : { points: [], paragraphs: [] };
 
-  if (loading) return <div className="grid min-h-dvh place-items-center text-sm text-neutral-500">Loading briefing…</div>;
-  if (!article) return <div className="grid min-h-dvh place-items-center p-6 text-center"><div><h1 className="font-display text-3xl font-semibold">Story not found</h1><p className="mt-2 text-sm text-neutral-500">This story may have expired from the live wire.</p><a href="/" className="mt-5 inline-block font-semibold text-teal-800">Return to RWDNEWS →</a></div></div>;
+  const jsonLd = useMemo(
+    () =>
+      article
+        ? {
+            "@context": "https://schema.org",
+            "@type": "NewsArticle",
+            headline: title,
+            description,
+            datePublished: article.timestamp,
+            dateModified: article.timestamp,
+            mainEntityOfPage: canonical,
+            url: canonical,
+            image: article.image ? [article.image] : undefined,
+            author: { "@type": "Organization", name: "RWDNEWS" },
+            publisher: {
+              "@type": "Organization",
+              name: "RWDNEWS",
+              logo: {
+                "@type": "ImageObject",
+                url: new URL("/rwdnews-logo.svg", canonical).toString(),
+              },
+            },
+          }
+        : null,
+    [article, title, description, canonical],
+  );
+
+  if (loading) {
+    return (
+      <div className="grid min-h-dvh place-items-center text-sm text-neutral-500">
+        Loading briefing…
+      </div>
+    );
+  }
+
+  if (!article) {
+    return (
+      <div className="grid min-h-dvh place-items-center p-6 text-center">
+        <div>
+          <h1 className="font-display text-3xl font-semibold">Story not found</h1>
+          <p className="mt-2 text-sm text-neutral-500">This story may have left the live wire.</p>
+          <a href="/" className="mt-5 inline-block font-semibold text-teal-800">
+            Return to RWDNEWS →
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const share = (network: string) => {
-    const shareMessage = `RWDNEWS — ${title}\n\n${description}\n\nRead the RWDNEWS briefing: ${canonical}`;
+    const shareMessage = `RWDNEWS — ${title}\n\n${description}\n\n${canonical}`;
     const text = encodeURIComponent(shareMessage);
-    const shareUrl = (network: string) => canonical + (canonical.includes("?") ? "&" : "?") + "utm_source=" + network + "&utm_medium=social&utm_campaign=rwdnews_share";
-    const encoded = encodeURIComponent(shareUrl(network));
+    const encoded = encodeURIComponent(canonical);
     const urls: Record<string, string> = {
-      whatsapp: "https://wa.me/?text=" + text + "%20" + encoded,
+      whatsapp: "https://wa.me/?text=" + text,
       telegram: "https://t.me/share/url?url=" + encoded + "&text=" + text,
       x: "https://twitter.com/intent/tweet?text=" + text + "&url=" + encoded,
       facebook: "https://www.facebook.com/sharer/sharer.php?u=" + encoded,
       linkedin: "https://www.linkedin.com/sharing/share-offsite/?url=" + encoded,
     };
-    void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: network });
+    void logRwdNewsEvent({
+      event: "article_share",
+      articleId: article.id,
+      placement: network,
+    });
     window.open(urls[network], "_blank", "noopener,noreferrer");
   };
 
@@ -107,105 +235,261 @@ export default function StoryPage() {
     try {
       await navigator.clipboard.writeText(canonical);
       setCopied(true);
-      void logRwdNewsEvent({ event: "article_share", articleId: article.id, articleUrl: article.original_url, placement: "copy_link" });
       window.setTimeout(() => setCopied(false), 1800);
-    } catch {}
+    } catch {
+      /* ignore */
+    }
   };
 
-  return <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950"><Helmet><title>{title} — RWDNEWS</title><meta name="description" content={description} /><link rel="canonical" href={canonical} /><meta property="og:title" content={`RWDNEWS — ${title}`} /><meta property="og:description" content={`RWDNEWS briefing: ${description}`} /><meta property="og:url" content={canonical} /><meta property="og:type" content="article" /><meta property="og:site_name" content="RWDNEWS" /><meta property="og:image" content={article.image} /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content={`RWDNEWS — ${title}`} /><meta name="twitter:description" content={description} /><meta name="twitter:image" content={article.image} /><script type="application/ld+json">{JSON.stringify(jsonLd)}</script></Helmet>
-    <div className="border-b border-neutral-900 bg-[#071a2d] text-white">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
-        <a href="/" className="text-[10px] font-extrabold tracking-[0.18em] text-amber-300 uppercase">Global News · RWDNEWS</a>
-        <a href="/sports" className="text-[10px] font-bold text-white/80 hover:text-white">Sports Desk →</a>
-      </div>
-    </div>
-    <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-        <a href="/" aria-label="RWDNEWS home">
-          <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[170px] sm:w-[210px]" />
-        </a>
-        <a href="/" className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-bold text-teal-800 hover:border-teal-300">← Back to news</a>
-      </div>
-    </header>
-    <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12"><p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">{article.source} · {article.category || "World"}</p><h1 className="font-display mt-3 text-4xl leading-tight font-semibold sm:text-5xl">{title}</h1><p className="mt-3 text-lg leading-relaxed text-neutral-600">{description}</p><p className="mt-3 text-xs text-neutral-400">{article.read_time || "3 min read"} · Published {new Date(article.timestamp).toLocaleString()}</p>
-      <img src={article.image} alt="" className="mt-8 aspect-[16/9] w-full object-cover bg-neutral-100" /><p className="mt-2 text-[10px] text-neutral-400">{article.image_credit ? "Image: " + article.image_credit : ""}{article.image_license ? " · " + article.image_license : ""}</p>
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_250px]"><article className="min-w-0">
-        <section className="rounded-2xl border border-neutral-200 bg-neutral-50 p-5 sm:p-6">
-          <div className="flex items-center gap-2 text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">
-            <span className="size-2 rounded-full bg-teal-600" />
-            Quick brief
-          </div>
-          <h2 className="font-display mt-2 text-2xl font-semibold">What you need to know</h2>
-          <p className="mt-2 text-[15px] leading-relaxed text-neutral-600">
-            A source-backed RWDNEWS explanation of the report, written from the published information below. For the complete story, quotes, documents and ongoing updates, follow the original publisher.
-          </p>
-          <ul className="mt-5 space-y-5">
-            {(article.ai_summary?.length ? article.ai_summary : [article.original_description]).map((point, i) => (
-              <li key={i} className="flex gap-3 text-[16px] leading-[1.7] text-neutral-800">
-                <span className="mt-[0.65rem] size-1.5 shrink-0 rounded-full bg-neutral-950" />
-                <span>{point}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-        {sponsor ? <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6"><p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p><p className="mt-1 text-xs font-semibold text-neutral-500">{sponsor.sponsorName}</p><h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>{sponsor.whyMatters?.[0] ? <p className="mt-2 text-sm leading-relaxed text-neutral-600">{sponsor.whyMatters[0]}</p> : null}<a href={sponsor.ctaUrl} target="_blank" rel="noopener noreferrer sponsored" onClick={() => void logSponsorClick(sponsor, "story_page")} className="mt-4 inline-flex items-center border border-neutral-900 bg-neutral-950 px-4 py-2.5 text-xs font-bold text-white">{sponsor.ctaText} →</a></section> : null}
-        <div className="mt-8 space-y-4 text-[17px] leading-[1.8] text-neutral-800">
-          {article.story_type === "RWDNEWS ORIGINAL" ? (
-            <>
-              {article.body ? <div className="whitespace-pre-wrap text-[17px] leading-[1.8] text-neutral-800">{article.body}</div> : null}
-              {article.author_name ? <p className="mt-6 text-xs font-semibold text-neutral-500">By {article.author_name}</p> : null}
-            </>
-          ) : (
-            <>
-              <h2 className="font-display pt-2 text-2xl font-semibold">Source & context</h2>
-              <p className="text-neutral-700">
-                <strong>{article.source}</strong> is the credited source for this report. RWDNEWS has reorganized the supplied reporting into a concise explanation; the original publisher remains the place to read the complete report and any later updates.
-              </p>
-              <div className="border-l-2 border-teal-700 bg-teal-50 p-4 text-sm leading-relaxed text-neutral-700">
-                <strong>Source-backed reporting:</strong> The RWDNEWS briefing is based on the published source material available to our news wire. AI is used to organize and summarize those facts; it is not used to create unsupported details.
-              </div>
-            </>
-          )}
-          <div className="flex flex-wrap gap-2 pt-2">{article.tags.map(t => <span key={t} className="bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600">{String(t).replace(/^#/, "")}</span>)}</div>
-        </div>
-      <div className="mt-10 border-y border-neutral-200 py-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 uppercase">Share this story</p><h2 className="mt-1 font-display text-xl font-semibold">Send the briefing to someone</h2><p className="mt-1 text-sm text-neutral-500">Share the RWDNEWS story with the original source one tap away.</p></div><Share2 className="mt-1 size-5 shrink-0 text-neutral-400" /></div><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3"><button onClick={() => share("whatsapp")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#25D366] px-3 text-xs font-bold text-white"><MessageCircle className="size-4" /> WhatsApp</button><button onClick={() => share("telegram")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#229ED9] px-3 text-xs font-bold text-white"><Send className="size-4" /> Telegram</button><button onClick={() => share("x")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-black px-3 text-xs font-bold text-white">𝕏 <span>Post on X</span></button><button onClick={() => share("facebook")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#1877F2] px-3 text-xs font-bold text-white">f <span>Facebook</span></button><button onClick={() => share("linkedin")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#0A66C2] px-3 text-xs font-bold text-white">in <span>LinkedIn</span></button><button onClick={() => void copyLink()} className="flex h-11 items-center justify-center gap-2 rounded-lg border border-neutral-300 bg-white px-3 text-xs font-bold text-neutral-800 hover:bg-neutral-50">{copied ? <Check className="size-4" /> : <Copy className="size-4" />} {copied ? "Copied" : "Copy link"}</button></div></div>
-      <div className="mt-10 border border-teal-200 bg-teal-50/60 p-5 sm:p-6">
-        <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">Original source</p>
-        <h2 className="mt-1 font-display text-xl font-semibold">Want the complete story?</h2>
-        <p className="mt-2 text-sm leading-relaxed text-neutral-600">Read the full report, original quotes, documents and any subsequent updates directly from the publisher.</p>
-        <p className="mt-3 text-xs font-bold text-neutral-500">Source: {article.source}</p>
-        <a href={article.original_url} target="_blank" rel="noopener noreferrer" onClick={() => void logRwdNewsEvent({ event: "external_source_click", articleId: article.id, articleUrl: article.original_url, placement: "story_source" })} className="mt-4 inline-flex items-center gap-2 bg-neutral-950 px-4 py-3 text-sm font-semibold text-white">Read the full report at {article.source} <ExternalLink className="size-3.5" /></a>
-      </div>
-      <section className="mt-10">
-        <div className="mb-4 flex items-end justify-between gap-3 border-b border-neutral-900 pb-3">
-          <div>
-            <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">Continue reading</p>
-            <h2 className="font-display mt-1 text-2xl font-semibold">Keep following the story</h2>
-          </div>
-          <a href="/" className="text-xs font-bold text-teal-800">Latest news →</a>
-        </div>
-        {related.length ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {related.slice(0, 4).map((item) => (
-              <a key={item.id} href={"/news/" + (item.ai_hook_title || item.original_title).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) + "--" + encodeURIComponent(item.id)}
-                className="group overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:-translate-y-0.5 hover:border-teal-300 hover:shadow-md">
-                <div className="grid grid-cols-[108px_1fr]">
-                  <img src={item.image} alt="" className="h-full min-h-[108px] w-full object-cover" />
-                  <div className="p-3">
-                    <p className="text-[9px] font-extrabold tracking-wider text-amber-800 uppercase">{item.source} · {item.category || "News"}</p>
-                    <h3 className="font-display mt-1 line-clamp-3 text-base font-semibold leading-snug group-hover:text-teal-800">{item.ai_hook_title || item.original_title}</h3>
-                    <p className="mt-1 text-[11px] text-neutral-400">{item.read_time || "3 min read"}</p>
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-sm text-neutral-500">More verified stories will appear here as the live wire updates.</div>
-        )}
-      </section>
+  return (
+    <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950">
+      <Helmet>
+        <title>{title} — RWDNEWS</title>
+        <meta name="description" content={description} />
+        <link rel="canonical" href={canonical} />
+        <meta property="og:title" content={`RWDNEWS — ${title}`} />
+        <meta property="og:description" content={description} />
+        <meta property="og:url" content={canonical} />
+        <meta property="og:type" content="article" />
+        <meta property="og:image" content={article.image} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
 
-      </article></div>
-    </main>
-  </div>;
+      <div className="border-b border-neutral-900 bg-[#071a2d] text-white">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+          <a href="/" className="text-[10px] font-extrabold tracking-[0.18em] text-amber-300 uppercase">
+            RWDNEWS
+          </a>
+          <a href="/sport" className="text-[10px] font-bold text-white/80 hover:text-white">
+            Sports desk →
+          </a>
+        </div>
+      </div>
+
+      <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+          <a href="/" aria-label="RWDNEWS home">
+            <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[170px] sm:w-[210px]" />
+          </a>
+          <a
+            href="/"
+            className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-bold text-teal-800"
+          >
+            ← Back to news
+          </a>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 sm:py-12">
+        <p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">
+          {article.category || "News"} · {article.source}
+        </p>
+        <h1 className="font-display mt-3 text-3xl leading-tight font-semibold sm:text-5xl">
+          {title}
+        </h1>
+        <p className="mt-3 text-base leading-relaxed text-neutral-600 sm:text-lg">{description}</p>
+        <p className="mt-3 text-xs text-neutral-400">
+          {article.read_time || "3 min read"} ·{" "}
+          {new Date(article.timestamp).toLocaleString()}
+        </p>
+
+        {article.image ? (
+          <img
+            src={article.image}
+            alt=""
+            className="mt-8 aspect-[16/9] w-full bg-neutral-100 object-cover"
+          />
+        ) : null}
+
+        <div className="mt-6">
+          <AdSlot slot="in_article_top" className="min-h-[90px]" />
+        </div>
+
+        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_240px]">
+          <article className="min-w-0">
+            <section className="rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
+              <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">
+                RWDNEWS briefing
+              </p>
+              <h2 className="font-display mt-2 text-2xl font-semibold">What you should know</h2>
+
+              <ul className="mt-5 space-y-4">
+                {briefing.points.map((point, i) => (
+                  <li key={i} className="flex gap-3 text-[16px] leading-[1.75] text-neutral-800">
+                    <span className="mt-[0.7rem] size-1.5 shrink-0 rounded-full bg-neutral-950" />
+                    <span>{point}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="mt-8 space-y-4 text-[16px] leading-[1.8] text-neutral-800 sm:text-[17px]">
+                {article.story_type === "RWDNEWS ORIGINAL" && article.body ? (
+                  <div className="whitespace-pre-wrap">{article.body}</div>
+                ) : (
+                  briefing.paragraphs.map((p, i) => <p key={i}>{p}</p>)
+                )}
+              </div>
+
+              {article.tags?.length ? (
+                <div className="mt-6 flex flex-wrap gap-2">
+                  {article.tags.map((t) => (
+                    <span
+                      key={t}
+                      className="bg-neutral-100 px-2.5 py-1 text-[11px] font-semibold text-neutral-600"
+                    >
+                      {String(t).replace(/^#/, "")}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+
+            {sponsor ? (
+              <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
+                <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">
+                  Sponsored
+                </p>
+                <p className="mt-1 text-xs font-semibold text-neutral-500">{sponsor.sponsorName}</p>
+                <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
+                {sponsor.whyMatters?.[0] ? (
+                  <p className="mt-2 text-sm leading-relaxed text-neutral-600">
+                    {sponsor.whyMatters[0]}
+                  </p>
+                ) : null}
+                <a
+                  href={sponsor.ctaUrl}
+                  target="_blank"
+                  rel="noopener noreferrer sponsored"
+                  onClick={() => void logSponsorClick(sponsor, "story_page")}
+                  className="mt-4 inline-flex items-center bg-neutral-950 px-4 py-2.5 text-xs font-bold text-white"
+                >
+                  {sponsor.ctaText} →
+                </a>
+              </section>
+            ) : (
+              <div className="mt-6">
+                <AdSlot slot="in_article_mid" className="min-h-[120px]" />
+              </div>
+            )}
+
+            <div className="mt-10 border-y border-neutral-200 py-6">
+              <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 uppercase">
+                Share this briefing
+              </p>
+              <h2 className="mt-1 font-display text-xl font-semibold">Send to someone</h2>
+              <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => share("whatsapp")}
+                  className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#25D366] text-xs font-bold text-white"
+                >
+                  <MessageCircle className="size-4" /> WhatsApp
+                </button>
+                <button
+                  type="button"
+                  onClick={() => share("telegram")}
+                  className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#229ED9] text-xs font-bold text-white"
+                >
+                  <Send className="size-4" /> Telegram
+                </button>
+                <button
+                  type="button"
+                  onClick={() => share("x")}
+                  className="flex h-11 items-center justify-center gap-2 rounded-lg bg-black text-xs font-bold text-white"
+                >
+                  Post on X
+                </button>
+                <button
+                  type="button"
+                  onClick={() => share("facebook")}
+                  className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#1877F2] text-xs font-bold text-white"
+                >
+                  Facebook
+                </button>
+                <button
+                  type="button"
+                  onClick={() => share("linkedin")}
+                  className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#0A66C2] text-xs font-bold text-white"
+                >
+                  LinkedIn
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void copyLink()}
+                  className="flex h-11 items-center justify-center gap-2 rounded-lg border bg-white text-xs font-bold"
+                >
+                  {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+              </div>
+            </div>
+
+            <section className="mt-10">
+              <div className="mb-4 flex items-end justify-between border-b border-neutral-900 pb-3">
+                <div>
+                  <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-800 uppercase">
+                    Continue reading
+                  </p>
+                  <h2 className="font-display mt-1 text-2xl font-semibold">More on RWDNEWS</h2>
+                </div>
+                <a href="/" className="text-xs font-bold text-teal-800">
+                  Latest →
+                </a>
+              </div>
+              {related.length ? (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {related.slice(0, 4).map((item) => (
+                    <a
+                      key={item.id}
+                      href={storyHref(item)}
+                      className="group overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:border-teal-300 hover:shadow-md"
+                    >
+                      <div className="grid grid-cols-[108px_1fr]">
+                        <img
+                          src={item.image}
+                          alt=""
+                          className="h-full min-h-[108px] w-full object-cover"
+                        />
+                        <div className="p-3">
+                          <p className="text-[9px] font-extrabold tracking-wider text-amber-800 uppercase">
+                            {item.category || "News"}
+                          </p>
+                          <h3 className="font-display mt-1 line-clamp-3 text-base font-semibold leading-snug group-hover:text-teal-800">
+                            {item.ai_hook_title || item.original_title}
+                          </h3>
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-xl border border-dashed p-5 text-sm text-neutral-500">
+                  More stories will appear here as the wire updates.
+                </div>
+              )}
+            </section>
+          </article>
+
+          <aside className="hidden lg:block">
+            <div className="sticky top-6 space-y-4">
+              <AdSlot slot="sidebar" className="min-h-[250px]" />
+              <a
+                href="/sport"
+                className="block rounded-xl border border-neutral-200 bg-white p-4 text-sm font-bold"
+              >
+                Sports desk →
+              </a>
+              <a
+                href="/advertise"
+                className="block rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm font-bold text-amber-900"
+              >
+                Advertise on RWDNEWS →
+              </a>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+  );
 }
