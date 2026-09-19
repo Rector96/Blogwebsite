@@ -22,63 +22,75 @@ function env(name: string) {
   return Netlify.env.get(name) || "";
 }
 
-function pick(obj: any, ...keys: string[]) {
-  for (const key of keys) {
-    if (obj?.[key] !== undefined && obj?.[key] !== null) return obj[key];
-  }
-  return null;
+/** Free public ESPN scoreboard endpoints (no API key) */
+const ESPN_BOARDS: { sport: string; path: string; league: string }[] = [
+  { sport: "football", path: "soccer/eng.1", league: "Premier League" },
+  { sport: "football", path: "soccer/uefa.champions", league: "UEFA Champions League" },
+  { sport: "football", path: "soccer/esp.1", league: "La Liga" },
+  { sport: "football", path: "soccer/ger.1", league: "Bundesliga" },
+  { sport: "football", path: "soccer/ita.1", league: "Serie A" },
+  { sport: "football", path: "soccer/fra.1", league: "Ligue 1" },
+  { sport: "football", path: "soccer/usa.1", league: "MLS" },
+  { sport: "basketball", path: "basketball/nba", league: "NBA" },
+  { sport: "football", path: "football/nfl", league: "NFL" },
+  { sport: "baseball", path: "baseball/mlb", league: "MLB" },
+  { sport: "hockey", path: "hockey/nhl", league: "NHL" },
+  { sport: "tennis", path: "tennis/atp", league: "ATP" },
+];
+
+async function getEspnBoard(path: string, sport: string, leagueFallback: string): Promise<SportMatch[]> {
+  const url = `https://site.api.espn.com/apis/site/v2/sports/${path}/scoreboard`;
+  const response = await fetch(url, {
+    headers: { Accept: "application/json", "User-Agent": "RWDNEWS/1.0" },
+    signal: AbortSignal.timeout(6000),
+  });
+  if (!response.ok) return [];
+  const data: any = await response.json();
+  const events = Array.isArray(data?.events) ? data.events : [];
+  return events
+    .map((event: any): SportMatch | null => {
+      const competition = event?.competitions?.[0];
+      const competitors = competition?.competitors || [];
+      const home = competitors.find((c: any) => c.homeAway === "home") || competitors[0];
+      const away = competitors.find((c: any) => c.homeAway === "away") || competitors[1];
+      if (!home || !away) return null;
+      const statusName = clean(event?.status?.type?.description || event?.status?.type?.name || "Scheduled");
+      const state = String(event?.status?.type?.state || "").toLowerCase();
+      const live = state === "in" || /live|in progress/i.test(statusName);
+      return {
+        id: String(event.id || `${path}-${home.team?.abbreviation}-${away.team?.abbreviation}`),
+        sport,
+        league: clean(event?.season?.slug ? leagueFallback : competition?.league?.name || leagueFallback),
+        home: clean(home.team?.displayName || home.team?.name),
+        away: clean(away.team?.displayName || away.team?.name),
+        homeScore: home.score != null && home.score !== "" ? Number(home.score) : null,
+        awayScore: away.score != null && away.score !== "" ? Number(away.score) : null,
+        status: statusName,
+        startTime: event.date ? new Date(event.date).toISOString() : undefined,
+        live,
+        source: "ESPN",
+      };
+    })
+    .filter(Boolean) as SportMatch[];
 }
 
-function normalizeMatch(item: any, sport: string): SportMatch | null {
-  const home = clean(pick(item, "home", "homeTeam", "home_name", "home_team"));
-  const away = clean(pick(item, "away", "awayTeam", "away_name", "away_team"));
-  if (!home || !away) return null;
-  const status = clean(pick(item, "status", "state", "matchStatus")?.type ?? pick(item, "status", "state", "matchStatus") ?? "Scheduled");
-  const scores = item?.score || item?.scores || {};
-  const homeScore = pick(item, "homeScore", "home_score") ?? pick(scores, "home", "homeScore");
-  const awayScore = pick(item, "awayScore", "away_score") ?? pick(scores, "away", "awayScore");
-  const league = clean(
-    item?.league?.name ??
-    item?.competition?.name ??
-    item?.tournament?.name ??
-    item?.league ??
-    "International",
+async function getAllEspnMatches(): Promise<SportMatch[]> {
+  const results = await Promise.allSettled(
+    ESPN_BOARDS.map((b) => getEspnBoard(b.path, b.sport, b.league)),
   );
-  const startTime = pick(item, "startTime", "start_time", "timestamp", "date", "kickoff", "time");
-  const live = /live|inprogress|in-progress|playing|1h|ht/i.test(status);
-  return {
-    id: String(pick(item, "id", "matchId", "eventId") ?? `${sport}-${home}-${away}-${startTime ?? ""}`),
-    sport,
-    league,
-    home,
-    away,
-    homeScore: homeScore == null ? null : Number(homeScore),
-    awayScore: awayScore == null ? null : Number(awayScore),
-    status,
-    startTime: startTime ? new Date(Number(startTime) > 2_000_000_000 ? Number(startTime) : String(startTime)).toISOString() : undefined,
-    live,
-    source: "SportScore",
-  };
-}
-
-async function getSport(sport: string) {
-  const url = `https://sportscore.com/api/widget/matches/?sport=${encodeURIComponent(sport)}&limit=50`;
-  const response = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`Sports provider returned ${response.status}`);
-  const payload: any = await response.json();
-  const list = Array.isArray(payload) ? payload : payload?.data ?? payload?.matches ?? payload?.events ?? [];
-  return list.map((item: any) => normalizeMatch(item, sport)).filter(Boolean) as SportMatch[];
+  return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
 export default async (req: Request) => {
-  if (req.method !== "GET") return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+  if (req.method !== "GET") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+  }
 
   const url = new URL(req.url);
   const action = url.searchParams.get("action") || "live";
+
   try {
-    const sports = ["football", "basketball", "cricket", "tennis"];
-    const results = await Promise.allSettled(sports.map(getSport));
-    const matches = results.flatMap((r) => r.status === "fulfilled" ? r.value : []);
+    const matches = await getAllEspnMatches();
     const live = matches.filter((m) => m.live);
     const majorLeaguePatterns: Record<string, string[]> = {
       "Premier League": ["premier league"],
@@ -87,33 +99,45 @@ export default async (req: Request) => {
       "Bundesliga": ["bundesliga"],
       "Serie A": ["serie a"],
       "Ligue 1": ["ligue 1"],
-      "Europa League": ["europa league"],
-      "NBA": ["nba"],
-      "NFL": ["nfl"],
-      "MLB": ["mlb", "major league baseball"],
-      "NHL": ["nhl"],
-      "Formula 1": ["formula 1", "f1"],
-      "ICC Cricket": ["icc", "test match", "odi", "t20"],
+      "MLS": ["mls"],
+      NBA: ["nba"],
+      NFL: ["nfl"],
+      MLB: ["mlb"],
+      NHL: ["nhl"],
+      ATP: ["atp"],
     };
-    const featuredLeagues = Object.values(majorLeaguePatterns).flat();
 
     const featured = matches
-      .filter((m) => featuredLeagues.some((league) => m.league.toLowerCase().includes(league.toLowerCase())))
-      .slice(0, 30);
-    const upcoming = matches.filter((m) => !m.live).slice(0, 30);
+      .filter((m) =>
+        Object.values(majorLeaguePatterns).some((patterns) =>
+          patterns.some((p) => m.league.toLowerCase().includes(p)),
+        ),
+      )
+      .slice(0, 40);
+    const upcoming = matches.filter((m) => !m.live).slice(0, 40);
 
     if (action === "preview") {
       const match = matches.find((m) => m.id === url.searchParams.get("id"));
-      if (!match) return new Response(JSON.stringify({ error: "Match not found" }), { status: 404 });
+      if (!match) {
+        return new Response(JSON.stringify({ error: "Match not found" }), { status: 404 });
+      }
       const key = env("GEMINI_API_KEY");
-      if (!key) return new Response(JSON.stringify({
-        match,
-        outlook: "AI match outlook is not configured yet. RWDNEWS will only publish predictions when enough verified match data is available.",
-      }), { headers: { "content-type": "application/json" } });
+      if (!key) {
+        return new Response(
+          JSON.stringify({
+            match,
+            situation: `${match.home} vs ${match.away} — ${match.status}.`,
+            factors: "Only verified scoreboard fields are available for this outlook.",
+            outlook:
+              "RWDNEWS will not invent form, injuries, or odds. Treat any outlook as informational only.",
+          }),
+          { headers: { "content-type": "application/json" } },
+        );
+      }
       const ai = new GoogleGenAI({ apiKey: key });
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
-        contents: `RWDNEWS sports analyst. Give a cautious pre-match or in-match outlook using ONLY these verified fields: ${JSON.stringify(match)}. Do not invent injuries, form, odds, statistics or player information. Do not give gambling advice or guaranteed outcomes. Return three short points: current situation, factors supported by the data, and a clearly uncertain outlook.`,
+        model: "gemini-2.0-flash",
+        contents: `RWDNEWS sports analyst. Cautious outlook using ONLY: ${JSON.stringify(match)}. No invented stats. No betting advice. Return situation, factors, outlook.`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -127,22 +151,49 @@ export default async (req: Request) => {
           },
         },
       });
-      return new Response(JSON.stringify({ match, ...JSON.parse((response as any).text || "{}") }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=30" } });
+      return new Response(
+        JSON.stringify({ match, ...JSON.parse((response as any).text || "{}") }),
+        {
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "public, max-age=30",
+          },
+        },
+      );
     }
 
-    return new Response(JSON.stringify({
-      live,
-      featured,
-      upcoming,
-      majorLeagues: Object.entries(majorLeaguePatterns).map(([name, patterns]) => ({ name, available: matches.some(m => patterns.some(p => m.league.toLowerCase().includes(p))) })),
-      provider: "SportScore",
-      generatedAt: new Date().toISOString(),
-    }), { headers: { "content-type": "application/json", "cache-control": "public, max-age=30, stale-while-revalidate=120" } });
+    return new Response(
+      JSON.stringify({
+        live,
+        featured,
+        upcoming,
+        majorLeagues: Object.entries(majorLeaguePatterns).map(([name, patterns]) => ({
+          name,
+          available: matches.some((m) =>
+            patterns.some((p) => m.league.toLowerCase().includes(p)),
+          ),
+        })),
+        provider: "ESPN",
+        count: matches.length,
+        generatedAt: new Date().toISOString(),
+      }),
+      {
+        headers: {
+          "content-type": "application/json",
+          "cache-control": "public, max-age=45, stale-while-revalidate=120",
+        },
+      },
+    );
   } catch (error) {
-    return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Sports feed unavailable", live: [], featured: [], upcoming: [] }), {
-      status: 502,
-      headers: { "content-type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Sports feed unavailable",
+        live: [],
+        featured: [],
+        upcoming: [],
+      }),
+      { status: 502, headers: { "content-type": "application/json" } },
+    );
   }
 };
 
