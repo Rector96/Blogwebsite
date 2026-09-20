@@ -6,6 +6,7 @@ import { logRwdNewsEvent } from "../lib/analytics";
 import { fetchSponsors, logSponsorClick, type SponsoredOffer } from "../lib/sponsors";
 import { AdSlot } from "../components/AdSlot";
 import type { EnrichedArticle } from "../App";
+import { SiteFooter } from "../components/SiteFooter";
 
 function currentStoryId() {
   const path = window.location.pathname.replace(/^\/news\//, "");
@@ -62,7 +63,26 @@ export default function StoryPage() {
     async function load() {
       try {
         let foundArticle: EnrichedArticle | null = null;
-        if (supabase && id) {
+        // Prefer the exact story the user tapped on the homepage
+        try {
+          const pendingId = sessionStorage.getItem("rwdnews_pending_story_id");
+          const pendingRaw = sessionStorage.getItem("rwdnews_pending_story");
+          if (pendingRaw && (!id || pendingId === id)) {
+            const pending = JSON.parse(pendingRaw) as EnrichedArticle;
+            if (pending?.id) {
+              foundArticle = {
+                ...pending,
+                ai_summary: Array.isArray(pending.ai_summary) ? pending.ai_summary : [],
+                tags: Array.isArray(pending.tags) ? pending.tags : [],
+              };
+              sessionStorage.removeItem("rwdnews_pending_story");
+              sessionStorage.removeItem("rwdnews_pending_story_id");
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+        if (supabase && id && !foundArticle) {
           const { data } = await supabase.from("articles").select("*").eq("id", id).maybeSingle();
           if (data) {
             foundArticle = {
@@ -145,7 +165,14 @@ export default function StoryPage() {
             url: canonical,
             image: article.image ? [article.image] : undefined,
             author: { "@type": "Organization", name: "RWDNEWS" },
-            publisher: { "@type": "Organization", name: "RWDNEWS" },
+            publisher: {
+              "@type": "Organization",
+              name: "RWDNEWS",
+              logo: {
+                "@type": "ImageObject",
+                url: "https://rwdnews.netlify.app/rwdnews-logo.svg",
+              },
+            },
           }
         : null,
     [article, title, description, canonical],
@@ -203,7 +230,7 @@ export default function StoryPage() {
         <meta property="og:title" content={`RWDNEWS — ${title}`} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={article.image} />
+        <meta property="og:image" content={article.image || "https://rwdnews.netlify.app/rwdnews-logo.svg"} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
@@ -266,10 +293,9 @@ export default function StoryPage() {
             </div>
           ) : null}
 
-          {/* Optional full report — secondary, not the main read */}
           {article.original_url ? (
             <p className="mt-8 border-t border-neutral-100 pt-4 text-sm text-neutral-500">
-              Want the long-form report?{" "}
+              Source credited:{" "}
               <a
                 href={article.original_url}
                 target="_blank"
@@ -350,6 +376,7 @@ export default function StoryPage() {
           ) : null}
         </section>
       </main>
+      <SiteFooter />
     </div>
   );
 }
