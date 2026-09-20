@@ -10,6 +10,9 @@ export default function SubmitPage() {
   const [category, setCategory] = useState("Nigeria");
   const [body, setBody] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
+  const [location, setLocation] = useState("");
+  const [eventDate, setEventDate] = useState("");
+  const [rightsConfirmed, setRightsConfirmed] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -17,7 +20,11 @@ export default function SubmitPage() {
     e.preventDefault();
     setMsg(null);
     if (!title.trim() || !body.trim() || !email.includes("@")) {
-      setMsg("Please add your email, a title, and the story text.");
+      setMsg("Please add your email, a headline, and the story details.");
+      return;
+    }
+    if (!rightsConfirmed) {
+      setMsg("Please confirm that you have permission to submit the material.");
       return;
     }
     setSending(true);
@@ -28,7 +35,11 @@ export default function SubmitPage() {
           author_email: email.trim().toLowerCase(),
           title: title.trim(),
           category,
-          body: body.trim(),
+          body: [
+            location.trim() ? `Location: ${location.trim()}` : "",
+            eventDate ? `Date of event: ${eventDate}` : "",
+            body.trim(),
+          ].filter(Boolean).join("\n\n"),
           source_url: sourceUrl.trim() || null,
           status: "pending",
           created_at: new Date().toISOString(),
@@ -45,7 +56,11 @@ export default function SubmitPage() {
             email,
             title,
             category,
-            body,
+            body: [
+              location.trim() ? `Location: ${location.trim()}` : "",
+              eventDate ? `Date of event: ${eventDate}` : "",
+              body.trim(),
+            ].filter(Boolean).join("\n\n"),
             sourceUrl,
           }).toString(),
         });
@@ -54,7 +69,10 @@ export default function SubmitPage() {
       setTitle("");
       setBody("");
       setSourceUrl("");
+      setLocation("");
+      setEventDate("");
       setName("");
+      setRightsConfirmed(false);
     } catch {
       setMsg(
         "We received your details where possible. If this keeps failing, email the story to the team and we will review it.",
@@ -91,9 +109,21 @@ export default function SubmitPage() {
         </p>
         <h1 className="font-display mt-2 text-3xl font-semibold sm:text-4xl">Submit a story</h1>
         <p className="mt-3 text-sm leading-relaxed text-neutral-600 sm:text-base">
-          RWDNEWS summarizes the wire for readers and credits original sources. You can also send an
-          original tip or story. Nothing goes live until an editor reviews it.
+          Send a news tip, eyewitness report, original story or useful lead. Editors verify submissions
+          before publication, and submitting does not guarantee publication.
         </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          {[
+            ["Facts first", "Tell us what happened, who was involved, where and when."],
+            ["Evidence helps", "A source link is recommended when one exists."],
+            ["Images are optional", "Only share photos you own or have permission to use."],
+          ].map(([heading, text]) => (
+            <div key={heading} className="rounded-xl border border-neutral-200 bg-white p-4">
+              <p className="text-xs font-bold text-neutral-950">{heading}</p>
+              <p className="mt-1 text-xs leading-relaxed text-neutral-500">{text}</p>
+            </div>
+          ))}
+        </div>
 
         <form
           name="article-submit"
@@ -160,6 +190,27 @@ export default function SubmitPage() {
             </select>
           </label>
 
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block text-sm">
+              <span className="font-semibold">Where did it happen?</span>
+              <input
+                className="mt-1 h-11 w-full border border-neutral-200 px-3"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                placeholder="City, country or venue"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="font-semibold">When did it happen?</span>
+              <input
+                type="date"
+                className="mt-1 h-11 w-full border border-neutral-200 px-3"
+                value={eventDate}
+                onChange={(e) => setEventDate(e.target.value)}
+              />
+            </label>
+          </div>
+
           <label className="block text-sm">
             <span className="font-semibold">Story / tip *</span>
             <textarea
@@ -182,9 +233,22 @@ export default function SubmitPage() {
             />
           </label>
 
-          <p className="text-xs text-neutral-500">
-            By submitting, you confirm the information is accurate to the best of your knowledge. We
-            may edit for clarity and will not publish until verified.
+          <label className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600">
+            <input
+              type="checkbox"
+              checked={rightsConfirmed}
+              onChange={(e) => setRightsConfirmed(e.target.checked)}
+              className="mt-0.5 size-4 shrink-0"
+            />
+            <span>
+              I confirm that this submission is truthful to the best of my knowledge and that I have
+              permission to share any text, documents or media I provide.
+            </span>
+          </label>
+
+          <p className="text-xs leading-relaxed text-neutral-500">
+            Images are optional. If you have a relevant photo, include its source/rights information in
+            the story text. Never upload private, stolen or copyrighted material without permission.
           </p>
 
           <button
@@ -197,14 +261,11 @@ export default function SubmitPage() {
           {msg ? <p className="text-sm font-medium text-teal-800">{msg}</p> : null}
         </form>
 
-        <p className="mt-6 text-sm text-neutral-500">
-          Tip: For the database table, run in Supabase:{" "}
-          <code className="rounded bg-neutral-100 px-1 text-xs">
-            create table article_submissions (id uuid default gen_random_uuid() primary key,
-            author_name text, author_email text, title text, category text, body text, source_url
-            text, status text default 'pending', created_at timestamptz default now());
-          </code>
-        </p>
+        <div className="mt-6 rounded-xl border border-teal-100 bg-teal-50/60 p-4 text-xs leading-relaxed text-teal-900">
+          <strong>What happens next?</strong> Your submission goes to the editorial queue. A reviewer may
+          contact you for clarification, verify the information against independent sources, and edit for
+          clarity. Nothing is published automatically.
+        </div>
       </main>
 
       <SiteFooter />
