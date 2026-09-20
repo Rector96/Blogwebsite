@@ -32,14 +32,21 @@ function formatTime(iso: string) {
   }
 }
 
+function cleanLine(value: string) {
+  let x = String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  x = x.replace(/\s*Read\s*More\s*:?\s*https?:\/\/\S+/gi, "");
+  x = x.replace(/https?:\/\/\S+/gi, "");
+  return x.replace(/\s+/g, " ").trim();
+}
+
 function cleanPoints(article: ReaderArticle) {
   const raw = article.ai_summary?.length
     ? article.ai_summary
     : [article.original_description].filter(Boolean);
   return raw
-    .map(String)
-    .map((x) => x.trim())
+    .map((x) => cleanLine(String(x)))
     .filter(Boolean)
+    .filter((x) => x.length > 20)
     .filter(
       (x) =>
         !/limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this story from the published source/i.test(
@@ -61,16 +68,17 @@ export function ArticleReader({
 }) {
   const title = article.ai_hook_title || article.original_title;
   const bullets = cleanPoints(article);
-  if (!bullets.length && article.original_description) {
-    bullets.push(article.original_description);
+  if (!bullets.length) {
+    const fallback = cleanLine(article.original_description || article.original_title || "");
+    if (fallback) bullets.push(fallback);
   }
 
   const share = async () => {
-    const url = typeof window !== "undefined" ? window.location.href : article.original_url;
+    const url = typeof window !== "undefined" ? window.location.href : "";
     try {
       if (navigator.share) {
         await navigator.share({ title, url, text: title });
-      } else if (navigator.clipboard) {
+      } else if (navigator.clipboard && url) {
         await navigator.clipboard.writeText(title + " — " + url);
       }
     } catch {
@@ -79,9 +87,9 @@ export function ArticleReader({
   };
 
   const openShare = (platform: string) => {
-    const url = encodeURIComponent(
-      typeof window !== "undefined" ? window.location.href : article.original_url,
-    );
+    const pageUrl =
+      typeof window !== "undefined" ? window.location.href : "https://rwdnews.netlify.app";
+    const url = encodeURIComponent(pageUrl);
     const text = encodeURIComponent(title);
     const links: Record<string, string> = {
       whatsapp: "https://wa.me/?text=" + text + "%20" + url,
@@ -98,7 +106,7 @@ export function ArticleReader({
     <div className="fixed inset-0 z-50 flex justify-end">
       <Helmet>
         <title>{title} · RWDNEWS</title>
-        <meta name="description" content={bullets[0] || article.original_description} />
+        <meta name="description" content={bullets[0] || title} />
       </Helmet>
 
       <button type="button" className="absolute inset-0 bg-black/50" onClick={onClose} />
