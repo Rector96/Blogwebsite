@@ -25,7 +25,7 @@ export function database() {
 }
 
 export async function paystackRequest(path: string, init: RequestInit = {}) {
-  const secret = env("PAYSTACK_SECRET_KEY");
+  const secret = env("PAYSTACK_SECRET_KEY") || env("PAYSTACK_API");
   if (!secret) throw new Error("PAYSTACK_SECRET_KEY is not configured.");
   return fetch("https://api.paystack.co" + path, {
     ...init,
