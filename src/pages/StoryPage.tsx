@@ -32,7 +32,7 @@ function cleanText(value: string) {
 }
 
 function isMetaLine(x: string) {
-  return /limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this (developing )?story|source wire:/i.test(
+  return /limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this (developing )?story|source wire:|why this matters|rwdnews perspective|editorial context/i.test(
     x,
   );
 }
@@ -46,6 +46,31 @@ function buildBriefing(article: EnrichedArticle) {
   const points = raw.filter(Boolean).filter((x) => !isMetaLine(x)).filter((x) => x.length > 20);
   const lead = points[0] || cleanText(article.original_description || article.original_title || "");
   return { points: points.length ? points : lead ? [lead] : [] };
+}
+
+function PageLoader() {
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center"
+      style={{
+        background: "linear-gradient(160deg, #071a2d 0%, #0b3d4a 45%, #0f172a 100%)",
+      }}
+    >
+      <div className="text-center px-6">
+        <img
+          src="/rwdnews-logo.svg"
+          alt="RWDNEWS"
+          className="mx-auto h-auto w-[min(78vw,240px)] brightness-0 invert"
+        />
+        <p className="mt-5 text-[11px] font-extrabold tracking-[0.2em] text-amber-300 uppercase">
+          Loading story
+        </p>
+        <div className="mx-auto mt-4 h-1 w-28 overflow-hidden rounded-full bg-white/15">
+          <div className="h-full w-2/5 animate-pulse rounded-full bg-amber-400" />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function StoryPage() {
@@ -63,7 +88,6 @@ export default function StoryPage() {
     async function load() {
       try {
         let foundArticle: EnrichedArticle | null = null;
-        // Prefer the exact story the user tapped on the homepage
         try {
           const pendingId = sessionStorage.getItem("rwdnews_pending_story_id");
           const pendingRaw = sessionStorage.getItem("rwdnews_pending_story");
@@ -178,11 +202,7 @@ export default function StoryPage() {
     [article, title, description, canonical],
   );
 
-  if (loading) {
-    return (
-      <div className="grid min-h-dvh place-items-center text-sm text-neutral-500">Loading…</div>
-    );
-  }
+  if (loading) return <PageLoader />;
 
   if (!article) {
     return (
@@ -293,29 +313,16 @@ export default function StoryPage() {
             </div>
           ) : null}
 
-          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 sm:p-6">
-            <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">
-              RWDNEWS perspective
-            </p>
-            <h3 className="font-display mt-1 text-xl font-semibold">Why this matters</h3>
-            <p className="mt-2 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-              The verified facts above are the starting point. The most useful next step is to follow
-              confirmed updates, compare new claims with the original reporting, and separate what is
-              known from what is still developing. This section is editorial context, not an additional
-              claim about the event.
-            </p>
-          </div>
-
           {article.original_url ? (
             <p className="mt-8 border-t border-neutral-100 pt-4 text-sm text-neutral-500">
-              Source credited:{" "}
+              Source:{" "}
               <a
                 href={article.original_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-semibold text-teal-800 underline-offset-2 hover:underline"
               >
-                Open original at {article.source}
+                {article.source}
               </a>
             </p>
           ) : null}
