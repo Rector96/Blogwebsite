@@ -278,9 +278,9 @@ export default function StoryPage() {
 
         <section className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
           <h2 className="font-display text-2xl font-semibold">What you should know</h2>
-          <ul className="mt-5 space-y-4">
+          <ul className="mt-5 space-y-5">
             {briefing.points.map((point, i) => (
-              <li key={i} className="flex gap-3 text-[16px] leading-[1.75] text-neutral-800">
+              <li key={i} className="flex gap-3 text-[18px] leading-[1.8] text-neutral-800 sm:text-[19px]">
                 <span className="mt-[0.7rem] size-1.5 shrink-0 rounded-full bg-neutral-950" />
                 <span>{point}</span>
               </li>
@@ -288,10 +288,23 @@ export default function StoryPage() {
           </ul>
 
           {article.story_type === "RWDNEWS ORIGINAL" && article.body ? (
-            <div className="mt-8 whitespace-pre-wrap text-[16px] leading-[1.8] text-neutral-800">
+            <div className="mt-8 whitespace-pre-wrap text-[18px] leading-[1.8] text-neutral-800 sm:text-[19px]">
               {article.body}
             </div>
           ) : null}
+
+          <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/70 p-5 sm:p-6">
+            <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">
+              RWDNEWS perspective
+            </p>
+            <h3 className="font-display mt-1 text-xl font-semibold">Why this matters</h3>
+            <p className="mt-2 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
+              The verified facts above are the starting point. The most useful next step is to follow
+              confirmed updates, compare new claims with the original reporting, and separate what is
+              known from what is still developing. This section is editorial context, not an additional
+              claim about the event.
+            </p>
+          </div>
 
           {article.original_url ? (
             <p className="mt-8 border-t border-neutral-100 pt-4 text-sm text-neutral-500">
