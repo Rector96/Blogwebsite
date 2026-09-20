@@ -95,6 +95,24 @@ export default async (req: Request) => {
       return json({ ok: true });
     }
 
+    if (body.action === "sponsor_delete") {
+      const id = clean(body.id, 100);
+      if (!id) return json({ error: "Sponsor ID is required." }, 400);
+
+      // Preserve payment history while removing the sponsor campaign and its click records.
+      const { error: clickError } = await database.from("sponsor_clicks").delete().eq("sponsor_id", id);
+      if (clickError) return json({ error: clickError.message }, 400);
+
+      const { error: paymentError } = await database.from("sponsor_payments").update({ sponsor_id: null, updated_at: new Date().toISOString() }).eq("sponsor_id", id);
+      if (paymentError) return json({ error: paymentError.message }, 400);
+
+      const { error: sponsorError } = await database.from("sponsors").delete().eq("id", id);
+      if (sponsorError) return json({ error: sponsorError.message }, 400);
+
+      await audit(database, "sponsor_deleted", "sponsor", id);
+      return json({ ok: true });
+    }
+
     if (body.action === "sponsor_status") {
       const id = clean(body.id, 100);
       const active = Boolean(body.active);
@@ -228,22 +246,29 @@ export default async (req: Request) => {
   const database = db();
   if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
 
-  const [sponsors, leads, events, payments, clicks, articles, newsletter] = await Promise.all([
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+  const [sponsors, leads, events, payments, clicks, articles, newsletter,
+    pageViewCount, sessionRows, articleOpenCount, shareCount, sponsorClickCount] = await Promise.all([
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
-    database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").order("created_at", { ascending: false }).limit(20000),
+    database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").gte("created_at", thirtyDaysAgo).order("created_at", { ascending: false }).range(0, 49999),
     database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned,story_type,category,region,subject,author_name,image").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
+    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "page_view").gte("created_at", thirtyDaysAgo),
+    database.from("rwdnews_events").select("session_id").eq("event_name", "page_view").gte("created_at", thirtyDaysAgo).not("session_id", "is", null).order("created_at", { ascending: false }).range(0, 49999),
+    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "article_open").gte("created_at", thirtyDaysAgo),
+    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "article_share").gte("created_at", thirtyDaysAgo),
+    database.from("sponsor_clicks").select("id", { count: "exact", head: true }),
   ]);
 
-  const firstError = [sponsors, leads, events, payments, clicks, articles, newsletter].find((x) => x.error);
+  const firstError = [sponsors, leads, events, payments, clicks, articles, newsletter, pageViewCount, sessionRows, articleOpenCount, shareCount, sponsorClickCount].find((x) => x.error);
   if (firstError?.error) return json({ error: firstError.error.message }, 400);
 
   const rows = events.data || [];
   const pageViews = rows.filter((r: any) => r.event_name === "page_view");
-  const sessions = new Set(pageViews.map((r: any) => r.session_id).filter(Boolean));
+  const sessions = new Set((sessionRows.data || []).map((r: any) => String(r.session_id)).filter(Boolean));
   const aggregate = (key: string) => {
     const map = new Map<string, number>();
     for (const row of pageViews) {
@@ -295,12 +320,12 @@ export default async (req: Request) => {
       external_source_clicks: externalSourceClicks,
     },
     overview: {
-      page_views: pageViews.length,
+      page_views: Number(pageViewCount.count || 0),
       unique_sessions: sessions.size,
-      article_opens: rows.filter((r:any)=>r.event_name==="article_open").length,
-      shares: rows.filter((r:any)=>r.event_name==="article_share").length,
+      article_opens: Number(articleOpenCount.count || 0),
+      shares: Number(shareCount.count || 0),
       saves: rows.filter((r:any)=>r.event_name==="article_save").length,
-      sponsor_clicks: (clicks.data || []).length,
+      sponsor_clicks: Number(sponsorClickCount.count || 0),
       advertiser_leads: (leads.data || []).length,
       newsletter_subscribers: (newsletter.data || []).filter((n:any)=>n.status==="active").length,
       paid_revenue_naira: revenue,
