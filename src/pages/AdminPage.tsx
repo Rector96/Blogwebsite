@@ -361,7 +361,13 @@ function EngagementPanel({data}:{data:{recommendation_impressions:number;recomme
   return <Panel title="Growth & retention signal" subtitle="Measures whether the site turns first visits into deeper reading and repeat visits."><div className="grid gap-3 grid-cols-2 md:grid-cols-4">{items.map(([label,value])=><div key={label} className="border bg-neutral-50 p-3"><p className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">{label}</p><p className="mt-1 text-xl font-bold">{value}</p></div>)}</div><p className="mt-3 text-xs text-neutral-500">Internal product signals only; they do not guarantee search rankings or traffic growth.</p></Panel>;
 }
 function StatusLine({label,value}:{label:string;value:string}) { return <div className="flex items-center justify-between gap-4 border-b border-neutral-100 py-3 text-sm"><span className="text-neutral-500">{label}</span><span className="text-right font-semibold">{value}</span></div>; }
-function Bars({data}:{data:Array<{label:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="space-y-3">{data.length?data.map(x=><div key={x.label}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate">{x.label}</span><span className="font-bold">{number(x.value)}</span></div><div className="h-2 bg-neutral-100"><div className="h-full bg-neutral-900" style={{width: Math.max(3,(x.value/max)*100)+"%"}} /></div></div>):<p className="text-sm text-neutral-500">No traffic recorded yet.</p>}</div>; }
+function Bars({data}:{data:Array<{label:string;value:number}>}) {
+  const max=Math.max(...data.map(x=>x.value),1);
+  return <div className="space-y-3">{data.length?data.map(x=><div key={x.label}>
+    <div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate">{x.label || "Unknown"}</span><span className="font-bold tabular-nums">{number(x.value)}</span></div>
+    <div className="h-2.5 overflow-hidden rounded-full bg-neutral-100"><div className="h-full bg-neutral-900" style={{width: Math.max(3,(x.value/max)*100)+"%"}} /></div>
+  </div>):<p className="text-sm text-neutral-500">No traffic recorded yet.</p>}</div>;
+}
 function DailyChart({data}:{data:Array<{day:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="flex h-44 items-end gap-1 overflow-x-auto">{data.map(x=><div key={x.day} className="flex min-w-4 flex-1 flex-col items-center justify-end gap-1"><div title={x.day+" · "+number(x.value)} className="w-full min-w-2 bg-neutral-900" style={{height:Math.max(3,(x.value/max)*130)+"px"}} /><span className="hidden text-[8px] text-neutral-400 sm:block">{x.day.slice(5)}</span></div>)}</div>; }
 
 function titleOf(a:any){ return a?.ai_hook_title || a?.original_title || "RWDNEWS story"; }
