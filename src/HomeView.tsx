@@ -74,9 +74,6 @@ export function HomeView({
             <a href="/sport" className="font-semibold text-teal-300 hover:text-white">
               Sports desk
             </a>
-            <a href="/submit" className="font-semibold text-amber-300 hover:text-white">
-              Submit story
-            </a>
             <button type="button" onClick={openAdvertiserForm} className="font-semibold text-amber-400">
               Advertise
             </button>
@@ -138,10 +135,6 @@ export function HomeView({
               {selectedTag === "All"
                 ? `${displayList.length} stories · all topics`
                 : `${displayList.length} ${selectedTag} stories only`}
-              {" · "}
-              <a href="/submit" className="font-semibold text-amber-800 underline-offset-2 hover:underline">
-                Submit a story
-              </a>
             </p>
           </div>
         </div>
