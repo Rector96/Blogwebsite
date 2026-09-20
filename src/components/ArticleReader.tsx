@@ -160,7 +160,7 @@ export function ArticleReader({
             </h1>
             <p className="mt-2 text-sm text-neutral-500">{article.read_time || "3 min read"}</p>
 
-            <div className="mt-6 space-y-4 text-[16px] leading-[1.75] text-neutral-800">
+            <div className="mt-6 space-y-5 text-[18px] leading-[1.8] text-neutral-800 sm:text-[19px]">
               <h2 className="font-display text-lg font-semibold">What you should know</h2>
               <ul className="space-y-3">
                 {bullets.map((b, i) => (
@@ -170,6 +170,16 @@ export function ArticleReader({
                   </li>
                 ))}
               </ul>
+
+              <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5">
+                <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">
+                  RWDNEWS perspective
+                </p>
+                <p className="mt-1 text-[16px] leading-7 text-neutral-700">
+                  Keep the verified facts above separate from interpretation. Watch for confirmed
+                  follow-up reporting before treating developing claims as established.
+                </p>
+              </div>
 
               {article.tags?.length ? (
                 <div className="flex flex-wrap gap-2 pt-2">
