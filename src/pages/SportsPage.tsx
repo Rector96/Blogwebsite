@@ -225,7 +225,8 @@ export default function SportsPage() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 30000);
+    const refreshMs = mode === "live" ? 15000 : 30000;
+    const t = window.setInterval(() => void load(), refreshMs);
     return () => window.clearInterval(t);
   }, []);
   useEffect(() => {
@@ -376,9 +377,9 @@ export default function SportsPage() {
           <div className="mt-6 flex flex-wrap gap-2">
             {[
               ["/sport", "Sports"],
-              ["/sport/live", "Live"],
-              ["/sport/fixtures", "Fixtures"],
+              ["/sport/live", "Live Scores"],
               ["/sport/results", "Results"],
+              ["/sport/fixtures", "Fixtures"],
               ["/sport/predictions", "Predictions"],
             ].map(([href, label]) => (
               <a
@@ -419,7 +420,7 @@ export default function SportsPage() {
           <div className="flex items-end justify-between border-b border-neutral-900 pb-3">
             <div>
               <p className="text-[10px] font-black tracking-[0.16em] text-red-700 uppercase">
-                Match centre
+                {mode === "live" ? "Live scoreboard" : "Match centre"}
               </p>
               <h2 className="font-display text-2xl font-black">
                 {mode === "live"
@@ -502,7 +503,7 @@ export default function SportsPage() {
                     <h3 className="font-display mt-2 text-lg font-bold leading-snug">
                       {s.ai_hook_title || s.original_title}
                     </h3>
-                    <p className="mt-2 line-clamp-4 text-sm leading-6 text-neutral-600">
+                    <p className="mt-2 line-clamp-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
                       {s.ai_summary?.[0] || s.original_description || "Open for the full RWDNEWS briefing."}
                     </p>
                     <p className="mt-3 text-xs font-black text-teal-800">Read full briefing →</p>
