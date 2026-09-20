@@ -167,18 +167,66 @@ async function getAllMatches() {
   });
 }
 
+async function fetchArticleImage(link) {
+  if (!link || !/^https?:\/\//i.test(link)) return "";
+  try {
+    const response = await fetch(link, {
+      headers: { "User-Agent": "RWDNEWS/2.0 sports-image", Accept: "text/html" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!response.ok) return "";
+    const html = await response.text();
+    const match =
+      html.match(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i) ||
+      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/i) ||
+      html.match(/<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"']+)["']/i);
+    if (!match?.[1]) return "";
+    try {
+      return new URL(match[1], link).toString();
+    } catch {
+      return match[1];
+    }
+  } catch {
+    return "";
+  }
+}
+
+async function ensureNewsImages(stories) {
+  const out = [];
+  for (let i = 0; i < stories.length; i += 6) {
+    const batch = stories.slice(i, i + 6);
+    const enriched = await Promise.all(
+      batch.map(async (story) => {
+        if (story.image && /^https?:\/\//i.test(story.image) && !/rwdnews-logo/i.test(story.image)) {
+          return story;
+        }
+        const img = await fetchArticleImage(story.original_url);
+        return { ...story, image: img || story.image || "" };
+      }),
+    );
+    out.push(...enriched);
+  }
+  return out;
+}
+
 function rssImage(item) {
   const candidates = [
     item?.enclosure?.url,
+    item?.enclosure?.link,
     item?.["media:content"]?.$?.url,
     item?.["media:content"]?.url,
     item?.["media:thumbnail"]?.$?.url,
+    item?.["media:thumbnail"]?.url,
     item?.image?.url,
+    item?.image?.link,
+    item?.itunes?.image,
   ];
   const hit = candidates.find((x) => typeof x === "string" && /^https?:\/\//i.test(x));
   if (hit) return hit;
-  const html = clean(item?.content || item?.["content:encoded"] || "");
-  const m = html.match(/src=["'](https?:\/\/[^"']+)["']/i);
+  const html = String(item?.content || item?.["content:encoded"] || item?.summary || item?.description || "");
+  const m =
+    html.match(/<img[^>]+(?:src|data-src)=["'](https?:\/\/[^"' >]+)["']/i) ||
+    html.match(/src=["'](https?:\/\/[^"']+)["']/i);
   return m?.[1] || "";
 }
 
@@ -194,10 +242,10 @@ async function getRssSportsNews() {
           timestamp: item.isoDate || item.pubDate || new Date().toISOString(),
           source,
           original_title: clean(item.title),
-          original_description: clean(item.contentSnippet || item.summary || "").slice(0, 400),
+          original_description: clean(item.contentSnippet || item.summary || "").slice(0, 800),
           ai_hook_title: clean(item.title),
           ai_summary: [
-            clean(item.contentSnippet || item.summary || "Sports report from the live wire.").slice(0, 220),
+            clean(item.contentSnippet || item.summary || "Sports report from the live wire.").slice(0, 500),
           ],
           category: "Sports",
           story_type: "WIRE",
@@ -280,7 +328,7 @@ async function gdeltSports() {
       original_title: clean(article.title || ""),
       original_description: "",
       ai_hook_title: clean(article.title || ""),
-      ai_summary: ["Live sports report from the global news index."],
+      ai_summary: ["Sports report from the global news index."],
       category: "Sports",
       story_type: "WIRE",
     }));
@@ -331,9 +379,10 @@ export async function handler(event) {
       }
     });
 
-    const news = Array.from(newsMap.values())
+    let news = Array.from(newsMap.values())
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, 120);
+      .slice(0, 48);
+    news = await ensureNewsImages(news);
 
     const live = matches.filter((m) => m.live).slice(0, 80);
     const upcoming = matches
@@ -401,7 +450,7 @@ export async function handler(event) {
         },
         providers: {
           scoreboard: hasApiFootball ? "API-Football + ESPN" : "ESPN public boards",
-          news: "RSS + Supabase + GDELT",
+          news: "RSS + Supabase + GDELT + og:image",
         },
         generatedAt: new Date().toISOString(),
       }),
