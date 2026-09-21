@@ -318,7 +318,7 @@ function pexelsMatchScore(photo, story) {
   ).test(alt);
   const titleWords = clean(story?.ai_hook_title || story?.original_title || "")
     .toLowerCase()
-    .split(/\\s+/)
+    .split(/\s+/)
     .filter((word) => word.length >= 5 && !/^(about|after|before|their|there|could|would|should|sports|sport)$/i.test(word))
     .slice(0, 8);
   const titleHits = titleWords.filter((word) => alt.includes(word)).length;
