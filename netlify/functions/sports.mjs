@@ -1,30 +1,24 @@
 import { createClient } from "@supabase/supabase-js";
 import Parser from "rss-parser";
 
+// Fewer boards + fewer date variants = reliable under Netlify time limits
 const ESPN_BOARDS = [
   { sport: "football", path: "soccer/eng.1", league: "Premier League" },
   { sport: "football", path: "soccer/uefa.champions", league: "UEFA Champions League" },
   { sport: "football", path: "soccer/esp.1", league: "La Liga" },
-  { sport: "football", path: "soccer/ger.1", league: "Bundesliga" },
   { sport: "football", path: "soccer/ita.1", league: "Serie A" },
+  { sport: "football", path: "soccer/ger.1", league: "Bundesliga" },
   { sport: "football", path: "soccer/fra.1", league: "Ligue 1" },
-  { sport: "football", path: "soccer/usa.1", league: "MLS" },
   { sport: "basketball", path: "basketball/nba", league: "NBA" },
   { sport: "football", path: "football/nfl", league: "NFL" },
-  { sport: "baseball", path: "baseball/mlb", league: "MLB" },
-  { sport: "hockey", path: "hockey/nhl", league: "NHL" },
-  { sport: "tennis", path: "tennis/atp", league: "ATP" },
 ];
 
 const SPORT_RSS = [
-  ["https://www.espn.com/espn/rss/news", "ESPN"],
   ["https://www.espn.com/espn/rss/soccer/news", "ESPN Soccer"],
   ["https://www.espn.com/espn/rss/nba/news", "ESPN NBA"],
-  ["https://www.espn.com/espn/rss/nfl/news", "ESPN NFL"],
-  ["https://feeds.bbci.co.uk/sport/rss.xml", "BBC Sport"],
   ["https://feeds.bbci.co.uk/sport/football/rss.xml", "BBC Football"],
+  ["https://feeds.bbci.co.uk/sport/rss.xml", "BBC Sport"],
   ["https://www.theguardian.com/football/rss", "Guardian Football"],
-  ["https://www.theguardian.com/sport/rss", "Guardian Sport"],
   ["https://www.skysports.com/rss/12040", "Sky Sports"],
   ["https://www.goal.com/feeds/en/news", "Goal.com"],
   ["https://www.completesports.com/feed/", "Complete Sports"],
@@ -38,8 +32,10 @@ const SPORT_LABELS = {
   hockey: "Hockey",
 };
 
+const PLACEHOLDER = "https://rwdnews.netlify.app/rwdnews-logo.svg";
+
 const rss = new Parser({
-  timeout: 4000,
+  timeout: 5000,
   headers: {
     "User-Agent": "RWDNEWS/2.0 (+https://rwdnews.netlify.app)",
     Accept: "application/rss+xml, application/xml, text/xml, */*",
@@ -103,7 +99,7 @@ async function fetchEspnBoard(board, dates) {
         Accept: "application/json",
         "User-Agent": "Mozilla/5.0 (compatible; RWDNEWS/2.0; +https://rwdnews.netlify.app)",
       },
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(7000),
     });
     if (!response.ok) return [];
     const data = await response.json();
@@ -144,8 +140,18 @@ function mapApiFootballFixture(x) {
   };
 }
 
+function apiFootballKey() {
+  return (
+    process.env.API_FOOTBALL_KEY ||
+    process.env.API_SPORTS_KEY ||
+    process.env.APIFOOTBALL_KEY ||
+    process.env.API_FOOTBALL ||
+    ""
+  );
+}
+
 async function fetchApiFootball() {
-  const apiKey = process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY || "";
+  const apiKey = apiFootballKey();
   if (!apiKey) return [];
   const headers = { "x-apisports-key": apiKey, Accept: "application/json" };
   const out = [];
@@ -157,7 +163,7 @@ async function fetchApiFootball() {
   await Promise.all(
     urls.map(async (url) => {
       try {
-        const response = await fetch(url, { headers, signal: AbortSignal.timeout(9000) });
+        const response = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
         if (!response.ok) return;
         const data = await response.json();
         for (const x of data?.response || []) {
@@ -173,18 +179,19 @@ async function fetchApiFootball() {
 }
 
 async function getAllMatches() {
+  // API-Football first (often richest for football), then lean ESPN
+  const apiMatches = await fetchApiFootball();
+
   const jobs = [];
   for (const board of ESPN_BOARDS) {
-    jobs.push(fetchEspnBoard(board, null));
-    for (const offset of [0, 1, 2, -1]) {
-      jobs.push(fetchEspnBoard(board, dateKey(offset)));
-    }
+    jobs.push(fetchEspnBoard(board, null)); // today board default
+    jobs.push(fetchEspnBoard(board, dateKey(0)));
+    jobs.push(fetchEspnBoard(board, dateKey(1)));
   }
   const settled = await Promise.allSettled(jobs);
-  const all = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-  const apiMatches = await fetchApiFootball();
-  all.push(...apiMatches);
+  const espn = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 
+  const all = [...apiMatches, ...espn];
   const seen = new Set();
   return all.filter((match) => {
     if (!match?.home || !match?.away) return false;
@@ -216,12 +223,45 @@ function rssImage(item) {
   return m?.[1] || "";
 }
 
+async function pexelsImage(query) {
+  const key =
+    process.env.PEXELS_API_KEY ||
+    process.env.PEXELS_KEY ||
+    process.env.PEXELS_API ||
+    "";
+  if (!key) return "";
+  try {
+    const u = new URL("https://api.pexels.com/v1/search");
+    u.searchParams.set("query", query || "football stadium");
+    u.searchParams.set("per_page", "1");
+    u.searchParams.set("orientation", "landscape");
+    const r = await fetch(u.toString(), {
+      headers: { Authorization: key, Accept: "application/json" },
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!r.ok) return "";
+    const data = await r.json();
+    const photo = Array.isArray(data?.photos) ? data.photos[0] : null;
+    return photo?.src?.large || photo?.src?.medium || photo?.src?.original || "";
+  } catch {
+    return "";
+  }
+}
+
+async function resolveStoryImage(existing) {
+  if (existing && /^https?:\/\//i.test(existing) && !/rwdnews-logo/i.test(existing)) {
+    return existing;
+  }
+  const fromPexels = await pexelsImage("soccer football match stadium");
+  return fromPexels || PLACEHOLDER;
+}
+
 async function getRssSportsNews() {
   const results = await Promise.allSettled(
     SPORT_RSS.map(async ([url, source]) => {
       try {
         const feed = await rss.parseURL(url);
-        return (feed.items || []).slice(0, 12).map((item, index) => ({
+        return (feed.items || []).slice(0, 10).map((item, index) => ({
           id: `rss-${Buffer.from(String(item.link || index)).toString("base64url").slice(0, 20)}`,
           original_url: String(item.link || item.guid || ""),
           image: rssImage(item),
@@ -256,7 +296,7 @@ async function getDbSportsNews() {
         "id,original_url,image,timestamp,source,original_title,original_description,ai_hook_title,ai_summary,category,region,body,story_type",
       )
       .order("timestamp", { ascending: false })
-      .limit(200);
+      .limit(120);
     if (error || !Array.isArray(data)) return [];
     const sportRe =
       /\b(sport|sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|transfer|arsenal|chelsea|liverpool|manchester|barcelona|real madrid|basketball|baseball|hockey)\b/i;
@@ -295,7 +335,7 @@ async function gdeltSports() {
       "(football OR soccer OR NBA OR NFL OR Premier League OR Champions League OR transfer OR tennis)",
     );
     u.searchParams.set("mode", "artlist");
-    u.searchParams.set("maxrecords", "50");
+    u.searchParams.set("maxrecords", "40");
     u.searchParams.set("timespan", "72h");
     u.searchParams.set("sort", "datedesc");
     u.searchParams.set("format", "json");
@@ -329,11 +369,26 @@ function isRumor(story) {
   );
 }
 
+async function withImages(stories) {
+  const out = [];
+  for (let i = 0; i < stories.length; i += 6) {
+    const batch = stories.slice(i, i + 6);
+    const enriched = await Promise.all(
+      batch.map(async (s) => ({
+        ...s,
+        image: await resolveStoryImage(s.image),
+      })),
+    );
+    out.push(...enriched);
+  }
+  return out;
+}
+
 export async function handler(event) {
   try {
     const qs = event.queryStringParameters || {};
     const action = qs.action || "hub";
-    const hasApiFootball = Boolean(process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY);
+    const hasApiFootball = Boolean(apiFootballKey());
     const affiliateUrl = process.env.SPORTS_AFFILIATE_URL || process.env.VITE_SPORTS_AFFILIATE_URL || "";
 
     const [matches, dbNews, rssNews, discovered] = await Promise.all([
@@ -371,9 +426,10 @@ export async function handler(event) {
       }
     });
 
-    const news = Array.from(newsMap.values())
+    let news = Array.from(newsMap.values())
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, 48);
+      .slice(0, 36);
+    news = await withImages(news);
 
     const live = matches.filter((m) => m.live).slice(0, 80);
     const upcoming = matches
@@ -391,7 +447,7 @@ export async function handler(event) {
         ),
       )
       .slice(0, 120);
-    const rumors = news.filter(isRumor).slice(0, 50);
+    const rumors = news.filter(isRumor).slice(0, 40);
 
     const majorLeagues = [
       "Premier League",
@@ -400,12 +456,8 @@ export async function handler(event) {
       "Bundesliga",
       "Serie A",
       "Ligue 1",
-      "MLS",
       "NBA",
       "NFL",
-      "MLB",
-      "NHL",
-      "ATP",
     ].map((name) => ({
       name,
       available: matches.some((m) => m.league.toLowerCase().includes(name.toLowerCase())),
@@ -420,7 +472,7 @@ export async function handler(event) {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
-        "Cache-Control": "public, max-age=30, stale-while-revalidate=120",
+        "Cache-Control": "public, max-age=20, stale-while-revalidate=60",
       },
       body: JSON.stringify({
         live,
@@ -442,7 +494,8 @@ export async function handler(event) {
         },
         providers: {
           scoreboard: hasApiFootball ? "API-Football + ESPN" : "ESPN public boards",
-          news: "RSS + Supabase + GDELT",
+          news: "RSS + Supabase + GDELT + Pexels",
+          apiFootballKeyPresent: hasApiFootball,
         },
         generatedAt: new Date().toISOString(),
       }),
