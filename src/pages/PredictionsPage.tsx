@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { Helmet } from "react-helmet-async";
 
 type Match = {
   id: string;
@@ -52,6 +53,7 @@ export default function PredictionsPage() {
   } | null>(null);
   const [predicting, setPredicting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [affiliateUrl, setAffiliateUrl] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -68,6 +70,7 @@ export default function PredictionsPage() {
         const list: Match[] = [];
         if (sportsRes.ok) {
           const d = await sportsRes.json();
+          if (typeof d.affiliateUrl === "string") setAffiliateUrl(d.affiliateUrl);
           list.push(...(d.upcoming || []), ...(d.featured || []), ...(d.live || []));
         }
         if (predRes.ok) {
@@ -111,6 +114,10 @@ export default function PredictionsPage() {
       const d = await r.json();
       setPrediction(d);
       window.history.replaceState({}, "", `/sport/predictions?id=${encodeURIComponent(id)}`);
+      // Scroll outlook into view on mobile
+      window.setTimeout(() => {
+        document.getElementById("outlook-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Prediction failed");
     } finally {
@@ -128,28 +135,31 @@ export default function PredictionsPage() {
   const p = prediction?.prediction;
 
   return (
-    <main className="min-h-dvh bg-[#f4f4f2] text-neutral-950">
-      <header className="border-b border-neutral-800 bg-neutral-950 text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <a href="/" className="font-display text-lg font-bold sm:text-xl">
-            RWDNEWS
+    <main className="min-h-dvh bg-[#f4f4f2] pb-24 text-neutral-950">
+      <Helmet>
+        <title>Predictions | RWDNEWS Sports</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Helmet>
+
+      <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 text-white backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6">
+          <a href="/sport" className="font-display text-base font-bold sm:text-lg">
+            RWDNEWS SPORTS
           </a>
-          <nav className="flex items-center gap-3">
-            <a href="/sport" className="text-xs font-semibold text-neutral-300">
-              ← Sports desk
-            </a>
-          </nav>
+          <a href="/sport" className="text-xs font-semibold text-neutral-300">
+            ← Desk
+          </a>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-neutral-950 to-neutral-900 p-5 text-white shadow-lg sm:p-8">
+      <div className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
+        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-neutral-950 to-neutral-900 p-4 text-white shadow-lg sm:p-8">
           <p className="text-[10px] font-extrabold tracking-[0.2em] text-amber-400 uppercase">
             Match outlooks
           </p>
-          <h1 className="font-display mt-1 text-3xl font-semibold sm:text-4xl">Predictions</h1>
+          <h1 className="font-display mt-1 text-2xl font-semibold sm:text-4xl">Predictions</h1>
           <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-300">
-            Pick a fixture for probabilities and a clear, cautious outlook. Not betting advice.
+            Free outlooks for entertainment. Not betting advice. 18+ where required.
           </p>
         </div>
 
@@ -159,34 +169,38 @@ export default function PredictionsPage() {
           </div>
         ) : null}
 
-        <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_380px]">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_min(380px,100%)]">
           <section>
-            <h2 className="font-display text-xl font-semibold">Choose a match</h2>
-            <p className="mt-1 text-sm text-neutral-500">Tap any card for an instant outlook.</p>
+            <h2 className="font-display text-lg font-semibold sm:text-xl">Choose a match</h2>
+            <p className="mt-1 text-sm text-neutral-500">Tap a card — outlook opens below on mobile.</p>
 
             {loading ? (
               <p className="mt-6 text-sm text-neutral-500">Loading fixtures…</p>
             ) : matches.length ? (
-              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {matches.slice(0, 48).map((m) => (
                   <button
                     key={m.id}
                     type="button"
                     onClick={() => void runPrediction(m.id)}
-                    className={`rounded-xl border p-4 text-left transition ${
+                    className={`rounded-xl border p-3.5 text-left transition active:scale-[0.99] sm:p-4 ${
                       selectedId === m.id
                         ? "border-amber-500 bg-amber-50 shadow-md"
                         : "border-neutral-200 bg-white shadow-sm hover:border-neutral-400"
                     }`}
                   >
-                    <p className="text-[9px] font-bold tracking-wider text-teal-800 uppercase">
+                    <p className="truncate text-[9px] font-bold tracking-wider text-teal-800 uppercase">
                       {m.league}
                     </p>
-                    <p className="mt-2 font-display text-base font-semibold leading-snug">
+                    <p className="mt-2 font-display text-[15px] font-semibold leading-snug sm:text-base">
                       {m.home} vs {m.away}
                     </p>
                     <p className="mt-1 text-[11px] text-neutral-500">
-                      {m.live ? "LIVE" : m.status}
+                      {m.live ? (
+                        <span className="font-bold text-red-600">LIVE</span>
+                      ) : (
+                        m.status
+                      )}
                       {m.startTime ? ` · ${timeLabel(m.startTime)}` : ""}
                     </p>
                   </button>
@@ -196,10 +210,6 @@ export default function PredictionsPage() {
               <div className="mt-6 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-neutral-600">
                 <p className="font-display text-lg font-semibold text-neutral-900">
                   No fixtures on the board right now
-                </p>
-                <p className="mt-2">
-                  When leagues publish the next set of matches, they will appear here automatically.
-                  You can still follow sports news on the Sports desk.
                 </p>
                 <a
                   href="/sport"
@@ -211,8 +221,8 @@ export default function PredictionsPage() {
             )}
           </section>
 
-          <aside className="lg:sticky lg:top-6 lg:self-start">
-            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-md">
+          <aside id="outlook-panel" className="lg:sticky lg:top-20 lg:self-start">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-md sm:p-5">
               <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-700 uppercase">
                 Outlook panel
               </p>
@@ -221,7 +231,9 @@ export default function PredictionsPage() {
                 <p className="mt-4 text-sm text-neutral-500">Building outlook…</p>
               ) : p && selected ? (
                 <>
-                  <h3 className="font-display mt-2 text-xl font-semibold leading-snug">{p.headline}</h3>
+                  <h3 className="font-display mt-2 text-lg font-semibold leading-snug sm:text-xl">
+                    {p.headline}
+                  </h3>
                   <p className="mt-1 text-sm text-neutral-600">
                     {selected.home} vs {selected.away}
                   </p>
@@ -234,7 +246,7 @@ export default function PredictionsPage() {
                     ].map(([label, pct, name]) => (
                       <div key={String(label)}>
                         <div className="mb-1 flex justify-between text-[11px] font-semibold">
-                          <span>{name as string}</span>
+                          <span className="truncate pr-2">{name as string}</span>
                           <span>{Number(pct).toFixed(0)}%</span>
                         </div>
                         <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
@@ -269,6 +281,26 @@ export default function PredictionsPage() {
 
                   <p className="mt-4 text-xs leading-relaxed text-neutral-500">{p.uncertainty}</p>
 
+                  {/* Affiliate zone — high attention under prediction */}
+                  {affiliateUrl ? (
+                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                      <p className="text-[10px] font-extrabold tracking-wider text-emerald-900 uppercase">
+                        Compare odds
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-600">
+                        Optional partner link. 18+ · Gamble responsibly.
+                      </p>
+                      <a
+                        href={affiliateUrl}
+                        target="_blank"
+                        rel="noopener noreferrer sponsored"
+                        className="mt-3 flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white"
+                      >
+                        See live odds →
+                      </a>
+                    </div>
+                  ) : null}
+
                   {prediction?.disclaimer ? (
                     <p className="mt-4 border-t pt-3 text-[10px] leading-relaxed text-neutral-400">
                       {prediction.disclaimer}
@@ -277,7 +309,7 @@ export default function PredictionsPage() {
                 </>
               ) : (
                 <p className="mt-4 text-sm text-neutral-500">
-                  Select a match on the left to see probabilities and analysis.
+                  Select a match to see probabilities and analysis.
                 </p>
               )}
             </div>
