@@ -165,14 +165,16 @@ function MatchRow({ match }: { match: Match }) {
           </div>
         </div>
       </a>
-      <div className="mt-2.5 flex justify-center">
-        <a
-          href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
-          className="inline-flex rounded-full bg-amber-400 px-3 py-1.5 text-[11px] font-extrabold text-neutral-950"
-        >
-          📊 AI outlook
-        </a>
-      </div>
+      {!match.completed && !match.live ? (
+        <div className="mt-2.5 flex justify-center">
+          <a
+            href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
+            className="inline-flex rounded-full bg-amber-400 px-3 py-1.5 text-[11px] font-extrabold text-neutral-950"
+          >
+            📊 Match outlook
+          </a>
+        </div>
+      ) : null}
     </article>
   );
 }
@@ -227,7 +229,7 @@ export default function SportsPage() {
         const newsData = await newsResponse.json();
         externalNews = Array.isArray(newsData?.articles)
           ? newsData.articles.filter((a: Story) =>
-              /sports|football|soccer|premier|champions|nba|nfl|tennis|transfer/i.test(
+              /sports|football|soccer|premier|champions|nba|wnba|nfl|tennis|atp|wta|mlb|baseball|nhl|hockey|basketball|transfer|mls/i.test(
                 `${a.original_title} ${a.ai_hook_title}`,
               ),
             )
