@@ -58,6 +58,11 @@ function dateKey(offsetDays = 0) {
   return `${y}${m}${day}`;
 }
 
+function isoDate(offsetDays = 0) {
+  const d = new Date(Date.now() + offsetDays * 86400000);
+  return d.toISOString().slice(0, 10);
+}
+
 function mapEspnEvent(event, board) {
   const competition = event?.competitions?.[0];
   const competitors = Array.isArray(competition?.competitors) ? competition.competitors : [];
@@ -109,6 +114,64 @@ async function fetchEspnBoard(board, dates) {
   }
 }
 
+function mapApiFootballFixture(x) {
+  const statusShort = String(x.fixture?.status?.short || "");
+  const statusLong = clean(x.fixture?.status?.long || "Scheduled");
+  const live =
+    ["1H", "2H", "ET", "BT", "P", "LIVE", "HT"].includes(statusShort) ||
+    /live|half|progress/i.test(statusLong);
+  const completed = ["FT", "AET", "PEN"].includes(statusShort) || /full.?time|finished/i.test(statusLong);
+  return {
+    id: `api-football-${x.fixture.id}`,
+    providerId: String(x.fixture.id),
+    provider: "API-Football",
+    sport: "football",
+    sportLabel: "Football",
+    league: clean(x.league?.name || "Football"),
+    home: clean(x.teams?.home?.name),
+    away: clean(x.teams?.away?.name),
+    homeScore: x.goals?.home ?? null,
+    awayScore: x.goals?.away ?? null,
+    status: statusLong,
+    statusState: live ? "in" : completed ? "post" : "pre",
+    startTime: x.fixture?.date,
+    live,
+    completed,
+    homeLogo: x.teams?.home?.logo || "",
+    awayLogo: x.teams?.away?.logo || "",
+    venue: clean(x.fixture?.venue?.name || ""),
+    apiFixtureId: String(x.fixture.id),
+  };
+}
+
+async function fetchApiFootball() {
+  const apiKey = process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY || "";
+  if (!apiKey) return [];
+  const headers = { "x-apisports-key": apiKey, Accept: "application/json" };
+  const out = [];
+  const urls = [
+    "https://v3.football.api-sports.io/fixtures?live=all",
+    `https://v3.football.api-sports.io/fixtures?date=${isoDate(0)}`,
+    `https://v3.football.api-sports.io/fixtures?date=${isoDate(1)}`,
+  ];
+  await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const response = await fetch(url, { headers, signal: AbortSignal.timeout(9000) });
+        if (!response.ok) return;
+        const data = await response.json();
+        for (const x of data?.response || []) {
+          const m = mapApiFootballFixture(x);
+          if (m.home && m.away) out.push(m);
+        }
+      } catch {
+        /* ignore */
+      }
+    }),
+  );
+  return out;
+}
+
 async function getAllMatches() {
   const jobs = [];
   for (const board of ESPN_BOARDS) {
@@ -119,43 +182,8 @@ async function getAllMatches() {
   }
   const settled = await Promise.allSettled(jobs);
   const all = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-
-  const apiKey = process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY || "";
-  if (apiKey) {
-    try {
-      const response = await fetch("https://v3.football.api-sports.io/fixtures?live=all", {
-        headers: { "x-apisports-key": apiKey, Accept: "application/json" },
-        signal: AbortSignal.timeout(8000),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        for (const x of data?.response || []) {
-          all.push({
-            id: `api-football-${x.fixture.id}`,
-            providerId: String(x.fixture.id),
-            provider: "API-Football",
-            sport: "football",
-            sportLabel: "Football",
-            league: clean(x.league?.name || "Football"),
-            home: clean(x.teams?.home?.name),
-            away: clean(x.teams?.away?.name),
-            homeScore: x.goals?.home ?? null,
-            awayScore: x.goals?.away ?? null,
-            status: clean(x.fixture?.status?.long || "Live"),
-            startTime: x.fixture?.date,
-            live: true,
-            completed: false,
-            homeLogo: x.teams?.home?.logo || "",
-            awayLogo: x.teams?.away?.logo || "",
-            venue: clean(x.fixture?.venue?.name || ""),
-            apiFixtureId: String(x.fixture.id),
-          });
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-  }
+  const apiMatches = await fetchApiFootball();
+  all.push(...apiMatches);
 
   const seen = new Set();
   return all.filter((match) => {
@@ -165,48 +193,6 @@ async function getAllMatches() {
     seen.add(key);
     return true;
   });
-}
-
-async function fetchArticleImage(link) {
-  if (!link || !/^https?:\/\//i.test(link)) return "";
-  try {
-    const response = await fetch(link, {
-      headers: { "User-Agent": "RWDNEWS/2.0 sports-image", Accept: "text/html" },
-      signal: AbortSignal.timeout(4000),
-    });
-    if (!response.ok) return "";
-    const html = await response.text();
-    const match =
-      html.match(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i) ||
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/i) ||
-      html.match(/<meta[^>]+property=["']og:image:secure_url["'][^>]+content=["']([^"']+)["']/i);
-    if (!match?.[1]) return "";
-    try {
-      return new URL(match[1], link).toString();
-    } catch {
-      return match[1];
-    }
-  } catch {
-    return "";
-  }
-}
-
-async function ensureNewsImages(stories) {
-  const out = [];
-  for (let i = 0; i < stories.length; i += 6) {
-    const batch = stories.slice(i, i + 6);
-    const enriched = await Promise.all(
-      batch.map(async (story) => {
-        if (story.image && /^https?:\/\//i.test(story.image) && !/rwdnews-logo/i.test(story.image)) {
-          return story;
-        }
-        const img = await fetchArticleImage(story.original_url);
-        return { ...story, image: img || story.image || "" };
-      }),
-    );
-    out.push(...enriched);
-  }
-  return out;
 }
 
 function rssImage(item) {
@@ -245,7 +231,7 @@ async function getRssSportsNews() {
           original_description: clean(item.contentSnippet || item.summary || "").slice(0, 800),
           ai_hook_title: clean(item.title),
           ai_summary: [
-            clean(item.contentSnippet || item.summary || "Sports report from the live wire.").slice(0, 500),
+            clean(item.contentSnippet || item.summary || "Sports report from the live wire.").slice(0, 400),
           ],
           category: "Sports",
           story_type: "WIRE",
@@ -348,6 +334,7 @@ export async function handler(event) {
     const qs = event.queryStringParameters || {};
     const action = qs.action || "hub";
     const hasApiFootball = Boolean(process.env.API_FOOTBALL_KEY || process.env.API_SPORTS_KEY);
+    const affiliateUrl = process.env.SPORTS_AFFILIATE_URL || process.env.VITE_SPORTS_AFFILIATE_URL || "";
 
     const [matches, dbNews, rssNews, discovered] = await Promise.all([
       getAllMatches(),
@@ -368,7 +355,12 @@ export async function handler(event) {
       return {
         statusCode: 200,
         headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=20" },
-        body: JSON.stringify({ match, detail: null, generatedAt: new Date().toISOString() }),
+        body: JSON.stringify({
+          match,
+          detail: null,
+          affiliateUrl,
+          generatedAt: new Date().toISOString(),
+        }),
       };
     }
 
@@ -379,10 +371,9 @@ export async function handler(event) {
       }
     });
 
-    let news = Array.from(newsMap.values())
+    const news = Array.from(newsMap.values())
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
       .slice(0, 48);
-    news = await ensureNewsImages(news);
 
     const live = matches.filter((m) => m.live).slice(0, 80);
     const upcoming = matches
@@ -440,6 +431,7 @@ export async function handler(event) {
         rumors,
         majorLeagues,
         bySport,
+        affiliateUrl,
         counts: {
           matches: matches.length,
           live: live.length,
@@ -450,7 +442,7 @@ export async function handler(event) {
         },
         providers: {
           scoreboard: hasApiFootball ? "API-Football + ESPN" : "ESPN public boards",
-          news: "RSS + Supabase + GDELT + og:image",
+          news: "RSS + Supabase + GDELT",
         },
         generatedAt: new Date().toISOString(),
       }),
@@ -469,6 +461,7 @@ export async function handler(event) {
         rumors: [],
         majorLeagues: [],
         bySport: {},
+        affiliateUrl: "",
       }),
     };
   }
