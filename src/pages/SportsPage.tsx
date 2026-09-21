@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { ArticleReader } from "../components/ArticleReader";
+import { SiteFooter } from "../components/SiteFooter";
 
 type Match = {
   id: string;
@@ -30,16 +30,40 @@ type Story = {
   original_description: string;
   ai_hook_title: string;
   ai_summary: string[];
+  category?: string;
 };
 
 const sports = [
-  ["all", "All sports", "🏆"],
+  ["all", "All", "🏆"],
   ["football", "Football", "⚽"],
   ["basketball", "Basketball", "🏀"],
   ["tennis", "Tennis", "🎾"],
   ["baseball", "Baseball", "⚾"],
   ["hockey", "Hockey", "🏒"],
 ];
+
+const READ_KEY = "rwdnews_read_story_ids";
+
+function loadReadIds(): Set<string> {
+  try {
+    const raw = localStorage.getItem(READ_KEY);
+    const arr = raw ? (JSON.parse(raw) as string[]) : [];
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function markRead(id: string) {
+  try {
+    const set = loadReadIds();
+    set.add(id);
+    const arr = Array.from(set).slice(-200);
+    localStorage.setItem(READ_KEY, JSON.stringify(arr));
+  } catch {
+    /* ignore */
+  }
+}
 
 function timeLabel(iso?: string) {
   if (!iso) return "Time TBA";
@@ -59,46 +83,67 @@ function matchPath(id: string) {
   return `/sport/match/${encodeURIComponent(id)}`;
 }
 
+function storyHref(item: Story) {
+  const title = (item.ai_hook_title || item.original_title)
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 90);
+  return "/news/" + title + "--" + encodeURIComponent(item.id);
+}
+
+function openStory(item: Story) {
+  markRead(item.id);
+  try {
+    sessionStorage.setItem("rwdnews_pending_story", JSON.stringify(item));
+    sessionStorage.setItem("rwdnews_pending_story_id", item.id);
+  } catch {
+    /* ignore */
+  }
+  window.location.href = storyHref(item);
+}
+
 function scoreText(m: Match) {
   return m.homeScore == null && m.awayScore == null ? "—" : `${m.homeScore ?? 0} - ${m.awayScore ?? 0}`;
 }
 
 function MatchCard({ match }: { match: Match }) {
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-      <a href={matchPath(match.id)} className="block">
+    <div className="rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm sm:p-4">
+      <a href={matchPath(match.id)} className="block active:opacity-90">
         <div className="flex items-center justify-between gap-2 text-[10px] font-bold tracking-wide uppercase">
           <span className="truncate text-teal-800">{match.league}</span>
-          <span className={match.live ? "text-red-600" : "text-neutral-400"}>
+          <span className={match.live ? "shrink-0 text-red-600" : "shrink-0 text-neutral-400"}>
             {match.live ? "● LIVE" : match.status}
           </span>
         </div>
-        <div className="mt-4 grid grid-cols-[1fr_auto] items-center gap-3">
-          <div className="space-y-3 text-sm font-semibold">
-            <div className="flex items-center gap-2 truncate">
+        <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-2">
+          <div className="min-w-0 space-y-2.5 text-sm font-semibold">
+            <div className="flex items-center gap-2">
               {match.homeLogo ? (
-                <img src={match.homeLogo} alt="" className="size-6 object-contain" />
+                <img src={match.homeLogo} alt="" className="size-5 shrink-0 object-contain sm:size-6" />
               ) : (
-                <span className="size-6 rounded-full bg-neutral-100" />
+                <span className="size-5 shrink-0 rounded-full bg-neutral-100 sm:size-6" />
               )}
               <span className="truncate">{match.home}</span>
             </div>
-            <div className="flex items-center gap-2 truncate">
+            <div className="flex items-center gap-2">
               {match.awayLogo ? (
-                <img src={match.awayLogo} alt="" className="size-6 object-contain" />
+                <img src={match.awayLogo} alt="" className="size-5 shrink-0 object-contain sm:size-6" />
               ) : (
-                <span className="size-6 rounded-full bg-neutral-100" />
+                <span className="size-5 shrink-0 rounded-full bg-neutral-100 sm:size-6" />
               )}
               <span className="truncate">{match.away}</span>
             </div>
           </div>
-          <div className="text-right font-display text-lg font-bold tabular-nums">
+          <div className="text-right font-display text-base font-bold tabular-nums sm:text-lg">
             <div>{match.homeScore ?? "—"}</div>
             <div>{match.awayScore ?? "—"}</div>
           </div>
         </div>
-        <p className="mt-4 text-[10px] text-neutral-400">{timeLabel(match.startTime)}</p>
-        <p className="mt-2 text-xs font-extrabold text-teal-800">Match centre →</p>
+        <p className="mt-3 text-[10px] text-neutral-400">{timeLabel(match.startTime)}</p>
+        <p className="mt-1.5 text-xs font-extrabold text-teal-800">Match centre →</p>
       </a>
       <a
         href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
@@ -131,15 +176,13 @@ export default function SportsPage() {
     results: Match[];
     news: Story[];
     rumors: Story[];
-    majorLeagues: { name: string; available: boolean }[];
-    bySport: Record<string, Match[]>;
+    affiliateUrl: string;
     counts?: {
       matches: number;
       live: number;
       results: number;
       upcoming: number;
       news: number;
-      rumors: number;
     };
   }>({
     live: [],
@@ -148,15 +191,16 @@ export default function SportsPage() {
     results: [],
     news: [],
     rumors: [],
-    majorLeagues: [],
-    bySport: {},
+    affiliateUrl: "",
   });
   const [selectedSport, setSelectedSport] = useState("all");
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [storyTab, setStoryTab] = useState<"news" | "rumors">("news");
-  const [activeStory, setActiveStory] = useState<Story | null>(null);
+  const [readIds, setReadIds] = useState<Set<string>>(() =>
+    typeof window !== "undefined" ? loadReadIds() : new Set(),
+  );
 
   const load = async () => {
     setLoading(true);
@@ -172,7 +216,7 @@ export default function SportsPage() {
         const newsData = await newsResponse.json();
         externalNews = Array.isArray(newsData?.articles)
           ? newsData.articles.filter((a: Story) =>
-              /sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|basketball|baseball|hockey|rugby|boxing|athletics|formula 1|transfer|arsenal|chelsea|liverpool|manchester|barcelona|madrid/i.test(
+              /sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|basketball|baseball|hockey|rugby|boxing|athletics|formula 1|transfer/i.test(
                 `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
               ),
             )
@@ -200,8 +244,7 @@ export default function SportsPage() {
             `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
           ),
         ),
-        majorLeagues: Array.isArray(sportsData.majorLeagues) ? sportsData.majorLeagues : [],
-        bySport: sportsData.bySport || {},
+        affiliateUrl: typeof sportsData.affiliateUrl === "string" ? sportsData.affiliateUrl : "",
         counts: sportsData.counts,
       });
     } finally {
@@ -228,6 +271,7 @@ export default function SportsPage() {
     const refreshMs = mode === "live" ? 15000 : 30000;
     const t = window.setInterval(() => void load(), refreshMs);
     return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
     if (matchId) void loadDetail();
@@ -245,64 +289,79 @@ export default function SportsPage() {
 
   if (matchId) {
     const m = detail?.match as Match | undefined;
+    const aff = detail?.affiliateUrl || data.affiliateUrl || "";
     return (
-      <main className="min-h-dvh bg-[#f4f4f2] text-neutral-950">
+      <main className="min-h-dvh bg-[#f4f4f2] pb-20 text-neutral-950">
         <Helmet>
           <title>{m ? `${m.home} vs ${m.away} | RWDNEWS Sports` : "Match Centre | RWDNEWS Sports"}</title>
         </Helmet>
-        <header className="border-b border-neutral-800 bg-neutral-950 text-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-            <a href="/sport" className="font-display font-bold">
+        <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950 text-white">
+          <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-3 sm:px-4">
+            <a href="/sport" className="font-display text-sm font-bold sm:text-base">
               RWDNEWS SPORTS
             </a>
             <a href="/" className="text-xs text-neutral-300">
-              News home
+              News
             </a>
           </div>
         </header>
-        <div className="mx-auto max-w-5xl px-4 py-6 sm:py-10">
+        <div className="mx-auto max-w-5xl px-3 py-5 sm:px-4 sm:py-10">
           <a href="/sport" className="text-xs font-bold text-teal-800">
             ← Back to Sports
           </a>
           {detailLoading ? (
-            <div className="mt-6 rounded-2xl bg-white p-8">Loading match centre…</div>
+            <div className="mt-6 rounded-2xl bg-white p-8 text-sm">Loading match centre…</div>
           ) : m ? (
-            <section className="mt-5 rounded-3xl bg-neutral-950 p-6 text-white shadow-xl sm:p-10">
+            <section className="mt-4 rounded-3xl bg-neutral-950 p-5 text-white shadow-xl sm:p-10">
               <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">
                 {m.league} · {m.sportLabel || m.sport}
               </p>
-              <div className="mt-8 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                <div className="text-center">
-                  {m.homeLogo ? <img src={m.homeLogo} alt="" className="mx-auto size-16 object-contain" /> : null}
-                  <h1 className="font-display mt-3 text-lg font-bold sm:text-2xl">{m.home}</h1>
+              <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:mt-8 sm:gap-3">
+                <div className="min-w-0 text-center">
+                  {m.homeLogo ? (
+                    <img src={m.homeLogo} alt="" className="mx-auto size-12 object-contain sm:size-16" />
+                  ) : null}
+                  <h1 className="font-display mt-2 truncate text-sm font-bold sm:mt-3 sm:text-2xl">{m.home}</h1>
                 </div>
                 <div className="text-center">
-                  <div className="font-display text-3xl font-black sm:text-5xl">{scoreText(m)}</div>
+                  <div className="font-display text-2xl font-black sm:text-5xl">{scoreText(m)}</div>
                   <p className={m.live ? "mt-2 text-xs font-bold text-red-400" : "mt-2 text-xs text-neutral-400"}>
                     {m.live ? "LIVE" : m.status}
                   </p>
                 </div>
-                <div className="text-center">
-                  {m.awayLogo ? <img src={m.awayLogo} alt="" className="mx-auto size-16 object-contain" /> : null}
-                  <h2 className="font-display mt-3 text-lg font-bold sm:text-2xl">{m.away}</h2>
+                <div className="min-w-0 text-center">
+                  {m.awayLogo ? (
+                    <img src={m.awayLogo} alt="" className="mx-auto size-12 object-contain sm:size-16" />
+                  ) : null}
+                  <h2 className="font-display mt-2 truncate text-sm font-bold sm:mt-3 sm:text-2xl">{m.away}</h2>
                 </div>
               </div>
-              <p className="mt-6 text-center text-xs text-neutral-400">
+              <p className="mt-5 text-center text-xs text-neutral-400">
                 {timeLabel(m.startTime)}
                 {m.venue ? ` · ${m.venue}` : ""}
               </p>
-              <div className="mt-6 flex justify-center">
+              <div className="mt-5 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
                 <a
                   href={`/sport/predictions?id=${encodeURIComponent(m.id)}`}
-                  className="rounded-full bg-amber-400 px-5 py-2 text-xs font-extrabold text-neutral-950"
+                  className="rounded-full bg-amber-400 px-5 py-2.5 text-center text-xs font-extrabold text-neutral-950"
                 >
-                  Open prediction outlook →
+                  Prediction outlook →
                 </a>
+                {aff ? (
+                  <a
+                    href={aff}
+                    target="_blank"
+                    rel="noopener noreferrer sponsored"
+                    className="rounded-full border border-emerald-400/50 px-5 py-2.5 text-center text-xs font-extrabold text-emerald-300"
+                  >
+                    Compare odds →
+                  </a>
+                ) : null}
               </div>
             </section>
           ) : (
-            <div className="mt-6 rounded-2xl border bg-white p-8 text-center">
-              This match is no longer in the live feed. Return to Sports for the latest fixtures.
+            <div className="mt-6 rounded-2xl border bg-white p-8 text-center text-sm">
+              This match is no longer in the live feed.
             </div>
           )}
         </div>
@@ -338,7 +397,7 @@ export default function SportsPage() {
           : "Sports";
 
   return (
-    <main className="min-h-dvh bg-[#f4f4f2] text-neutral-950">
+    <main className="min-h-dvh bg-[#f4f4f2] pb-24 text-neutral-950">
       <Helmet>
         <title>{title} | RWDNEWS</title>
         <meta
@@ -347,9 +406,9 @@ export default function SportsPage() {
         />
       </Helmet>
 
-      <header className="border-b border-neutral-800 bg-neutral-950 text-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <a href="/sport" className="font-display text-lg font-black tracking-tight">
+      <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 text-white backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6">
+          <a href="/sport" className="font-display text-base font-black tracking-tight sm:text-lg">
             RWDNEWS SPORTS
           </a>
           <a href="/" className="text-xs font-semibold text-neutral-300">
@@ -358,37 +417,37 @@ export default function SportsPage() {
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8">
-        <section className="rounded-3xl bg-neutral-950 p-6 text-white shadow-lg sm:p-9">
+      <div className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
+        <section className="rounded-3xl bg-neutral-950 p-5 text-white shadow-lg sm:p-9">
           <p className="text-[10px] font-black tracking-[0.2em] text-amber-400 uppercase">
             RWDNEWS Sports Centre
           </p>
-          <h1 className="font-display mt-2 text-3xl font-black sm:text-5xl">{title}</h1>
+          <h1 className="font-display mt-2 text-2xl font-black sm:text-5xl">{title}</h1>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-neutral-300">
-            Scores, fixtures, results and sports news in one place. Open any story to read the full
-            briefing without leaving RWDNEWS.
+            Scores, fixtures, results and short sports briefings. Tap a story to read on RWDNEWS, then
+            open the full report on the publisher.
           </p>
           {data.counts ? (
-            <p className="mt-4 text-[11px] text-neutral-400">
+            <p className="mt-3 text-[11px] text-neutral-400">
               {data.counts.matches} fixtures · {data.counts.live} live · {data.counts.results} results ·{" "}
-              {data.counts.news} sports stories
+              {data.counts.news} stories
             </p>
           ) : null}
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
             {[
               ["/sport", "Sports"],
-              ["/sport/live", "Live Scores"],
+              ["/sport/live", "Live"],
               ["/sport/results", "Results"],
               ["/sport/fixtures", "Fixtures"],
-              ["/sport/predictions", "Predictions"],
+              ["/sport/predictions", "Predict"],
             ].map(([href, label]) => (
               <a
                 key={href}
                 href={href}
                 className={
                   path === href
-                    ? "rounded-full bg-amber-400 px-4 py-2 text-xs font-black text-neutral-950"
-                    : "rounded-full border border-neutral-700 px-4 py-2 text-xs font-bold text-white"
+                    ? "shrink-0 rounded-full bg-amber-400 px-3.5 py-2 text-xs font-black text-neutral-950"
+                    : "shrink-0 rounded-full border border-neutral-700 px-3.5 py-2 text-xs font-bold text-white"
                 }
               >
                 {label}
@@ -397,7 +456,7 @@ export default function SportsPage() {
           </div>
         </section>
 
-        <section className="mt-6">
+        <section className="mt-5">
           <div className="flex gap-2 overflow-x-auto pb-1">
             {sports.map(([id, label, icon]) => (
               <button
@@ -406,8 +465,8 @@ export default function SportsPage() {
                 onClick={() => setSelectedSport(id)}
                 className={
                   selectedSport === id
-                    ? "shrink-0 rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white"
-                    : "shrink-0 rounded-full border bg-white px-4 py-2 text-xs font-bold text-neutral-700"
+                    ? "shrink-0 rounded-full bg-neutral-950 px-3.5 py-2 text-xs font-bold text-white"
+                    : "shrink-0 rounded-full border bg-white px-3.5 py-2 text-xs font-bold text-neutral-700"
                 }
               >
                 {icon} {label}
@@ -416,13 +475,13 @@ export default function SportsPage() {
           </div>
         </section>
 
-        <section className="mt-8">
+        <section className="mt-7">
           <div className="flex items-end justify-between border-b border-neutral-900 pb-3">
             <div>
               <p className="text-[10px] font-black tracking-[0.16em] text-red-700 uppercase">
                 {mode === "live" ? "Live scoreboard" : "Match centre"}
               </p>
-              <h2 className="font-display text-2xl font-black">
+              <h2 className="font-display text-xl font-black sm:text-2xl">
                 {mode === "live"
                   ? "Live now"
                   : mode === "results"
@@ -432,31 +491,28 @@ export default function SportsPage() {
                       : "Matches"}
               </h2>
             </div>
-            <span className="text-xs text-neutral-500">{filtered.length} shown</span>
+            <span className="text-xs text-neutral-500">{filtered.length}</span>
           </div>
           {loading ? (
             <div className="py-10 text-sm text-neutral-500">Loading live sports data…</div>
           ) : filtered.length ? (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {filtered.map((m) => (
                 <MatchCard key={m.id} match={m} />
               ))}
             </div>
           ) : (
-            <div className="mt-5 rounded-2xl border border-dashed bg-white p-10 text-center text-sm text-neutral-500">
-              No matches for this filter right now. Sports news below is still updating from the live
-              wire.
+            <div className="mt-5 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
+              No matches for this filter right now. Check sports news below.
             </div>
           )}
         </section>
 
-        <section className="mt-12">
+        <section className="mt-10">
           <div className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-900 pb-3">
             <div>
-              <p className="text-[10px] font-black tracking-[0.16em] text-teal-800 uppercase">
-                Sports desk
-              </p>
-              <h2 className="font-display text-2xl font-black">Latest sports news</h2>
+              <p className="text-[10px] font-black tracking-[0.16em] text-teal-800 uppercase">Sports desk</p>
+              <h2 className="font-display text-xl font-black sm:text-2xl">Latest sports news</h2>
             </div>
             <div className="flex gap-2">
               <button
@@ -484,72 +540,66 @@ export default function SportsPage() {
             </div>
           </div>
           {stories.length ? (
-            <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {stories.map((s) => (
-                <article
-                  key={s.id}
-                  className="cursor-pointer overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md"
-                  onClick={() => setActiveStory(s)}
-                >
-                  {s.image ? (
-                    <img src={s.image} alt="" className="aspect-[16/10] w-full object-cover" />
-                  ) : (
-                    <div className="flex aspect-[16/10] items-center justify-center bg-neutral-100 text-xs text-neutral-400">
-                      Sports
+            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {stories.map((s) => {
+                const isRead = readIds.has(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      openStory(s);
+                      setReadIds(loadReadIds());
+                    }}
+                    className={`overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition active:scale-[0.99] ${
+                      isRead ? "border-neutral-100 opacity-75" : "border-neutral-200"
+                    }`}
+                  >
+                    <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[120px_1fr]">
+                      {s.image ? (
+                        <img src={s.image} alt="" className="h-full min-h-[96px] w-full object-cover" />
+                      ) : (
+                        <div className="min-h-[96px] bg-neutral-100" />
+                      )}
+                      <div className="p-3">
+                        <div className="flex items-center gap-2">
+                          <p className="text-[9px] font-extrabold tracking-wider text-amber-800 uppercase">
+                            {s.source}
+                          </p>
+                          {isRead ? (
+                            <span className="text-[9px] font-bold text-neutral-400">Read</span>
+                          ) : (
+                            <span className="size-1.5 rounded-full bg-teal-600" title="Unread" />
+                          )}
+                        </div>
+                        <h3 className="font-display mt-1 line-clamp-3 text-[15px] font-semibold leading-snug">
+                          {s.ai_hook_title || s.original_title}
+                        </h3>
+                      </div>
                     </div>
-                  )}
-                  <div className="p-4">
-                    <p className="text-[10px] font-bold text-neutral-500 uppercase">{s.source}</p>
-                    <h3 className="font-display mt-2 text-lg font-bold leading-snug">
-                      {s.ai_hook_title || s.original_title}
-                    </h3>
-                    <p className="mt-2 line-clamp-4 text-[16px] leading-7 text-neutral-700 sm:text-[17px]">
-                      {s.ai_summary?.[0] || s.original_description || "Open for the full RWDNEWS briefing."}
-                    </p>
-                    <p className="mt-3 text-xs font-black text-teal-800">Read full briefing →</p>
-                  </div>
-                </article>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           ) : (
-            <div className="mt-5 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
-              Sports stories are refreshing. Pull again in a moment.
-            </div>
+            <p className="mt-6 text-sm text-neutral-500">No sports stories in this filter yet.</p>
           )}
         </section>
-
-        <p className="mt-10 text-[10px] leading-6 text-neutral-500">
-          Scores and match information are supplied by sports data providers and refreshed
-          automatically. Predictions are informational analysis, not betting advice.
-        </p>
       </div>
 
-      {activeStory ? (
-        <ArticleReader
-          article={{
-            id: activeStory.id,
-            original_url: activeStory.original_url,
-            image: activeStory.image || "",
-            timestamp: activeStory.timestamp,
-            source: activeStory.source,
-            original_title: activeStory.original_title,
-            original_description: activeStory.original_description,
-            ai_hook_title: activeStory.ai_hook_title || activeStory.original_title,
-            ai_summary: activeStory.ai_summary?.length
-              ? activeStory.ai_summary
-              : [
-                  activeStory.original_description ||
-                    "RWDNEWS is tracking this sports story from the published source.",
-                  "Key facts stay on-site so you can understand the report without leaving.",
-                ],
-            tags: ["#Sports"],
-            read_time: "3 min read",
-          }}
-          saved={false}
-          onClose={() => setActiveStory(null)}
-          onToggleSave={() => undefined}
-        />
+      {/* Mobile sticky live shortcut */}
+      {data.live.length > 0 && mode !== "live" ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 px-3 py-2.5 backdrop-blur sm:hidden">
+          <a
+            href="/sport/live"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-xs font-extrabold text-white"
+          >
+            ● {data.live.length} live now — open scoreboard
+          </a>
+        </div>
       ) : null}
+
+      <SiteFooter />
     </main>
   );
 }
