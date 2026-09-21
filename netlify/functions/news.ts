@@ -131,19 +131,69 @@ function rssImage(item: any) {
   return match?.[1] || "";
 }
 
-async function fetchArticleImage(link: string) {
-  if (!link || !/^https?:\/\//i.test(link)) return "";
-  try {
-    const response = await fetch(link, { headers: { "User-Agent": "RWDNEWS/1.0" }, signal: AbortSignal.timeout(3500) });
-    if (!response.ok) return "";
-    const html = await response.text();
-    const match =
-      html.match(/<meta[^>]+(?:property|name)=["'](?:og:image|twitter:image)["'][^>]+content=["']([^"']+)["']/i) ||
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["'](?:og:image|twitter:image)["']/i);
-    return match?.[1] ? new URL(match[1], link).toString() : "";
-  } catch {
-    return "";
+/** Category keyword for Unsplash — generic stock, not publisher photos */
+function unsplashQuery(cat: string) {
+  const map: Record<string, string> = {
+    Sports: "football stadium match",
+    Tech: "technology computer abstract",
+    Business: "business finance office",
+    Crypto: "cryptocurrency digital finance",
+    Entertainment: "entertainment stage lights",
+    Nigeria: "lagos nigeria city",
+    Ghana: "accra ghana africa",
+    Africa: "africa landscape city",
+    World: "world news city skyline",
+    Europe: "europe city architecture",
+    Asia: "asia city skyline",
+    "Middle East": "middle east city",
+  };
+  return map[cat] || "news journalism desk";
+}
+
+/**
+ * Safe image policy:
+ * 1) RSS / GDELT thumbnail URL only (hotlink, not re-hosted)
+ * 2) Unsplash royalty-free category image if key set
+ * 3) RWDNEWS logo placeholder
+ * We do NOT scrape publisher og:image HTML (copyright risk).
+ */
+async function resolveSafeImage(rssOrGdeltImage: string, section: string) {
+  if (rssOrGdeltImage && /^https?:\/\//i.test(rssOrGdeltImage)) {
+    return {
+      image: rssOrGdeltImage,
+      image_credit: "Publisher feed",
+      image_license: "Feed preview",
+    };
   }
+  const key = process.env["UNSPLASH_ACCESS_KEY"] || "";
+  if (key) {
+    try {
+      const q = encodeURIComponent(unsplashQuery(section));
+      const u = `https://api.unsplash.com/photos/random?query=${q}&orientation=landscape&content_filter=high`;
+      const r = await fetch(u, {
+        headers: { Authorization: `Client-ID ${key}`, "Accept-Version": "v1" },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (r.ok) {
+        const data = (await r.json()) as any;
+        const url = data?.urls?.regular || data?.urls?.small || "";
+        if (url) {
+          return {
+            image: String(url),
+            image_credit: data?.user?.name ? `Photo: ${data.user.name} / Unsplash` : "Unsplash",
+            image_license: "Unsplash License",
+          };
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+  return {
+    image: PLACEHOLDER_IMAGE,
+    image_credit: "RWDNEWS",
+    image_license: "Site asset",
+  };
 }
 
 async function getRss() {
@@ -377,14 +427,11 @@ async function buildArticles(): Promise<NewsArticle[]> {
       items.map(async (item) => {
         const section = category(item.title + " " + item.desc, item.category, item.region);
         const brief = await aiBrief(item.title, item.desc);
-        let image =
-          item.image && /^https?:\/\//i.test(item.image) ? item.image : await fetchArticleImage(item.link);
-        if (!image) image = PLACEHOLDER_IMAGE;
-        const bodyText = sanitizeSummary(brief.ai_summary).join(" ");
+        const safe = await resolveSafeImage(item.image || "", section);
         return {
           id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
           original_url: item.link,
-          image,
+          image: safe.image,
           timestamp:
             item.date && !Number.isNaN(new Date(item.date).getTime())
               ? new Date(item.date).toISOString()
@@ -400,8 +447,8 @@ async function buildArticles(): Promise<NewsArticle[]> {
           region: item.region || "Global",
           trend_score: item.trendScore,
           trend_label: item.trendLabel,
-          image_credit: item.source,
-          image_license: "Publisher image",
+          image_credit: safe.image_credit,
+          image_license: safe.image_license,
           image_source_url: item.link,
           discovered_via: item.sources,
         } satisfies NewsArticle;
