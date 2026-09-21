@@ -35,6 +35,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/social-dispatch"
+  to = "/.netlify/functions/social-dispatch"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/paystack/init"
   to = "/.netlify/functions/paystack-init"
   status = 200
