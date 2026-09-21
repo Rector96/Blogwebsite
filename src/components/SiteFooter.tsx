@@ -18,15 +18,17 @@ export function SiteFooter() {
             />
           </a>
           <p className="mt-4 text-sm leading-relaxed text-white/70">
-            RWDNEWS brings the global wire into one place — clear summaries so you understand the
-            story fast. Original sources are always credited.
+            The world’s wire, briefed clearly. RWDNEWS helps readers everywhere understand the story
+            fast — original sources always credited. Building a global brand you can trust.
+          </p>
+          <p className="mt-3 text-xs text-white/45">
+            Languages: English now · Français, Español, Português coming soon (use the language control
+            in the header).
           </p>
         </div>
 
         <div>
-          <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-300 uppercase">
-            Explore
-          </p>
+          <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-300 uppercase">Explore</p>
           <ul className="mt-3 space-y-2 text-sm text-white/80">
             <li>
               <a href="/" className="hover:text-white">
@@ -49,6 +51,11 @@ export function SiteFooter() {
               </a>
             </li>
             <li>
+              <a href="/editorial" className="hover:text-white">
+                Editorial standards
+              </a>
+            </li>
+            <li>
               <a href="/advertise" className="hover:text-white">
                 Advertise
               </a>
@@ -57,33 +64,24 @@ export function SiteFooter() {
         </div>
 
         <div>
-          <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-300 uppercase">
-            Follow us
-          </p>
+          <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-300 uppercase">Follow us</p>
           <ul className="mt-3 space-y-2 text-sm text-white/80">
             {SOCIALS.map((s) => (
               <li key={s.label}>
-                <a
-                  href={s.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="hover:text-white"
-                >
+                <a href={s.href} target="_blank" rel="noopener noreferrer" className="hover:text-white">
                   {s.label} · {s.handle}
                 </a>
               </li>
             ))}
           </ul>
-          <p className="mt-4 text-xs text-white/50">
-            Update these links to your real pages when ready (X, Facebook, Instagram, WhatsApp).
-          </p>
+          <p className="mt-4 text-xs text-white/50">Update these to your real social pages when ready.</p>
         </div>
       </div>
 
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-6xl flex-col gap-2 px-4 py-4 text-xs text-white/50 sm:flex-row sm:items-center sm:justify-between sm:px-6">
-          <p>© {new Date().getFullYear()} RWDNEWS. Summaries for readers · sources credited.</p>
-          <div className="flex gap-4">
+          <p>© {new Date().getFullYear()} RWDNEWS. Global briefings · sources credited.</p>
+          <div className="flex flex-wrap gap-4">
             <a href="/privacy" className="hover:text-white/80">
               Privacy
             </a>
@@ -92,6 +90,9 @@ export function SiteFooter() {
             </a>
             <a href="/editorial" className="hover:text-white/80">
               Editorial
+            </a>
+            <a href="/about" className="hover:text-white/80">
+              About
             </a>
           </div>
         </div>
