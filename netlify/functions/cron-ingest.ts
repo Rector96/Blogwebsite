@@ -1,4 +1,5 @@
 import { runIngest } from "./news";
+import { dispatchToMake } from "./social-dispatch.mjs";
 
 export async function handler(event: {
   headers?: Record<string, string | undefined>;
@@ -19,7 +20,6 @@ export async function handler(event: {
 
   try {
     const result = await runIngest();
-    // Support both array return and { articles, saved, generatedAt }
     const articles = Array.isArray(result)
       ? result
       : Array.isArray((result as any)?.articles)
@@ -32,6 +32,23 @@ export async function handler(event: {
         ? (result as any).generatedAt
         : new Date().toISOString();
 
+    // Social: send a few top stories to Make.com (if MAKE_WEBHOOK_URL is set)
+    let social: unknown = { skipped: true };
+    try {
+      // Prefer highest trend / freshest
+      const ranked = [...articles].sort(
+        (a: any, b: any) =>
+          Number(b.trend_score || 0) - Number(a.trend_score || 0) ||
+          Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0),
+      );
+      social = await dispatchToMake(ranked);
+    } catch (e) {
+      social = {
+        ok: false,
+        error: e instanceof Error ? e.message : "social dispatch failed",
+      };
+    }
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
@@ -40,6 +57,7 @@ export async function handler(event: {
         count: articles.length,
         saved,
         generatedAt,
+        social,
       }),
     };
   } catch (error) {
