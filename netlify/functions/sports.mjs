@@ -15,7 +15,13 @@ const ESPN_BOARDS = [
   { sport: "football", path: "soccer/fra.1", league: "Ligue 1" },
   { sport: "football", path: "soccer/uefa.champions", league: "UEFA Champions League" },
   { sport: "basketball", path: "basketball/nba", league: "NBA" },
+  { sport: "basketball", path: "basketball/wnba", league: "WNBA" },
   { sport: "football", path: "football/nfl", league: "NFL" },
+  { sport: "football", path: "soccer/usa.1", league: "MLS" },
+  { sport: "baseball", path: "baseball/mlb", league: "MLB" },
+  { sport: "hockey", path: "hockey/nhl", league: "NHL" },
+  { sport: "tennis", path: "tennis/atp", league: "ATP" },
+  { sport: "tennis", path: "tennis/wta", league: "WTA" },
 ];
 
 const SPORT_RSS = [
