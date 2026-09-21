@@ -45,7 +45,7 @@ function timeLabel(iso?: string) {
   });
 }
 
-export default function Match outlooksPage() {
+export default function PredictionsPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
