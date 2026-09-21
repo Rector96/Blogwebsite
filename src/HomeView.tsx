@@ -4,6 +4,7 @@ import { Bookmark, BookmarkCheck, ChevronLeft, ChevronRight, RefreshCw, Search }
 import { ArticleReader } from "./components/ArticleReader";
 import { AdSlot } from "./components/AdSlot";
 import { SiteFooter } from "./components/SiteFooter";
+import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import type { EnrichedArticle } from "./AppHome";
 
 /** Insert an ad cell after every N story cards in the grid. */
@@ -71,46 +72,50 @@ export function HomeView({
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>RWDNEWS — Global News, Trends & Briefings</title>
+        <title>RWDNEWS — The world’s wire, briefed clearly</title>
         <meta
           name="description"
-          content="RWDNEWS brings the global wire into one place — clear summaries, sources credited."
+          content="RWDNEWS is a global news briefing platform — clear summaries from the world wire, sources always credited. Sports, tech, business and world news."
         />
       </Helmet>
 
       <div className="border-b border-neutral-200 bg-neutral-950 text-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-1.5 text-[11px] sm:px-6">
-          <span className="font-medium tracking-wide text-neutral-300">{todayLabel()}</span>
-          <span className="hidden text-neutral-400 sm:inline">
-            {feedSource === "live" ? "Live global wire" : "Live wire reconnecting"}
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-1.5 text-[11px] sm:px-6">
+          <span className="truncate font-medium tracking-wide text-neutral-300">{todayLabel()}</span>
+          <span className="hidden text-neutral-400 md:inline">
+            {feedSource === "live" ? "Live global wire · Sources credited" : "Reconnecting to the wire"}
           </span>
-          <div className="flex items-center gap-3">
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
             <a href="/sport" className="font-semibold text-teal-300 hover:text-white">
-              Sports desk
+              Sports
             </a>
-            <button type="button" onClick={openAdvertiserForm} className="font-semibold text-amber-400">
+            <button type="button" onClick={openAdvertiserForm} className="hidden font-semibold text-amber-400 sm:inline">
               Advertise
             </button>
           </div>
         </div>
       </div>
 
-      <header className="border-b border-neutral-200">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
-          <div className="w-10 sm:hidden" />
-          <a href="/" className="block shrink-0" aria-label="RWDNEWS home">
-            <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[205px] sm:w-[275px]" />
+      <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
+          <a href="/" className="block min-w-0 shrink" aria-label="RWDNEWS home">
+            <img
+              src="/rwdnews-logo.svg"
+              alt="RWDNEWS"
+              className="h-auto w-[150px] sm:w-[220px] md:w-[275px]"
+            />
           </a>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <div className="relative hidden md:block">
               <Search className="pointer-events-none absolute top-1/2 left-3 size-3.5 -translate-y-1/2 text-neutral-400" />
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search"
-                className="h-9 w-44 rounded-full border border-neutral-200 bg-neutral-50 pr-3 pl-9 text-sm outline-none lg:w-56"
+                className="h-9 w-40 rounded-full border border-neutral-200 bg-neutral-50 pr-3 pl-9 text-sm outline-none lg:w-52"
               />
             </div>
+            <LanguageSwitcher />
             <button
               type="button"
               onClick={() => void fetchNews(true)}
@@ -122,8 +127,12 @@ export function HomeView({
           </div>
         </div>
 
+        <p className="border-t border-neutral-100 bg-neutral-50/80 px-3 py-1.5 text-center text-[10px] font-semibold tracking-wide text-neutral-500 sm:text-[11px]">
+          The world’s wire, briefed clearly · Sources always credited
+        </p>
+
         <div className="border-t border-neutral-100 bg-neutral-50/70">
-          <div className="mx-auto max-w-6xl px-4 py-2.5 sm:px-6">
+          <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6">
             <div className="flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
               {tags.map((t: string) => (
                 <button
@@ -145,20 +154,20 @@ export function HomeView({
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-[10px] text-neutral-400">
+            <p className="mt-1.5 text-[10px] text-neutral-400">
               {selectedTag === "All"
-                ? `${displayList.length} stories · all topics`
-                : `${displayList.length} ${selectedTag} stories only`}
+                ? `${displayList.length} stories · global desk`
+                : `${displayList.length} ${selectedTag} stories`}
             </p>
           </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
+      <div className="mx-auto max-w-6xl px-3 py-3 sm:px-6">
         <AdSlot slot="leaderboard" variant="inline" label="Advertisement" className="min-h-[90px]" />
       </div>
 
-      <main className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
+      <main className="mx-auto max-w-6xl px-3 pb-12 sm:px-6">
         {emptyForTab ? (
           <div className="mb-8 border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center">
             <p className="font-display text-lg font-semibold">{emptyForTab}</p>
@@ -189,6 +198,7 @@ export function HomeView({
                       src={hero.image}
                       alt=""
                       className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                      loading="eager"
                     />
                   ) : (
                     <div className="flex aspect-[16/10] items-center justify-center bg-neutral-200 text-sm text-neutral-500">
@@ -199,7 +209,7 @@ export function HomeView({
                 <p className="mt-3 text-[11px] font-bold tracking-[0.14em] text-amber-800 uppercase">
                   {hero.category || hero.source} · {formatRelativeTime(hero.timestamp)}
                 </p>
-                <h1 className="font-display mt-1 text-2xl leading-[1.15] font-semibold sm:text-3xl">
+                <h1 className="font-display mt-1 text-xl leading-[1.15] font-semibold sm:text-3xl">
                   {hero.ai_hook_title || hero.original_title}
                 </h1>
               </a>
@@ -216,13 +226,13 @@ export function HomeView({
                     className="group flex gap-3 border-b border-neutral-100 pb-4"
                   >
                     {a.image ? (
-                      <img src={a.image} alt="" className="size-20 shrink-0 object-cover" />
+                      <img src={a.image} alt="" className="size-16 shrink-0 object-cover sm:size-20" loading="lazy" />
                     ) : null}
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
                         {a.category || a.source}
                       </p>
-                      <h2 className="font-display mt-0.5 text-base font-semibold leading-snug group-hover:text-teal-800">
+                      <h2 className="font-display mt-0.5 text-sm font-semibold leading-snug group-hover:text-teal-800 sm:text-base">
                         {a.ai_hook_title || a.original_title}
                       </h2>
                     </div>
@@ -259,12 +269,11 @@ export function HomeView({
           </section>
         ) : null}
 
-        {/* Mid-page ad between hero and grid */}
         <div className="my-6">
           <AdSlot slot="mid_home" variant="inline" label="Advertisement" className="min-h-[100px]" />
         </div>
 
-        <section className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <section className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {feedCells.map((cell) =>
             cell.type === "ad" ? (
               <div key={cell.key} className="col-span-full sm:col-span-2 lg:col-span-3">
@@ -281,13 +290,18 @@ export function HomeView({
                 className="group overflow-hidden border border-neutral-200 bg-white transition hover:border-teal-300"
               >
                 {cell.item.image ? (
-                  <img src={cell.item.image} alt="" className="aspect-[16/9] w-full object-cover" />
+                  <img
+                    src={cell.item.image}
+                    alt=""
+                    className="aspect-[16/9] w-full object-cover"
+                    loading="lazy"
+                  />
                 ) : null}
-                <div className="p-4">
+                <div className="p-3 sm:p-4">
                   <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
                     {cell.item.category || cell.item.source} · {formatRelativeTime(cell.item.timestamp)}
                   </p>
-                  <h2 className="font-display mt-1 text-lg font-semibold leading-snug group-hover:text-teal-800">
+                  <h2 className="font-display mt-1 text-base font-semibold leading-snug group-hover:text-teal-800 sm:text-lg">
                     {cell.item.ai_hook_title || cell.item.original_title}
                   </h2>
                   <button
@@ -310,7 +324,7 @@ export function HomeView({
 
         {recommended?.length ? (
           <section className="mt-12">
-            <h2 className="font-display text-2xl font-semibold">Recommended</h2>
+            <h2 className="font-display text-xl font-semibold sm:text-2xl">Recommended</h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {recommended.map((a: EnrichedArticle) => (
                 <a
@@ -330,8 +344,9 @@ export function HomeView({
           </section>
         ) : null}
 
-        <form onSubmit={submitNewsletter} className="mt-12 border border-neutral-200 bg-neutral-50 p-6">
-          <h2 className="font-display text-xl font-semibold">Get the RWDNEWS briefing</h2>
+        <form onSubmit={submitNewsletter} className="mt-12 border border-neutral-200 bg-neutral-50 p-5 sm:p-6">
+          <h2 className="font-display text-lg font-semibold sm:text-xl">Get the RWDNEWS briefing</h2>
+          <p className="mt-1 text-xs text-neutral-500">Global headlines, short and clear — in your inbox.</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={email}
