@@ -44,6 +44,7 @@ const SPORT_LABELS = {
 };
 
 const PLACEHOLDER = "https://rwdnews.netlify.app/rwdnews-logo.svg";
+const pexelsCache = new Map();
 
 const rss = new Parser({
   timeout: 5000,
@@ -123,15 +124,20 @@ async function fetchEspnBoard(board, dates) {
   }
 }
 
-/** Sequential ESPN — avoids Netlify timeouts from 20+ parallel calls */
+/** Bounded concurrency: broad sports coverage without firing every request at once. */
 async function fetchEspnAll() {
-  const out = [];
+  const jobs = [];
   for (const board of ESPN_BOARDS) {
-    // Default board (usually today) + explicit today + tomorrow
-    for (const dates of [null, dateKey(0), dateKey(1)]) {
-      const batch = await fetchEspnBoard(board, dates);
-      out.push(...batch);
+    for (const dates of [dateKey(-1), dateKey(0), dateKey(1)]) {
+      jobs.push(() => fetchEspnBoard(board, dates));
     }
+  }
+
+  const out = [];
+  const concurrency = 6;
+  for (let i = 0; i < jobs.length; i += concurrency) {
+    const batch = await Promise.allSettled(jobs.slice(i, i + concurrency).map((job) => job()));
+    out.push(...batch.flatMap((result) => (result.status === "fulfilled" ? result.value : [])));
   }
   return out;
 }
@@ -334,6 +340,11 @@ function pexelsMatchScore(photo, story) {
 async function pexelsImage(story) {
   const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
   if (!key) return null;
+
+  const cacheKey = storyImageQuery(story);
+  const cached = pexelsCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+
   try {
     const u = new URL("https://api.pexels.com/v1/search");
     u.searchParams.set("query", storyImageQuery(story));
@@ -352,12 +363,17 @@ async function pexelsImage(story) {
       .map((photo) => ({ photo, score: pexelsMatchScore(photo, story) }))
       .sort((a, b) => b.score - a.score);
     const best = ranked.find((item) => item.score >= 4)?.photo;
-    if (!best?.src) return null;
-    return {
+    if (!best?.src) {
+      pexelsCache.set(cacheKey, { value: null, expiresAt: Date.now() + 10 * 60 * 1000 });
+      return null;
+    }
+    const value = {
       image: best.src.large || best.src.medium || best.src.original || "",
       credit: best.photographer ? `Photo by ${best.photographer} on Pexels` : "Photos provided by Pexels",
       sourceUrl: best.url || "https://www.pexels.com/",
     };
+    pexelsCache.set(cacheKey, { value, expiresAt: Date.now() + 10 * 60 * 1000 });
+    return value;
   } catch {
     return null;
   }
