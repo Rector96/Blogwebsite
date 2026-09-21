@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
-import { Check, Copy, MessageCircle, Send, Share2 } from "lucide-react";
+import { Check, Copy, ExternalLink, MessageCircle, Send } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { logRwdNewsEvent } from "../lib/analytics";
 import { fetchSponsors, logSponsorClick, type SponsoredOffer } from "../lib/sponsors";
@@ -32,20 +32,24 @@ function cleanText(value: string) {
 }
 
 function isMetaLine(x: string) {
-  return /limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this (developing )?story|source wire:|why this matters|rwdnews perspective|editorial context/i.test(
+  return /limited to facts|supplied source material|source report remains|not add facts|meant to be read on RWDNEWS|without leaving the site|tracking this (developing )?story|source wire:|why this matters|rwdnews perspective|editorial context|full briefing on RWDNEWS|no need to leave/i.test(
     x,
   );
 }
 
+/** Wire stories: short fact bullets only (legal aggregation). Originals can use body. */
 function buildBriefing(article: EnrichedArticle) {
+  const isOriginal = article.story_type === "RWDNEWS ORIGINAL";
   const raw = (article.ai_summary?.length
     ? article.ai_summary
     : [article.original_description].filter(Boolean)
   ).map((x) => cleanText(String(x)));
 
-  const points = raw.filter(Boolean).filter((x) => !isMetaLine(x)).filter((x) => x.length > 20);
+  let points = raw.filter(Boolean).filter((x) => !isMetaLine(x)).filter((x) => x.length > 15);
+  // Cap wire briefings — do not present a full rewrite of the source
+  if (!isOriginal) points = points.slice(0, 5);
   const lead = points[0] || cleanText(article.original_description || article.original_title || "");
-  return { points: points.length ? points : lead ? [lead] : [] };
+  return { points: points.length ? points : lead ? [lead] : [], isOriginal };
 }
 
 function PageLoader() {
@@ -173,7 +177,7 @@ export default function StoryPage() {
     typeof window !== "undefined"
       ? window.location.origin + window.location.pathname
       : "https://rwdnews.netlify.app/";
-  const briefing = article ? buildBriefing(article) : { points: [] as string[] };
+  const briefing = article ? buildBriefing(article) : { points: [] as string[], isOriginal: false };
   const description = briefing.points[0] || cleanText(article?.original_description || "");
 
   const jsonLd = useMemo(
@@ -241,6 +245,8 @@ export default function StoryPage() {
     }
   };
 
+  const sourceUrl = article.original_url || "";
+
   return (
     <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950">
       <Helmet>
@@ -283,9 +289,9 @@ export default function StoryPage() {
         <p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">
           {article.category || "News"} · {article.source}
         </p>
-        <h1 className="font-display mt-3 text-3xl leading-tight font-semibold sm:text-5xl">{title}</h1>
+        <h1 className="font-display mt-3 text-3xl leading-tight font-semibold sm:text-4xl">{title}</h1>
         <p className="mt-3 text-xs text-neutral-400">
-          {article.read_time || "3 min read"} · {new Date(article.timestamp).toLocaleString()}
+          Briefing · {new Date(article.timestamp).toLocaleString()}
         </p>
 
         {article.image ? (
@@ -297,34 +303,53 @@ export default function StoryPage() {
         </div>
 
         <section className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
-          <h2 className="font-display text-2xl font-semibold">What you should know</h2>
-          <ul className="mt-5 space-y-5">
+          <h2 className="font-display text-xl font-semibold sm:text-2xl">Quick briefing</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Short summary for context. Full report lives on the original publisher.
+          </p>
+          <ul className="mt-5 space-y-4">
             {briefing.points.map((point, i) => (
-              <li key={i} className="flex gap-3 text-[18px] leading-[1.8] text-neutral-800 sm:text-[19px]">
-                <span className="mt-[0.7rem] size-1.5 shrink-0 rounded-full bg-neutral-950" />
+              <li key={i} className="flex gap-3 text-[17px] leading-[1.7] text-neutral-800 sm:text-[18px]">
+                <span className="mt-[0.65rem] size-1.5 shrink-0 rounded-full bg-neutral-950" />
                 <span>{point}</span>
               </li>
             ))}
           </ul>
 
-          {article.story_type === "RWDNEWS ORIGINAL" && article.body ? (
-            <div className="mt-8 whitespace-pre-wrap text-[18px] leading-[1.8] text-neutral-800 sm:text-[19px]">
+          {briefing.isOriginal && article.body ? (
+            <div className="mt-8 whitespace-pre-wrap text-[17px] leading-[1.75] text-neutral-800 sm:text-[18px]">
               {article.body}
             </div>
           ) : null}
 
-          {article.original_url ? (
-            <p className="mt-8 border-t border-neutral-100 pt-4 text-sm text-neutral-500">
-              Source:{" "}
+          {/* Primary value exchange: send reader to the publisher */}
+          {sourceUrl ? (
+            <div className="mt-8 rounded-2xl border border-teal-200 bg-teal-50/80 p-5 sm:p-6">
+              <p className="text-[10px] font-extrabold tracking-[0.16em] text-teal-900 uppercase">
+                Full story
+              </p>
+              <p className="mt-1 text-sm text-neutral-700">
+                Read the complete article on <strong>{article.source}</strong>. We only publish a short
+                briefing here.
+              </p>
               <a
-                href={article.original_url}
+                href={sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-semibold text-teal-800 underline-offset-2 hover:underline"
+                onClick={() =>
+                  void logRwdNewsEvent({
+                    event: "external_source_click",
+                    articleId: article.id,
+                    articleUrl: sourceUrl,
+                    placement: "story_page",
+                  })
+                }
+                className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-teal-800 px-5 py-3.5 text-sm font-bold text-white sm:w-auto"
               >
-                {article.source}
+                Read full article on {article.source}
+                <ExternalLink className="size-4" />
               </a>
-            </p>
+            </div>
           ) : null}
         </section>
 
@@ -345,7 +370,7 @@ export default function StoryPage() {
         ) : null}
 
         <div className="mt-10 border-y border-neutral-200 py-6">
-          <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 uppercase">Share</p>
+          <p className="text-[10px] font-bold tracking-[0.16em] text-neutral-500 uppercase">Share this briefing</p>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
             <button type="button" onClick={() => share("whatsapp")} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#25D366] text-xs font-bold text-white">
               <MessageCircle className="size-4" /> WhatsApp
@@ -380,7 +405,11 @@ export default function StoryPage() {
                   className="group overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:border-teal-300"
                 >
                   <div className="grid grid-cols-[108px_1fr]">
-                    <img src={item.image} alt="" className="h-full min-h-[108px] w-full object-cover" />
+                    {item.image ? (
+                      <img src={item.image} alt="" className="h-full min-h-[108px] w-full object-cover" />
+                    ) : (
+                      <div className="min-h-[108px] bg-neutral-100" />
+                    )}
                     <div className="p-3">
                       <p className="text-[9px] font-extrabold tracking-wider text-amber-800 uppercase">
                         {item.category || "News"}
