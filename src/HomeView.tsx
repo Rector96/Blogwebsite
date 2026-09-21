@@ -6,6 +6,18 @@ import { AdSlot } from "./components/AdSlot";
 import { SiteFooter } from "./components/SiteFooter";
 import type { EnrichedArticle } from "./AppHome";
 
+/** Insert an ad cell after every N story cards in the grid. */
+function withFeedAds(items: EnrichedArticle[], every = 5) {
+  const out: Array<{ type: "story"; item: EnrichedArticle } | { type: "ad"; key: string }> = [];
+  items.forEach((item, i) => {
+    out.push({ type: "story", item });
+    if ((i + 1) % every === 0) {
+      out.push({ type: "ad", key: `feed-ad-${i}` });
+    }
+  });
+  return out;
+}
+
 export function HomeView({
   emptyForTab,
   displayList,
@@ -54,6 +66,8 @@ export function HomeView({
   storyPath,
   normalizeTags,
 }: any) {
+  const feedCells = withFeedAds(Array.isArray(rest) ? rest : [], 5);
+
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
@@ -141,7 +155,7 @@ export function HomeView({
       </header>
 
       <div className="mx-auto max-w-6xl px-4 py-3 sm:px-6">
-        <AdSlot slot="leaderboard" />
+        <AdSlot slot="leaderboard" variant="inline" label="Advertisement" className="min-h-[90px]" />
       </div>
 
       <main className="mx-auto max-w-6xl px-4 pb-12 sm:px-6">
@@ -245,42 +259,53 @@ export function HomeView({
           </section>
         ) : null}
 
-        <section className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {rest.map((a: EnrichedArticle) => (
-            <a
-              key={a.id}
-              href={storyPath(a)}
-              onClick={(e: React.MouseEvent) => {
-                e.preventDefault();
-                openArticle(a);
-              }}
-              className="group overflow-hidden border border-neutral-200 bg-white transition hover:border-teal-300"
-            >
-              {a.image ? (
-                <img src={a.image} alt="" className="aspect-[16/9] w-full object-cover" />
-              ) : null}
-              <div className="p-4">
-                <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
-                  {a.category || a.source} · {formatRelativeTime(a.timestamp)}
-                </p>
-                <h2 className="font-display mt-1 text-lg font-semibold leading-snug group-hover:text-teal-800">
-                  {a.ai_hook_title || a.original_title}
-                </h2>
-                <button
-                  type="button"
-                  className="mt-2 text-neutral-400"
-                  onClick={(e) => toggleSave(a.id, e)}
-                  aria-label="Save"
-                >
-                  {saved.includes(a.id) ? (
-                    <BookmarkCheck className="size-4 text-teal-800" />
-                  ) : (
-                    <Bookmark className="size-4" />
-                  )}
-                </button>
+        {/* Mid-page ad between hero and grid */}
+        <div className="my-6">
+          <AdSlot slot="mid_home" variant="inline" label="Advertisement" className="min-h-[100px]" />
+        </div>
+
+        <section className="mt-2 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {feedCells.map((cell) =>
+            cell.type === "ad" ? (
+              <div key={cell.key} className="col-span-full sm:col-span-2 lg:col-span-3">
+                <AdSlot slot="in_feed" variant="feed" label="Advertisement" className="min-h-[100px]" />
               </div>
-            </a>
-          ))}
+            ) : (
+              <a
+                key={cell.item.id}
+                href={storyPath(cell.item)}
+                onClick={(e: React.MouseEvent) => {
+                  e.preventDefault();
+                  openArticle(cell.item);
+                }}
+                className="group overflow-hidden border border-neutral-200 bg-white transition hover:border-teal-300"
+              >
+                {cell.item.image ? (
+                  <img src={cell.item.image} alt="" className="aspect-[16/9] w-full object-cover" />
+                ) : null}
+                <div className="p-4">
+                  <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
+                    {cell.item.category || cell.item.source} · {formatRelativeTime(cell.item.timestamp)}
+                  </p>
+                  <h2 className="font-display mt-1 text-lg font-semibold leading-snug group-hover:text-teal-800">
+                    {cell.item.ai_hook_title || cell.item.original_title}
+                  </h2>
+                  <button
+                    type="button"
+                    className="mt-2 text-neutral-400"
+                    onClick={(e) => toggleSave(cell.item.id, e)}
+                    aria-label="Save"
+                  >
+                    {saved.includes(cell.item.id) ? (
+                      <BookmarkCheck className="size-4 text-teal-800" />
+                    ) : (
+                      <Bookmark className="size-4" />
+                    )}
+                  </button>
+                </div>
+              </a>
+            ),
+          )}
         </section>
 
         {recommended?.length ? (
