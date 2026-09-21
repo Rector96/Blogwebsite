@@ -455,7 +455,7 @@ export default function SportsPage() {
               </div>
             </div>
             <div className="border-t border-white/5 bg-neutral-900/60">
-
+              <div className="mx-auto flex max-w-3xl gap-1.5 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                 {LEAGUE_CHIPS.map((c) => (
                   <button
                     key={c.id}
