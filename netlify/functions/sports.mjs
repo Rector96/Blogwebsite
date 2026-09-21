@@ -1,14 +1,19 @@
 import { createClient } from "@supabase/supabase-js";
 import Parser from "rss-parser";
 
-// Fewer boards + fewer date variants = reliable under Netlify time limits
+/**
+ * Free score sources (no paid API-Football required):
+ * 1) ESPN public scoreboard (no key)
+ * 2) TheSportsDB free demo key
+ * 3) Optional API-Football only if key works (often suspended on free accounts)
+ */
 const ESPN_BOARDS = [
   { sport: "football", path: "soccer/eng.1", league: "Premier League" },
-  { sport: "football", path: "soccer/uefa.champions", league: "UEFA Champions League" },
   { sport: "football", path: "soccer/esp.1", league: "La Liga" },
   { sport: "football", path: "soccer/ita.1", league: "Serie A" },
   { sport: "football", path: "soccer/ger.1", league: "Bundesliga" },
   { sport: "football", path: "soccer/fra.1", league: "Ligue 1" },
+  { sport: "football", path: "soccer/uefa.champions", league: "UEFA Champions League" },
   { sport: "basketball", path: "basketball/nba", league: "NBA" },
   { sport: "football", path: "football/nfl", league: "NFL" },
 ];
@@ -97,9 +102,11 @@ async function fetchEspnBoard(board, dates) {
     const response = await fetch(url.toString(), {
       headers: {
         Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; RWDNEWS/2.0; +https://rwdnews.netlify.app)",
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Referer: "https://www.espn.com/",
       },
-      signal: AbortSignal.timeout(7000),
+      signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) return [];
     const data = await response.json();
@@ -108,6 +115,73 @@ async function fetchEspnBoard(board, dates) {
   } catch {
     return [];
   }
+}
+
+/** Sequential ESPN — avoids Netlify timeouts from 20+ parallel calls */
+async function fetchEspnAll() {
+  const out = [];
+  for (const board of ESPN_BOARDS) {
+    // Default board (usually today) + explicit today + tomorrow
+    for (const dates of [null, dateKey(0), dateKey(1)]) {
+      const batch = await fetchEspnBoard(board, dates);
+      out.push(...batch);
+    }
+  }
+  return out;
+}
+
+/** TheSportsDB free demo (no signup). Limited but useful fallback. */
+async function fetchTheSportsDb() {
+  const out = [];
+  const key = process.env.THESPORTSDB_KEY || "3"; // public demo key
+  for (const offset of [0, 1, -1]) {
+    try {
+      const d = isoDate(offset);
+      const url = `https://www.thesportsdb.com/api/v1/json/${key}/eventsday.php?d=${d}&s=Soccer`;
+      const response = await fetch(url, {
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (!response.ok) continue;
+      const data = await response.json();
+      const events = Array.isArray(data?.events) ? data.events : [];
+      for (const e of events) {
+        const home = clean(e.strHomeTeam);
+        const away = clean(e.strAwayTeam);
+        if (!home || !away) continue;
+        const status = clean(e.strStatus || e.strProgress || "Scheduled");
+        const live = /in play|live|1h|2h|ht|half/i.test(status);
+        const completed = /match finished|ft|aet|pen/i.test(status);
+        out.push({
+          id: `tsdb-${e.idEvent}`,
+          providerId: String(e.idEvent),
+          provider: "TheSportsDB",
+          sport: "football",
+          sportLabel: "Football",
+          league: clean(e.strLeague || "Football"),
+          home,
+          away,
+          homeScore: e.intHomeScore != null && e.intHomeScore !== "" ? Number(e.intHomeScore) : null,
+          awayScore: e.intAwayScore != null && e.intAwayScore !== "" ? Number(e.intAwayScore) : null,
+          status,
+          statusState: live ? "in" : completed ? "post" : "pre",
+          startTime: e.strTimestamp
+            ? new Date(e.strTimestamp).toISOString()
+            : e.dateEvent
+              ? new Date(`${e.dateEvent}T${e.strTime || "12:00:00"}Z`).toISOString()
+              : undefined,
+          live,
+          completed,
+          homeLogo: e.strHomeTeamBadge || "",
+          awayLogo: e.strAwayTeamBadge || "",
+          venue: clean(e.strVenue || ""),
+        });
+      }
+    } catch {
+      /* ignore day */
+    }
+  }
+  return out;
 }
 
 function mapApiFootballFixture(x) {
@@ -153,49 +227,38 @@ function apiFootballKey() {
 async function fetchApiFootball() {
   const apiKey = apiFootballKey();
   if (!apiKey) return [];
+  // Suspended accounts return errors — fail soft
   const headers = { "x-apisports-key": apiKey, Accept: "application/json" };
   const out = [];
-  const urls = [
-    "https://v3.football.api-sports.io/fixtures?live=all",
-    `https://v3.football.api-sports.io/fixtures?date=${isoDate(0)}`,
-    `https://v3.football.api-sports.io/fixtures?date=${isoDate(1)}`,
-  ];
-  await Promise.all(
-    urls.map(async (url) => {
-      try {
-        const response = await fetch(url, { headers, signal: AbortSignal.timeout(8000) });
-        if (!response.ok) return;
-        const data = await response.json();
-        for (const x of data?.response || []) {
-          const m = mapApiFootballFixture(x);
-          if (m.home && m.away) out.push(m);
-        }
-      } catch {
-        /* ignore */
-      }
-    }),
-  );
+  try {
+    const url = `https://v3.football.api-sports.io/fixtures?date=${isoDate(0)}`;
+    const response = await fetch(url, { headers, signal: AbortSignal.timeout(6000) });
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (data?.errors && Object.keys(data.errors).length) return [];
+    for (const x of data?.response || []) {
+      const m = mapApiFootballFixture(x);
+      if (m.home && m.away) out.push(m);
+    }
+  } catch {
+    return [];
+  }
   return out;
 }
 
 async function getAllMatches() {
-  // API-Football first (often richest for football), then lean ESPN
-  const apiMatches = await fetchApiFootball();
+  // Free sources first — do not depend on suspended API-Football
+  const [espn, tsdb, apiFb] = await Promise.all([
+    fetchEspnAll(),
+    fetchTheSportsDb(),
+    fetchApiFootball(),
+  ]);
 
-  const jobs = [];
-  for (const board of ESPN_BOARDS) {
-    jobs.push(fetchEspnBoard(board, null)); // today board default
-    jobs.push(fetchEspnBoard(board, dateKey(0)));
-    jobs.push(fetchEspnBoard(board, dateKey(1)));
-  }
-  const settled = await Promise.allSettled(jobs);
-  const espn = settled.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
-
-  const all = [...apiMatches, ...espn];
+  const all = [...espn, ...tsdb, ...apiFb];
   const seen = new Set();
   return all.filter((match) => {
     if (!match?.home || !match?.away) return false;
-    const key = `${match.sport}|${match.home}|${match.away}|${match.startTime || match.id}`;
+    const key = `${match.sport}|${match.home}|${match.away}|${(match.startTime || "").slice(0, 13)}|${match.id}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -224,11 +287,7 @@ function rssImage(item) {
 }
 
 async function pexelsImage(query) {
-  const key =
-    process.env.PEXELS_API_KEY ||
-    process.env.PEXELS_KEY ||
-    process.env.PEXELS_API ||
-    "";
+  const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
   if (!key) return "";
   try {
     const u = new URL("https://api.pexels.com/v1/search");
@@ -388,7 +447,6 @@ export async function handler(event) {
   try {
     const qs = event.queryStringParameters || {};
     const action = qs.action || "hub";
-    const hasApiFootball = Boolean(apiFootballKey());
     const affiliateUrl = process.env.SPORTS_AFFILIATE_URL || process.env.VITE_SPORTS_AFFILIATE_URL || "";
 
     const [matches, dbNews, rssNews, discovered] = await Promise.all([
@@ -442,31 +500,12 @@ export async function handler(event) {
       .slice(0, 120);
     const featured = matches
       .filter((m) =>
-        /premier league|champions league|la liga|bundesliga|serie a|ligue 1|nba|nfl|mlb|nhl|atp|mls/i.test(
-          m.league,
-        ),
+        /premier league|champions league|la liga|bundesliga|serie a|ligue 1|nba|nfl/i.test(m.league),
       )
       .slice(0, 120);
     const rumors = news.filter(isRumor).slice(0, 40);
 
-    const majorLeagues = [
-      "Premier League",
-      "UEFA Champions League",
-      "La Liga",
-      "Bundesliga",
-      "Serie A",
-      "Ligue 1",
-      "NBA",
-      "NFL",
-    ].map((name) => ({
-      name,
-      available: matches.some((m) => m.league.toLowerCase().includes(name.toLowerCase())),
-    }));
-
-    const bySport = Object.keys(SPORT_LABELS).reduce((acc, key) => {
-      acc[key] = matches.filter((m) => m.sport === key).slice(0, 100);
-      return acc;
-    }, {});
+    const providersUsed = Array.from(new Set(matches.map((m) => m.provider).filter(Boolean)));
 
     return {
       statusCode: 200,
@@ -481,8 +520,23 @@ export async function handler(event) {
         results,
         news,
         rumors,
-        majorLeagues,
-        bySport,
+        majorLeagues: [
+          "Premier League",
+          "UEFA Champions League",
+          "La Liga",
+          "Bundesliga",
+          "Serie A",
+          "Ligue 1",
+          "NBA",
+          "NFL",
+        ].map((name) => ({
+          name,
+          available: matches.some((m) => m.league.toLowerCase().includes(name.toLowerCase())),
+        })),
+        bySport: Object.keys(SPORT_LABELS).reduce((acc, key) => {
+          acc[key] = matches.filter((m) => m.sport === key).slice(0, 100);
+          return acc;
+        }, {}),
         affiliateUrl,
         counts: {
           matches: matches.length,
@@ -493,9 +547,10 @@ export async function handler(event) {
           rumors: rumors.length,
         },
         providers: {
-          scoreboard: hasApiFootball ? "API-Football + ESPN" : "ESPN public boards",
+          scoreboard: providersUsed.length ? providersUsed.join(" + ") : "ESPN + TheSportsDB (free)",
           news: "RSS + Supabase + GDELT + Pexels",
-          apiFootballKeyPresent: hasApiFootball,
+          freeOnly: true,
+          apiFootballKeyPresent: Boolean(apiFootballKey()),
         },
         generatedAt: new Date().toISOString(),
       }),
