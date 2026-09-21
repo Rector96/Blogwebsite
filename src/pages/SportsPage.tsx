@@ -39,6 +39,15 @@ type Story = {
 type MainTab = "news" | "scores" | "predictions";
 type DayFilter = "live" | "yesterday" | "today" | "tomorrow";
 
+const SPORT_CHIPS = [
+  { id: "all", label: "All sports" },
+  { id: "football", label: "Football" },
+  { id: "basketball", label: "Basketball" },
+  { id: "tennis", label: "Tennis" },
+  { id: "baseball", label: "Baseball" },
+  { id: "hockey", label: "Hockey" },
+];
+
 const LEAGUE_CHIPS = [
   { id: "all", label: "All" },
   { id: "premier league", label: "EPL" },
@@ -193,6 +202,7 @@ export default function SportsPage() {
   });
   const [tab, setTab] = useState<MainTab>("news"); // news first by design
   const [day, setDay] = useState<DayFilter>("today");
+  const [sportFilter, setSportFilter] = useState("all");
   const [league, setLeague] = useState("all");
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -276,6 +286,7 @@ export default function SportsPage() {
   const filtered = useMemo(() => {
     return pool
       .filter((m) => matchInDay(m, day))
+      .filter((m) => sportFilter === "all" || m.sport === sportFilter)
       .filter((m) => league === "all" || m.league.toLowerCase().includes(league))
       .sort((a, b) => {
         if (a.live !== b.live) return a.live ? -1 : 1;
@@ -424,6 +435,27 @@ export default function SportsPage() {
             </div>
             <div className="border-t border-white/5 bg-neutral-900/80">
               <div className="mx-auto flex max-w-3xl gap-1.5 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {SPORT_CHIPS.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => {
+                      setSportFilter(c.id);
+                      setLeague("all");
+                    }}
+                    className={
+                      sportFilter === c.id
+                        ? "shrink-0 rounded-full bg-amber-400 px-3 py-1 text-[11px] font-black text-neutral-950"
+                        : "shrink-0 rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-neutral-300"
+                    }
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="border-t border-white/5 bg-neutral-900/60">
+
                 {LEAGUE_CHIPS.map((c) => (
                   <button
                     key={c.id}
@@ -449,7 +481,7 @@ export default function SportsPage() {
         {tab === "news" ? (
           <section>
             <p className="text-[11px] text-neutral-500">
-              Sports briefings · sources credited · not full republished articles
+              Sports briefings · sources credited · related imagery · not full republished articles
             </p>
             {loading ? (
               <div className="mt-4 space-y-3">
@@ -547,6 +579,7 @@ export default function SportsPage() {
           <section>
             <p className="text-[11px] text-neutral-500">
               {filtered.length} matches · {day}
+              {sportFilter !== "all" ? ` · ${sportFilter}` : ""}
               {league !== "all" ? ` · ${league}` : ""}
             </p>
             {loading ? (
