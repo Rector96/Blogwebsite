@@ -229,11 +229,11 @@ export default function PredictionsPage() {
                   <h3 className="font-display mt-1 text-xl font-semibold leading-snug">{p.headline}</h3>
 
                   <div className="mt-5 space-y-3">
-                    {[
+                    {([
                       [selected.home, p.homeWin, "bg-teal-700"],
-                      ["Draw", p.draw, "bg-neutral-500"],
+                      ...(selected.sport === "football" ? [["Draw", p.draw, "bg-neutral-500"]] : []),
                       [selected.away, p.awayWin, "bg-amber-600"],
-                    ].map(([name, pct, bar]) => (
+                    ] as const).map(([name, pct, bar]) => (
                       <div key={String(name)}>
                         <div className="mb-1 flex justify-between text-xs font-bold">
                           <span className="truncate pr-2">{name as string}</span>
@@ -303,15 +303,17 @@ export default function PredictionsPage() {
                     <h4 className="text-xs font-extrabold tracking-wider text-neutral-800 uppercase">
                       Data & model notes
                     </h4>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                    <div className={`mt-3 grid gap-2 ${selected.sport === "football" ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-[10px] font-bold uppercase text-neutral-500">Home model</p>
                         <p className="mt-1 text-lg font-black">{p.homeWin}%</p>
                       </div>
-                      <div className="rounded-xl bg-white p-3">
-                        <p className="text-[10px] font-bold uppercase text-neutral-500">Draw model</p>
-                        <p className="mt-1 text-lg font-black">{p.draw}%</p>
-                      </div>
+                      {selected.sport === "football" ? (
+                        <div className="rounded-xl bg-white p-3">
+                          <p className="text-[10px] font-bold uppercase text-neutral-500">Draw model</p>
+                          <p className="mt-1 text-lg font-black">{p.draw}%</p>
+                        </div>
+                      ) : null}
                       <div className="rounded-xl bg-white p-3">
                         <p className="text-[10px] font-bold uppercase text-neutral-500">Away model</p>
                         <p className="mt-1 text-lg font-black">{p.awayWin}%</p>
