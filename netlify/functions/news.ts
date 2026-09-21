@@ -75,7 +75,7 @@ function stripJunk(value: unknown) {
 }
 
 function isMetaLine(x: string) {
-  return /limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this story from the published source|why this matters|rwdnews perspective|editorial context/i.test(x);
+  return /limited to facts|supplied source material|source report remains|not add facts that are not supported|meant to be read on RWDNEWS|without leaving the site|tracking this story from the published source|why this matters|rwdnews perspective|editorial context|full briefing on RWDNEWS|no need to leave/i.test(x);
 }
 
 function sanitizeSummary(items: string[]) {
@@ -83,7 +83,7 @@ function sanitizeSummary(items: string[]) {
     .map((x) => stripJunk(x))
     .filter(Boolean)
     .filter((x) => !isMetaLine(x))
-    .filter((x) => x.length > 20);
+    .filter((x) => x.length > 15);
 }
 
 const words = (text: string) =>
@@ -153,7 +153,7 @@ async function getRss() {
         const feed = await rss.parseURL(url);
         return (feed.items || []).slice(0, 12).map((item: any) => {
           const title = clean(item.title);
-          const desc = stripJunk(item.contentSnippet || item.content || item.summary).slice(0, 2500);
+          const desc = stripJunk(item.contentSnippet || item.content || item.summary).slice(0, 1200);
           return {
             title,
             link: String(item.link || item.guid || ""),
@@ -281,19 +281,19 @@ function expandFallbackSummary(title: string, desc: string): string[] {
   const t = stripJunk(title);
   if (d.length > 40) {
     const sentences = d.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 15);
-    if (sentences.length >= 2) return sanitizeSummary(sentences.slice(0, 10));
+    if (sentences.length >= 2) return sanitizeSummary(sentences.slice(0, 5));
     const chunks: string[] = [];
     let rest = d;
-    while (rest.length > 120 && chunks.length < 8) {
-      let cut = rest.lastIndexOf(" ", 140);
-      if (cut < 40) cut = 140;
+    while (rest.length > 100 && chunks.length < 4) {
+      let cut = rest.lastIndexOf(" ", 120);
+      if (cut < 30) cut = 120;
       chunks.push(rest.slice(0, cut).trim());
       rest = rest.slice(cut).trim();
     }
     if (rest) chunks.push(rest);
-    return sanitizeSummary(chunks.length ? chunks : [d]);
+    return sanitizeSummary(chunks.length ? chunks : [d]).slice(0, 5);
   }
-  return sanitizeSummary([d || t]);
+  return sanitizeSummary([d || t]).slice(0, 5);
 }
 
 async function aiBrief(title: string, desc: string) {
@@ -310,14 +310,16 @@ async function aiBrief(title: string, desc: string) {
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "Write a factual news summary for readers. Return JSON only. " +
+          "Write a short news briefing for an aggregator. Return JSON only. " +
           "(1) ai_hook_title: clear headline. " +
-          "(2) ai_summary: 6 to 10 detailed bullet points. Each bullet 2–4 full sentences with concrete facts " +
-          "(who, what, where, when, numbers, outcomes). Target about 450–500 words total across all bullets " +
-          "so readers get full context. Facts only from the title and description. Do not invent. " +
-          "No disclaimers, no ownership claims, no why it matters, no URLs, no Read More. " +
+          "(2) ai_summary: exactly 3 to 5 short bullet points. One sentence each. " +
+          "Total 60–100 words max. Facts only from the title and description. " +
+          "Do not invent, do not copy long passages, no disclaimers, no URLs, no Read More, no why it matters. " +
           "(3) tags: 2–4 hashtags. " +
-          "TITLE: " + title + " DESCRIPTION: " + desc,
+          "TITLE: " +
+          title +
+          " DESCRIPTION: " +
+          desc,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -331,12 +333,12 @@ async function aiBrief(title: string, desc: string) {
           },
         },
       }),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 12000)),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 8000)),
     ]);
     const text = (response as any)?.text;
     if (!text) return fallback;
     const parsed = JSON.parse(text);
-    const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 10);
+    const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 5);
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
       ai_summary: summary.length ? summary : fallback.ai_summary,
@@ -393,7 +395,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
           ai_hook_title: brief.ai_hook_title,
           ai_summary: sanitizeSummary(brief.ai_summary),
           tags: brief.tags,
-          read_time: Math.max(3, Math.ceil((item.title + " " + bodyText).split(/\s+/).length / 160)) + " min read",
+          read_time: "1 min read",
           category: section,
           region: item.region || "Global",
           trend_score: item.trendScore,
@@ -433,9 +435,9 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
         original_title: String(a.original_title || a.ai_hook_title || ""),
         original_description: stripJunk(String(a.original_description || "")),
         ai_hook_title: String(a.ai_hook_title || a.original_title || ""),
-        ai_summary: sanitizeSummary(Array.isArray(a.ai_summary) ? a.ai_summary : []),
+        ai_summary: sanitizeSummary(Array.isArray(a.ai_summary) ? a.ai_summary : []).slice(0, 5),
         tags: Array.isArray(a.tags) ? a.tags : ["#World"],
-        read_time: String(a.read_time || "3 min read"),
+        read_time: String(a.read_time || "1 min read"),
         category: String(a.category || category(String(a.original_title || ""), undefined, String(a.region || ""))),
         region: String(a.region || "Global"),
         trend_score: 0,
