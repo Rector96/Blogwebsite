@@ -286,33 +286,104 @@ function rssImage(item) {
   return m?.[1] || "";
 }
 
-async function pexelsImage(query) {
+function storySport(story) {
+  const text = `${story?.category || ""} ${story?.original_title || ""} ${story?.ai_hook_title || ""}`.toLowerCase();
+  if (/\b(nba|wnba|basketball|hoops)\b/.test(text)) return "basketball";
+  if (/\b(nfl|american football)\b/.test(text)) return "football";
+  if (/\b(mlb|baseball)\b/.test(text)) return "baseball";
+  if (/\b(nhl|hockey|ice hockey)\b/.test(text)) return "hockey";
+  if (/\b(atp|wta|tennis)\b/.test(text)) return "tennis";
+  return "football";
+}
+
+function storyImageQuery(story) {
+  const sport = storySport(story);
+  const title = clean(story?.ai_hook_title || story?.original_title || "")
+    .replace(/[^a-z0-9\s-]/gi, " ")
+    .split(/\s+/)
+    .filter((word) => word.length > 3)
+    .slice(0, 5)
+    .join(" ");
+  return `${title} ${sport} sports`.trim();
+}
+
+function pexelsMatchScore(photo, story) {
+  const alt = clean(photo?.alt || "").toLowerCase();
+  const sport = storySport(story);
+  const sportHit = new RegExp(
+    sport === "football"
+      ? "\\b(football|soccer|stadium|pitch|player)\\b"
+      : `\\b(${sport}|player|stadium|arena|court|game)\\b`,
+    "i",
+  ).test(alt);
+  const titleWords = clean(story?.ai_hook_title || story?.original_title || "")
+    .toLowerCase()
+    .split(/\\s+/)
+    .filter((word) => word.length >= 5 && !/^(about|after|before|their|there|could|would|should|sports|sport)$/i.test(word))
+    .slice(0, 8);
+  const titleHits = titleWords.filter((word) => alt.includes(word)).length;
+  return (sportHit ? 4 : 0) + titleHits;
+}
+
+async function pexelsImage(story) {
   const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
-  if (!key) return "";
+  if (!key) return null;
   try {
     const u = new URL("https://api.pexels.com/v1/search");
-    u.searchParams.set("query", query || "football stadium");
-    u.searchParams.set("per_page", "1");
+    u.searchParams.set("query", storyImageQuery(story));
+    u.searchParams.set("per_page", "8");
     u.searchParams.set("orientation", "landscape");
-    const r = await fetch(u.toString(), {
+    u.searchParams.set("size", "medium");
+    u.searchParams.set("locale", "en-US");
+    const response = await fetch(u.toString(), {
       headers: { Authorization: key, Accept: "application/json" },
-      signal: AbortSignal.timeout(4000),
+      signal: AbortSignal.timeout(5000),
     });
-    if (!r.ok) return "";
-    const data = await r.json();
-    const photo = Array.isArray(data?.photos) ? data.photos[0] : null;
-    return photo?.src?.large || photo?.src?.medium || photo?.src?.original || "";
+    if (!response.ok) return null;
+    const data = await response.json();
+    const photos = Array.isArray(data?.photos) ? data.photos : [];
+    const ranked = photos
+      .map((photo) => ({ photo, score: pexelsMatchScore(photo, story) }))
+      .sort((a, b) => b.score - a.score);
+    const best = ranked.find((item) => item.score >= 4)?.photo;
+    if (!best?.src) return null;
+    return {
+      image: best.src.large || best.src.medium || best.src.original || "",
+      credit: best.photographer ? `Photo by ${best.photographer} on Pexels` : "Photos provided by Pexels",
+      sourceUrl: best.url || "https://www.pexels.com/",
+    };
   } catch {
-    return "";
+    return null;
   }
 }
 
-async function resolveStoryImage(existing) {
-  if (existing && /^https?:\/\//i.test(existing) && !/rwdnews-logo/i.test(existing)) {
-    return existing;
+async function resolveStoryImage(story) {
+  if (story?.image && /^https?:\/\//i.test(story.image) && !/rwdnews-logo/i.test(story.image)) {
+    return {
+      ...story,
+      image_is_illustrative: false,
+      image_credit: story.image_credit || "",
+      image_source_url: story.image_source_url || "",
+    };
   }
-  const fromPexels = await pexelsImage("soccer football match stadium");
-  return fromPexels || PLACEHOLDER;
+  const fromPexels = await pexelsImage(story);
+  if (fromPexels?.image) {
+    return {
+      ...story,
+      image: fromPexels.image,
+      image_is_illustrative: true,
+      image_credit: fromPexels.credit,
+      image_source_url: fromPexels.sourceUrl,
+      image_license: "Pexels",
+    };
+  }
+  return {
+    ...story,
+    image: PLACEHOLDER,
+    image_is_illustrative: false,
+    image_credit: "",
+    image_source_url: "",
+  };
 }
 
 async function getRssSportsNews() {
@@ -432,12 +503,7 @@ async function withImages(stories) {
   const out = [];
   for (let i = 0; i < stories.length; i += 6) {
     const batch = stories.slice(i, i + 6);
-    const enriched = await Promise.all(
-      batch.map(async (s) => ({
-        ...s,
-        image: await resolveStoryImage(s.image),
-      })),
-    );
+    const enriched = await Promise.all(batch.map((story) => resolveStoryImage(story)));
     out.push(...enriched);
   }
   return out;
@@ -548,7 +614,7 @@ export async function handler(event) {
         },
         providers: {
           scoreboard: providersUsed.length ? providersUsed.join(" + ") : "ESPN + TheSportsDB (free)",
-          news: "RSS + Supabase + GDELT + Pexels",
+          news: "RSS + Supabase + GDELT + Pexels (strict relevance fallback)",
           freeOnly: true,
           apiFootballKeyPresent: Boolean(apiFootballKey()),
         },
