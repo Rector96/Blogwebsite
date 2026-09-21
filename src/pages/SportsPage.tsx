@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { SiteFooter } from "../components/SiteFooter";
+import { AdSlot, StickyAdBanner } from "../components/AdSlot";
 
 type Match = {
   id: string;
@@ -506,6 +507,9 @@ export default function SportsPage() {
               No matches for this filter right now. Check sports news below.
             </div>
           )}
+          <div className="mt-5">
+            <AdSlot slot="sports_mid" variant="inline" label="Advertisement" className="min-h-[90px]" />
+          </div>
         </section>
 
         <section className="mt-10">
@@ -587,7 +591,6 @@ export default function SportsPage() {
         </section>
       </div>
 
-      {/* Mobile sticky live shortcut */}
       {data.live.length > 0 && mode !== "live" ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 px-3 py-2.5 backdrop-blur sm:hidden">
           <a
@@ -597,7 +600,11 @@ export default function SportsPage() {
             ● {data.live.length} live now — open scoreboard
           </a>
         </div>
-      ) : null}
+      ) : (
+        <div className="sm:hidden">
+          <StickyAdBanner slot="sports_sticky" />
+        </div>
+      )}
 
       <SiteFooter />
     </main>
