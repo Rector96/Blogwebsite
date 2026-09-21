@@ -19,10 +19,12 @@ const BOARDS = [
   { sport: "football", path: "soccer/fra.1", league: "Ligue 1" },
   { sport: "football", path: "soccer/ned.1", league: "Eredivisie" },
   { sport: "basketball", path: "basketball/nba", league: "NBA" },
+  { sport: "basketball", path: "basketball/wnba", league: "WNBA" },
   { sport: "football", path: "football/nfl", league: "NFL" },
   { sport: "baseball", path: "baseball/mlb", league: "MLB" },
   { sport: "hockey", path: "hockey/nhl", league: "NHL" },
   { sport: "tennis", path: "tennis/atp", league: "ATP" },
+  { sport: "tennis", path: "tennis/wta", league: "WTA" },
 ];
 
 function mapEvent(event, b) {
@@ -126,7 +128,9 @@ async function openaiPrediction(match) {
       "headline (string), mostLikelyOutcome (string), homeWin (number 0-100), draw (number 0-100), awayWin (number 0-100),",
       "confidence (Low|Moderate|High), dataQuality (Limited|Usable|Strong), analysis (2-4 sentences),",
       "keyFactors (array of 3 short strings), uncertainty (1 sentence), updateTrigger (1 short sentence).",
-      "homeWin+draw+awayWin must equal 100.",
+      match.sport === "football"
+        ? "For football, homeWin+draw+awayWin must equal 100."
+        : "For non-football sports, draw must be 0 and homeWin+awayWin must equal 100.",
       `Fixture: ${match.league} — ${match.home} vs ${match.away}.`,
       `Status: ${match.status}. Start: ${match.startTime || "unknown"}. Sport: ${match.sport}.`,
       match.live ? `Live score: ${match.homeScore ?? "-"} - ${match.awayScore ?? "-"}.` : "Not live yet.",
@@ -159,10 +163,18 @@ async function openaiPrediction(match) {
     let homeWin = Number(parsed.homeWin) || 34;
     let draw = Number(parsed.draw) || 32;
     let awayWin = Number(parsed.awayWin) || 34;
-    const sum = homeWin + draw + awayWin || 1;
-    homeWin = Math.round((homeWin / sum) * 100);
-    draw = Math.round((draw / sum) * 100);
-    awayWin = Math.max(0, 100 - homeWin - draw);
+
+    if (match.sport !== "football") {
+      draw = 0;
+      const sum = homeWin + awayWin || 1;
+      homeWin = Math.round((homeWin / sum) * 100);
+      awayWin = Math.max(0, 100 - homeWin);
+    } else {
+      const sum = homeWin + draw + awayWin || 1;
+      homeWin = Math.round((homeWin / sum) * 100);
+      draw = Math.round((draw / sum) * 100);
+      awayWin = Math.max(0, 100 - homeWin - draw);
+    }
 
     return {
       configured: true,
@@ -198,6 +210,7 @@ async function openaiPrediction(match) {
 }
 
 function baseline(match) {
+  const football = match.sport === "football";
   return {
     configured: Boolean(env("OPENAI_API_KEY")),
     provider: "RWDNEWS baseline",
@@ -205,16 +218,16 @@ function baseline(match) {
     prediction: {
       headline: `${match.home} vs ${match.away} — cautious pre-match outlook`,
       mostLikelyOutcome: "No strong lean from available data",
-      homeWin: 38,
-      draw: 26,
-      awayWin: 36,
+      homeWin: football ? 38 : 52,
+      draw: football ? 26 : 0,
+      awayWin: football ? 36 : 48,
       confidence: "Low",
       dataQuality: "Limited",
       analysis:
         "RWDNEWS has the verified fixture. Without enough confirmed form data, probabilities stay close and confidence stays low.",
       keyFactors: [
         "Fixture confirmed",
-        "No invented injuries or rankings",
+        "No invented injuries, rankings or historical results",
         "Match outcomes remain uncertain",
       ],
       uncertainty:
