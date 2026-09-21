@@ -31,6 +31,9 @@ type Story = {
   original_description: string;
   ai_hook_title: string;
   ai_summary: string[];
+  image_credit?: string;
+  image_source_url?: string;
+  image_is_illustrative?: boolean;
 };
 
 type MainTab = "news" | "scores" | "predictions";
@@ -192,6 +195,7 @@ export default function SportsPage() {
   const [day, setDay] = useState<DayFilter>("today");
   const [league, setLeague] = useState("all");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [detail, setDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [readIds, setReadIds] = useState<Set<string>>(() =>
@@ -200,6 +204,7 @@ export default function SportsPage() {
 
   const load = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [sportsResponse, newsResponse] = await Promise.all([
         fetch("/api/sports", { headers: { Accept: "application/json" } }),
@@ -240,6 +245,8 @@ export default function SportsPage() {
         counts: sportsData.counts,
         providers: sportsData.providers,
       });
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Sports feed unavailable");
     } finally {
       setLoading(false);
     }
@@ -247,7 +254,7 @@ export default function SportsPage() {
 
   useEffect(() => {
     void load();
-    const t = window.setInterval(() => void load(), 45000);
+    const t = window.setInterval(() => void load(), 30000);
     return () => window.clearInterval(t);
   }, []);
 
@@ -467,14 +474,24 @@ export default function SportsPage() {
                       }`}
                     >
                       {s.image && !/rwdnews-logo/i.test(s.image) ? (
-                        <img
-                          src={s.image}
-                          alt=""
-                          className="size-[72px] shrink-0 rounded-xl object-cover"
-                          loading="lazy"
-                        />
+                        <div className="relative size-[88px] shrink-0 overflow-hidden rounded-xl bg-neutral-100">
+                          <img
+                            src={s.image}
+                            alt={s.ai_hook_title || s.original_title || "Sports story"}
+                            className="size-full object-cover"
+                            loading="lazy"
+                            onError={(event) => {
+                              event.currentTarget.style.display = "none";
+                            }}
+                          />
+                          {s.image_is_illustrative ? (
+                            <span className="absolute bottom-1 left-1 rounded bg-black/70 px-1.5 py-0.5 text-[8px] font-bold text-white">
+                              Illustrative
+                            </span>
+                          ) : null}
+                        </div>
                       ) : (
-                        <div className="grid size-[72px] shrink-0 place-items-center rounded-xl bg-neutral-100 text-[10px] font-bold text-neutral-400">
+                        <div className="grid size-[88px] shrink-0 place-items-center rounded-xl bg-neutral-100 text-[10px] font-bold text-neutral-400">
                           SPORT
                         </div>
                       )}
@@ -482,13 +499,30 @@ export default function SportsPage() {
                         <p className="text-[9px] font-bold tracking-wider text-amber-800 uppercase">
                           {s.source}
                         </p>
-                        <p className="mt-0.5 line-clamp-3 text-sm font-semibold leading-snug">
+                        <p className="mt-0.5 line-clamp-3 text-[15px] font-semibold leading-snug">
                           {s.ai_hook_title || s.original_title}
                         </p>
+                        {s.image_credit ? (
+                          <p className="mt-1 truncate text-[9px] text-neutral-400">
+                            {s.image_credit}
+                          </p>
+                        ) : null}
                       </div>
                     </button>
                   );
                 })}
+              </div>
+            ) : loadError ? (
+              <div className="mt-6 rounded-2xl border border-red-200 bg-white p-6 text-center">
+                <p className="text-sm font-bold text-neutral-900">Sports feed could not refresh</p>
+                <p className="mt-1 text-xs text-neutral-500">Your existing news remains available while we retry.</p>
+                <button
+                  type="button"
+                  onClick={() => void load()}
+                  className="mt-4 rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white"
+                >
+                  Try again
+                </button>
               </div>
             ) : (
               <div className="mt-6 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
@@ -601,6 +635,21 @@ export default function SportsPage() {
             <p className="mt-4 text-[10px] text-neutral-400">18+ where applicable. Gamble responsibly.</p>
           </section>
         ) : null}
+
+        <section className="mt-6 rounded-2xl border border-neutral-200 bg-white p-4 text-xs leading-6 text-neutral-600">
+          <p>
+            Some sports stories use illustrative imagery when a publisher image is unavailable. Those images are
+            selected for the story's sport/topic and credited to the photographer.
+          </p>
+          <a
+            href="https://www.pexels.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 inline-flex font-bold text-teal-800 underline underline-offset-2"
+          >
+            Photos provided by Pexels
+          </a>
+        </section>
 
         <section className="mt-10 rounded-2xl border border-neutral-200 bg-white p-5 text-sm leading-7 text-neutral-700">
           <h2 className="font-display text-base font-bold text-neutral-950">RWDNEWS Sports</h2>
