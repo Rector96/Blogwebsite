@@ -45,31 +45,7 @@ function timeLabel(iso?: string) {
   });
 }
 
-/** Visual form badges — shown when API has limited H2H; honest about data quality */
-function FormDots({ label }: { label: string }) {
-  // Neutral placeholder pattern until full H2H API is wired
-  const bits = ["W", "D", "L", "W", "D"] as const;
-  const color = (x: string) =>
-    x === "W" ? "bg-emerald-600" : x === "D" ? "bg-amber-500" : "bg-red-600";
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-16 shrink-0 truncate text-xs font-semibold text-neutral-600">{label}</span>
-      <div className="flex gap-1">
-        {bits.map((b, i) => (
-          <span
-            key={i}
-            className={`grid size-6 place-items-center rounded text-[10px] font-black text-white ${color(b)}`}
-            title="Illustrative form pattern — expand with verified H2H when available"
-          >
-            {b}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export default function PredictionsPage() {
+export default function Match outlooksPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState("");
@@ -170,8 +146,8 @@ export default function PredictionsPage() {
       <Helmet>
         <title>
           {selected
-            ? `${selected.home} vs ${selected.away} Prediction | RWDNEWS`
-            : "Match Predictions | RWDNEWS Sports"}
+            ? `${selected.home} vs ${selected.away} Outlook | RWDNEWS`
+            : "Match Outlooks | RWDNEWS Sports"}
         </title>
         <meta
           name="description"
@@ -244,11 +220,11 @@ export default function PredictionsPage() {
             {/* Section B — AI dashboard */}
             <div className="border-t border-white/10 bg-white px-4 py-5 text-neutral-950">
               {predicting ? (
-                <p className="text-sm text-neutral-500">Building AI outlook…</p>
+                <p className="text-sm text-neutral-500">Building match outlook…</p>
               ) : p ? (
                 <>
                   <p className="text-[10px] font-extrabold tracking-[0.14em] text-amber-700 uppercase">
-                    AI verdict
+                    Model outlook
                   </p>
                   <h3 className="font-display mt-1 text-xl font-semibold leading-snug">{p.headline}</h3>
 
@@ -322,49 +298,28 @@ export default function PredictionsPage() {
                     {p.uncertainty} {prediction?.disclaimer || "Not betting advice. 18+."}
                   </p>
 
-                  {/* Section D — H2H / form */}
+                  {/* Verified-data status */}
                   <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
                     <h4 className="text-xs font-extrabold tracking-wider text-neutral-800 uppercase">
-                      Head-to-head & form
+                      Data & model notes
                     </h4>
-                    <p className="mt-1 text-[11px] text-neutral-500">
-                      Structured form view for readers and search. Verified H2H expands as API coverage
-                      grows — we do not invent past results.
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-[10px] font-bold uppercase text-neutral-500">Home model</p>
+                        <p className="mt-1 text-lg font-black">{p.homeWin}%</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-[10px] font-bold uppercase text-neutral-500">Draw model</p>
+                        <p className="mt-1 text-lg font-black">{p.draw}%</p>
+                      </div>
+                      <div className="rounded-xl bg-white p-3">
+                        <p className="text-[10px] font-bold uppercase text-neutral-500">Away model</p>
+                        <p className="mt-1 text-lg font-black">{p.awayWin}%</p>
+                      </div>
+                    </div>
+                    <p className="mt-3 text-[11px] leading-relaxed text-neutral-500">
+                      {p.dataQuality} data quality. RWDNEWS does not display invented form, rankings or head-to-head results. New verified team information can change the outlook.
                     </p>
-                    <div className="mt-3 space-y-2">
-                      <FormDots label={selected.home.split(" ").slice(-1)[0]} />
-                      <FormDots label={selected.away.split(" ").slice(-1)[0]} />
-                    </div>
-                    <div className="mt-4 overflow-x-auto">
-                      <table className="w-full min-w-[260px] text-left text-xs">
-                        <thead>
-                          <tr className="border-b text-neutral-500">
-                            <th className="py-1.5 font-semibold">Metric</th>
-                            <th className="py-1.5 font-semibold">{selected.home.split(" ").slice(-1)[0]}</th>
-                            <th className="py-1.5 font-semibold">{selected.away.split(" ").slice(-1)[0]}</th>
-                          </tr>
-                        </thead>
-                        <tbody className="text-neutral-700">
-                          <tr className="border-b border-neutral-100">
-                            <td className="py-1.5">Win model %</td>
-                            <td className="py-1.5 font-bold">{p.homeWin}%</td>
-                            <td className="py-1.5 font-bold">{p.awayWin}%</td>
-                          </tr>
-                          <tr className="border-b border-neutral-100">
-                            <td className="py-1.5">Draw model %</td>
-                            <td className="py-1.5" colSpan={2}>
-                              {p.draw}%
-                            </td>
-                          </tr>
-                          <tr>
-                            <td className="py-1.5">Most likely</td>
-                            <td className="py-1.5 font-semibold" colSpan={2}>
-                              {p.mostLikelyOutcome}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
                   </div>
                 </>
               ) : (
@@ -379,7 +334,7 @@ export default function PredictionsPage() {
             </p>
             <h1 className="font-display mt-1 text-2xl font-semibold">Predictions</h1>
             <p className="mt-2 text-sm text-neutral-300">
-              Pick a fixture. AI outlook loads only when you open it — faster on mobile.
+              Pick a fixture. The model runs only when you open a match — faster on mobile.
             </p>
           </div>
         )}
