@@ -19,14 +19,27 @@ export async function handler(event: {
 
   try {
     const result = await runIngest();
+    // Support both array return and { articles, saved, generatedAt }
+    const articles = Array.isArray(result)
+      ? result
+      : Array.isArray((result as any)?.articles)
+        ? (result as any).articles
+        : [];
+    const saved =
+      typeof (result as any)?.saved === "number" ? (result as any).saved : articles.length;
+    const generatedAt =
+      typeof (result as any)?.generatedAt === "string"
+        ? (result as any).generatedAt
+        : new Date().toISOString();
+
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ok: true,
-        count: result.articles.length,
-        saved: result.saved,
-        generatedAt: result.generatedAt,
+        count: articles.length,
+        saved,
+        generatedAt,
       }),
     };
   } catch (error) {
@@ -34,7 +47,10 @@ export async function handler(event: {
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ok: false, error: "Ingest failed" }),
+      body: JSON.stringify({
+        ok: false,
+        error: error instanceof Error ? error.message : "Ingest failed",
+      }),
     };
   }
 }
