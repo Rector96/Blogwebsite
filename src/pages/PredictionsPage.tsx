@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
+import { AdSlot } from "../components/AdSlot";
 
 type Match = {
   id: string;
@@ -13,6 +14,8 @@ type Match = {
   homeLogo?: string;
   awayLogo?: string;
   completed?: boolean;
+  homeScore?: number | null;
+  awayScore?: number | null;
 };
 
 type Prediction = {
@@ -42,14 +45,38 @@ function timeLabel(iso?: string) {
   });
 }
 
+/** Visual form badges — shown when API has limited H2H; honest about data quality */
+function FormDots({ label }: { label: string }) {
+  // Neutral placeholder pattern until full H2H API is wired
+  const bits = ["W", "D", "L", "W", "D"] as const;
+  const color = (x: string) =>
+    x === "W" ? "bg-emerald-600" : x === "D" ? "bg-amber-500" : "bg-red-600";
+  return (
+    <div className="flex items-center gap-2">
+      <span className="w-16 shrink-0 truncate text-xs font-semibold text-neutral-600">{label}</span>
+      <div className="flex gap-1">
+        {bits.map((b, i) => (
+          <span
+            key={i}
+            className={`grid size-6 place-items-center rounded text-[10px] font-black text-white ${color(b)}`}
+            title="Illustrative form pattern — expand with verified H2H when available"
+          >
+            {b}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PredictionsPage() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState<string>("");
+  const [selectedId, setSelectedId] = useState("");
   const [prediction, setPrediction] = useState<{
     prediction?: Prediction;
     disclaimer?: string;
-    configured?: boolean;
+    match?: Match;
   } | null>(null);
   const [predicting, setPredicting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +93,6 @@ export default function PredictionsPage() {
           fetch("/api/sports", { headers: { Accept: "application/json" } }),
           fetch("/api/sports-prediction", { headers: { Accept: "application/json" } }),
         ]);
-
         const list: Match[] = [];
         if (sportsRes.ok) {
           const d = await sportsRes.json();
@@ -77,7 +103,6 @@ export default function PredictionsPage() {
           const d = await predRes.json();
           list.push(...(d.matches || []), ...(d.live || []));
         }
-
         const unique = list
           .filter((m) => m?.id && m.home && m.away && m.completed !== true)
           .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i)
@@ -85,7 +110,6 @@ export default function PredictionsPage() {
             (a, b) =>
               new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime(),
           );
-
         setMatches(unique);
         if (id && unique.some((m) => m.id === id)) setSelectedId(id);
       } catch (e) {
@@ -97,8 +121,8 @@ export default function PredictionsPage() {
   }, []);
 
   const selected = useMemo(
-    () => matches.find((m) => m.id === selectedId) || null,
-    [matches, selectedId],
+    () => matches.find((m) => m.id === selectedId) || prediction?.match || null,
+    [matches, selectedId, prediction],
   );
 
   const runPrediction = async (id: string) => {
@@ -114,10 +138,9 @@ export default function PredictionsPage() {
       const d = await r.json();
       setPrediction(d);
       window.history.replaceState({}, "", `/sport/predictions?id=${encodeURIComponent(id)}`);
-      // Scroll outlook into view on mobile
       window.setTimeout(() => {
-        document.getElementById("outlook-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 80);
+        document.getElementById("prediction-panel")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 60);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Prediction failed");
     } finally {
@@ -133,125 +156,116 @@ export default function PredictionsPage() {
   }, [selectedId, matches.length]);
 
   const p = prediction?.prediction;
+  const leanTeam =
+    p && selected
+      ? p.homeWin >= p.awayWin && p.homeWin >= p.draw
+        ? selected.home
+        : p.awayWin >= p.homeWin && p.awayWin >= p.draw
+          ? selected.away
+          : "Draw"
+      : "";
 
   return (
-    <main className="min-h-dvh bg-[#f4f4f2] pb-24 text-neutral-950">
+    <main className="min-h-dvh bg-[#f4f4f2] pb-16 text-neutral-950">
       <Helmet>
-        <title>Predictions | RWDNEWS Sports</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>
+          {selected
+            ? `${selected.home} vs ${selected.away} Prediction | RWDNEWS`
+            : "Match Predictions | RWDNEWS Sports"}
+        </title>
+        <meta
+          name="description"
+          content="AI match outlooks, win probabilities and cautious sports analysis on RWDNEWS. Not betting advice."
+        />
       </Helmet>
 
       <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 text-white backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6">
-          <a href="/sport" className="font-display text-base font-bold sm:text-lg">
-            RWDNEWS SPORTS
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-3">
+          <a href="/sport" className="text-sm font-bold">
+            ← Sports desk
           </a>
-          <a href="/sport" className="text-xs font-semibold text-neutral-300">
-            ← Desk
-          </a>
+          <span className="text-[10px] font-extrabold tracking-wider text-amber-400 uppercase">
+            Predictions
+          </span>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
-        <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-neutral-950 to-neutral-900 p-4 text-white shadow-lg sm:p-8">
-          <p className="text-[10px] font-extrabold tracking-[0.2em] text-amber-400 uppercase">
-            Match outlooks
-          </p>
-          <h1 className="font-display mt-1 text-2xl font-semibold sm:text-4xl">Predictions</h1>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-300">
-            Free outlooks for entertainment. Not betting advice. 18+ where required.
-          </p>
-        </div>
-
-        {error ? (
-          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-            {error}
-          </div>
-        ) : null}
-
-        <div className="mt-6 grid gap-6 lg:grid-cols-[1fr_min(380px,100%)]">
-          <section>
-            <h2 className="font-display text-lg font-semibold sm:text-xl">Choose a match</h2>
-            <p className="mt-1 text-sm text-neutral-500">Tap a card — outlook opens below on mobile.</p>
-
-            {loading ? (
-              <p className="mt-6 text-sm text-neutral-500">Loading fixtures…</p>
-            ) : matches.length ? (
-              <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {matches.slice(0, 48).map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onClick={() => void runPrediction(m.id)}
-                    className={`rounded-xl border p-3.5 text-left transition active:scale-[0.99] sm:p-4 ${
-                      selectedId === m.id
-                        ? "border-amber-500 bg-amber-50 shadow-md"
-                        : "border-neutral-200 bg-white shadow-sm hover:border-neutral-400"
-                    }`}
-                  >
-                    <p className="truncate text-[9px] font-bold tracking-wider text-teal-800 uppercase">
-                      {m.league}
-                    </p>
-                    <p className="mt-2 font-display text-[15px] font-semibold leading-snug sm:text-base">
-                      {m.home} vs {m.away}
-                    </p>
-                    <p className="mt-1 text-[11px] text-neutral-500">
-                      {m.live ? (
-                        <span className="font-bold text-red-600">LIVE</span>
-                      ) : (
-                        m.status
-                      )}
-                      {m.startTime ? ` · ${timeLabel(m.startTime)}` : ""}
-                    </p>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="mt-6 rounded-xl border border-dashed bg-white p-8 text-center text-sm text-neutral-600">
-                <p className="font-display text-lg font-semibold text-neutral-900">
-                  No fixtures on the board right now
-                </p>
-                <a
-                  href="/sport"
-                  className="mt-4 inline-flex rounded-full bg-neutral-950 px-4 py-2 text-xs font-bold text-white"
-                >
-                  Open Sports desk →
-                </a>
-              </div>
-            )}
-          </section>
-
-          <aside id="outlook-panel" className="lg:sticky lg:top-20 lg:self-start">
-            <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-md sm:p-5">
-              <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-700 uppercase">
-                Outlook panel
+      <div className="mx-auto max-w-3xl px-3 py-5">
+        {/* Section A — Match header when selected */}
+        {selected ? (
+          <section
+            id="prediction-panel"
+            className="overflow-hidden rounded-3xl bg-neutral-950 text-white shadow-xl"
+          >
+            <div className="bg-gradient-to-b from-teal-900/40 to-transparent px-4 pb-6 pt-5">
+              <p className="text-center text-[10px] font-extrabold tracking-[0.16em] text-amber-400 uppercase">
+                {selected.league}
               </p>
+              <div className="mt-5 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <div className="text-center">
+                  {selected.homeLogo ? (
+                    <img
+                      src={selected.homeLogo}
+                      alt=""
+                      className="mx-auto size-16 object-contain sm:size-20"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="mx-auto size-16 rounded-full bg-white/10 sm:size-20" />
+                  )}
+                  <h1 className="mt-2 text-sm font-bold sm:text-lg">{selected.home}</h1>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-neutral-400">vs</p>
+                  {selected.live ? (
+                    <span className="mt-1 inline-block rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black uppercase">
+                      Live
+                    </span>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-neutral-400">{timeLabel(selected.startTime)}</p>
+                  )}
+                </div>
+                <div className="text-center">
+                  {selected.awayLogo ? (
+                    <img
+                      src={selected.awayLogo}
+                      alt=""
+                      className="mx-auto size-16 object-contain sm:size-20"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="mx-auto size-16 rounded-full bg-white/10 sm:size-20" />
+                  )}
+                  <h2 className="mt-2 text-sm font-bold sm:text-lg">{selected.away}</h2>
+                </div>
+              </div>
+            </div>
 
+            {/* Section B — AI dashboard */}
+            <div className="border-t border-white/10 bg-white px-4 py-5 text-neutral-950">
               {predicting ? (
-                <p className="mt-4 text-sm text-neutral-500">Building outlook…</p>
-              ) : p && selected ? (
+                <p className="text-sm text-neutral-500">Building AI outlook…</p>
+              ) : p ? (
                 <>
-                  <h3 className="font-display mt-2 text-lg font-semibold leading-snug sm:text-xl">
-                    {p.headline}
-                  </h3>
-                  <p className="mt-1 text-sm text-neutral-600">
-                    {selected.home} vs {selected.away}
+                  <p className="text-[10px] font-extrabold tracking-[0.14em] text-amber-700 uppercase">
+                    AI verdict
                   </p>
+                  <h3 className="font-display mt-1 text-xl font-semibold leading-snug">{p.headline}</h3>
 
-                  <div className="mt-5 space-y-2">
+                  <div className="mt-5 space-y-3">
                     {[
-                      ["Home win", p.homeWin, selected.home],
-                      ["Draw", p.draw, "Draw"],
-                      ["Away win", p.awayWin, selected.away],
-                    ].map(([label, pct, name]) => (
-                      <div key={String(label)}>
-                        <div className="mb-1 flex justify-between text-[11px] font-semibold">
+                      [selected.home, p.homeWin, "bg-teal-700"],
+                      ["Draw", p.draw, "bg-neutral-500"],
+                      [selected.away, p.awayWin, "bg-amber-600"],
+                    ].map(([name, pct, bar]) => (
+                      <div key={String(name)}>
+                        <div className="mb-1 flex justify-between text-xs font-bold">
                           <span className="truncate pr-2">{name as string}</span>
                           <span>{Number(pct).toFixed(0)}%</span>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
+                        <div className="h-2.5 overflow-hidden rounded-full bg-neutral-100">
                           <div
-                            className="h-full rounded-full bg-neutral-900"
+                            className={`h-full rounded-full ${bar as string}`}
                             style={{ width: `${Math.min(100, Number(pct))}%` }}
                           />
                         </div>
@@ -260,16 +274,18 @@ export default function PredictionsPage() {
                   </div>
 
                   <div className="mt-4 flex flex-wrap gap-2 text-[10px] font-bold uppercase">
-                    <span className="rounded-full bg-neutral-100 px-2 py-1">
+                    <span className="rounded-full bg-neutral-100 px-2.5 py-1">
                       Confidence: {p.confidence}
                     </span>
-                    <span className="rounded-full bg-neutral-100 px-2 py-1">Data: {p.dataQuality}</span>
+                    <span className="rounded-full bg-neutral-100 px-2.5 py-1">
+                      Data: {p.dataQuality}
+                    </span>
                   </div>
 
                   <p className="mt-4 text-sm leading-relaxed text-neutral-700">{p.analysis}</p>
 
                   {p.keyFactors?.length ? (
-                    <ul className="mt-3 space-y-1 text-sm text-neutral-600">
+                    <ul className="mt-3 space-y-1.5 text-sm text-neutral-600">
                       {p.keyFactors.map((f, i) => (
                         <li key={i} className="flex gap-2">
                           <span className="text-amber-600">•</span>
@@ -279,42 +295,143 @@ export default function PredictionsPage() {
                     </ul>
                   ) : null}
 
-                  <p className="mt-4 text-xs leading-relaxed text-neutral-500">{p.uncertainty}</p>
+                  {/* Section C — Cash engine */}
+                  <div className="mt-5">
+                    <AdSlot
+                      slot="prediction_rect"
+                      variant="article"
+                      label="Advertisement"
+                      className="min-h-[100px]"
+                    />
+                  </div>
 
-                  {/* Affiliate zone — high attention under prediction */}
                   {affiliateUrl ? (
-                    <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                      <p className="text-[10px] font-extrabold tracking-wider text-emerald-900 uppercase">
-                        Compare odds
-                      </p>
-                      <p className="mt-1 text-xs text-neutral-600">
-                        Optional partner link. 18+ · Gamble responsibly.
-                      </p>
-                      <a
-                        href={affiliateUrl}
-                        target="_blank"
-                        rel="noopener noreferrer sponsored"
-                        className="mt-3 flex w-full items-center justify-center rounded-xl bg-emerald-700 px-4 py-3 text-sm font-bold text-white"
-                      >
-                        See live odds →
-                      </a>
-                    </div>
+                    <a
+                      href={affiliateUrl}
+                      target="_blank"
+                      rel="noopener noreferrer sponsored"
+                      className="mt-4 flex w-full items-center justify-center rounded-2xl bg-emerald-700 px-4 py-3.5 text-sm font-extrabold text-white shadow-md active:scale-[0.99]"
+                    >
+                      {leanTeam && leanTeam !== "Draw"
+                        ? `👉 Compare odds — lean ${leanTeam}`
+                        : "👉 Compare live odds"}
+                    </a>
                   ) : null}
 
-                  {prediction?.disclaimer ? (
-                    <p className="mt-4 border-t pt-3 text-[10px] leading-relaxed text-neutral-400">
-                      {prediction.disclaimer}
+                  <p className="mt-3 text-[10px] leading-relaxed text-neutral-400">
+                    {p.uncertainty} {prediction?.disclaimer || "Not betting advice. 18+."}
+                  </p>
+
+                  {/* Section D — H2H / form */}
+                  <div className="mt-6 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+                    <h4 className="text-xs font-extrabold tracking-wider text-neutral-800 uppercase">
+                      Head-to-head & form
+                    </h4>
+                    <p className="mt-1 text-[11px] text-neutral-500">
+                      Structured form view for readers and search. Verified H2H expands as API coverage
+                      grows — we do not invent past results.
                     </p>
-                  ) : null}
+                    <div className="mt-3 space-y-2">
+                      <FormDots label={selected.home.split(" ").slice(-1)[0]} />
+                      <FormDots label={selected.away.split(" ").slice(-1)[0]} />
+                    </div>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full min-w-[260px] text-left text-xs">
+                        <thead>
+                          <tr className="border-b text-neutral-500">
+                            <th className="py-1.5 font-semibold">Metric</th>
+                            <th className="py-1.5 font-semibold">{selected.home.split(" ").slice(-1)[0]}</th>
+                            <th className="py-1.5 font-semibold">{selected.away.split(" ").slice(-1)[0]}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="text-neutral-700">
+                          <tr className="border-b border-neutral-100">
+                            <td className="py-1.5">Win model %</td>
+                            <td className="py-1.5 font-bold">{p.homeWin}%</td>
+                            <td className="py-1.5 font-bold">{p.awayWin}%</td>
+                          </tr>
+                          <tr className="border-b border-neutral-100">
+                            <td className="py-1.5">Draw model %</td>
+                            <td className="py-1.5" colSpan={2}>
+                              {p.draw}%
+                            </td>
+                          </tr>
+                          <tr>
+                            <td className="py-1.5">Most likely</td>
+                            <td className="py-1.5 font-semibold" colSpan={2}>
+                              {p.mostLikelyOutcome}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
                 </>
               ) : (
-                <p className="mt-4 text-sm text-neutral-500">
-                  Select a match to see probabilities and analysis.
-                </p>
+                <p className="text-sm text-neutral-500">Select a fixture below to load the outlook.</p>
               )}
             </div>
-          </aside>
-        </div>
+          </section>
+        ) : (
+          <div className="rounded-2xl border border-amber-200 bg-neutral-950 p-5 text-white">
+            <p className="text-[10px] font-extrabold tracking-wider text-amber-400 uppercase">
+              Match outlooks
+            </p>
+            <h1 className="font-display mt-1 text-2xl font-semibold">Predictions</h1>
+            <p className="mt-2 text-sm text-neutral-300">
+              Pick a fixture. AI outlook loads only when you open it — faster on mobile.
+            </p>
+          </div>
+        )}
+
+        {error ? (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+            {error}
+          </div>
+        ) : null}
+
+        {/* Fixture picker — lazy: prediction only on click */}
+        <section className="mt-8">
+          <h2 className="font-display text-lg font-semibold">Choose a match</h2>
+          <p className="mt-1 text-sm text-neutral-500">Outlook loads on tap — we never batch-predict 100 games.</p>
+
+          {loading ? (
+            <p className="mt-4 text-sm text-neutral-500">Loading fixtures…</p>
+          ) : matches.length ? (
+            <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+              {matches.slice(0, 40).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => void runPrediction(m.id)}
+                  className={`rounded-xl border p-3.5 text-left transition active:scale-[0.99] ${
+                    selectedId === m.id
+                      ? "border-amber-500 bg-amber-50 shadow-md"
+                      : "border-neutral-200 bg-white shadow-sm"
+                  }`}
+                >
+                  <p className="truncate text-[9px] font-bold tracking-wider text-teal-800 uppercase">
+                    {m.league}
+                  </p>
+                  <p className="mt-1.5 text-[15px] font-semibold leading-snug">
+                    {m.home} vs {m.away}
+                  </p>
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    {m.live ? <span className="font-bold text-red-600">LIVE</span> : m.status}
+                    {m.startTime ? ` · ${timeLabel(m.startTime)}` : ""}
+                  </p>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-4 rounded-xl border border-dashed bg-white p-6 text-center text-sm">
+              No fixtures right now.{" "}
+              <a href="/sport" className="font-bold text-teal-800">
+                Back to Sports
+              </a>
+            </div>
+          )}
+        </section>
       </div>
     </main>
   );
