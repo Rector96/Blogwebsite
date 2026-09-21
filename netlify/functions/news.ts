@@ -251,15 +251,7 @@ function scoreItems(items: any[]) {
 function pickBalanced(items: any[], limit = 48) {
   const sorted = [...items].sort((a, b) => b.trendScore - a.trendScore);
   const quotas: Record<string, number> = {
-    Nigeria: 8,
-    Africa: 6,
-    Ghana: 3,
-    Tech: 7,
-    Sports: 8,
-    Business: 6,
-    World: 8,
-    Crypto: 2,
-    Entertainment: 2,
+    Nigeria: 8, Africa: 6, Ghana: 3, Tech: 7, Sports: 8, Business: 6, World: 8, Crypto: 2, Entertainment: 2,
   };
   const picked: any[] = [];
   const used = new Set<string>();
@@ -325,10 +317,7 @@ async function aiBrief(title: string, desc: string) {
           "so readers get full context. Facts only from the title and description. Do not invent. " +
           "No disclaimers, no ownership claims, no why it matters, no URLs, no Read More. " +
           "(3) tags: 2–4 hashtags. " +
-          "TITLE: " +
-          title +
-          " DESCRIPTION: " +
-          desc,
+          "TITLE: " + title + " DESCRIPTION: " + desc,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -381,7 +370,6 @@ async function buildArticles(): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
   const items = pickBalanced(scored, 48);
-
   const results = (
     await Promise.all(
       items.map(async (item) => {
@@ -469,8 +457,9 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
   }
 }
 
-async function runIngest() {
+export async function runIngest() {
   const articles = await buildArticles();
+  let saved = 0;
   const url = process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"] || "";
   const key = process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
   if (url && key && articles.length) {
@@ -496,12 +485,13 @@ async function runIngest() {
         image_license: a.image_license,
         image_source_url: a.image_source_url,
       }));
-      await db.from("articles").upsert(rows, { onConflict: "original_url" });
+      const { error } = await db.from("articles").upsert(rows, { onConflict: "original_url" });
+      if (!error) saved = rows.length;
     } catch {
-      /* ignore store errors */
+      /* ignore */
     }
   }
-  return articles;
+  return { articles, saved, generatedAt: new Date().toISOString() };
 }
 
 export async function handler(event: any) {
@@ -510,10 +500,14 @@ export async function handler(event: any) {
     const refresh = qs.refresh === "true" || qs.refresh === "1";
     let articles: NewsArticle[] = [];
     if (refresh) {
-      articles = await runIngest();
+      const result = await runIngest();
+      articles = result.articles;
     } else {
       articles = await getStoredArticles();
-      if (!articles.length) articles = await runIngest();
+      if (!articles.length) {
+        const result = await runIngest();
+        articles = result.articles;
+      }
     }
     const stored = await getStoredArticles();
     const map = new Map<string, NewsArticle>();
