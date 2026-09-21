@@ -31,16 +31,21 @@ type Story = {
   original_description: string;
   ai_hook_title: string;
   ai_summary: string[];
-  category?: string;
 };
 
-const sports = [
-  ["all", "All", "🏆"],
-  ["football", "Football", "⚽"],
-  ["basketball", "Basketball", "🏀"],
-  ["tennis", "Tennis", "🎾"],
-  ["baseball", "Baseball", "⚾"],
-  ["hockey", "Hockey", "🏒"],
+type DayFilter = "live" | "yesterday" | "today" | "tomorrow";
+
+const LEAGUE_CHIPS = [
+  { id: "all", label: "All" },
+  { id: "premier league", label: "EPL" },
+  { id: "champions league", label: "UCL" },
+  { id: "la liga", label: "La Liga" },
+  { id: "serie a", label: "Serie A" },
+  { id: "bundesliga", label: "Bundesliga" },
+  { id: "ligue 1", label: "Ligue 1" },
+  { id: "npfl", label: "NPFL" },
+  { id: "nba", label: "NBA" },
+  { id: "nfl", label: "NFL" },
 ];
 
 const READ_KEY = "rwdnews_read_story_ids";
@@ -59,29 +64,53 @@ function markRead(id: string) {
   try {
     const set = loadReadIds();
     set.add(id);
-    const arr = Array.from(set).slice(-200);
-    localStorage.setItem(READ_KEY, JSON.stringify(arr));
+    localStorage.setItem(READ_KEY, JSON.stringify(Array.from(set).slice(-200)));
   } catch {
     /* ignore */
   }
 }
 
-function timeLabel(iso?: string) {
-  if (!iso) return "Time TBA";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime())
-    ? "Time TBA"
-    : d.toLocaleString(undefined, {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+function dayBounds(filter: DayFilter) {
+  const now = new Date();
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  if (filter === "yesterday") start.setDate(start.getDate() - 1);
+  if (filter === "tomorrow") start.setDate(start.getDate() + 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start: start.getTime(), end: end.getTime() };
 }
 
-function matchPath(id: string) {
-  return `/sport/match/${encodeURIComponent(id)}`;
+function matchInDay(m: Match, filter: DayFilter) {
+  if (filter === "live") return Boolean(m.live);
+  if (!m.startTime) return filter === "today";
+  const t = new Date(m.startTime).getTime();
+  if (Number.isNaN(t)) return false;
+  const { start, end } = dayBounds(filter);
+  return t >= start && t < end;
+}
+
+function timeOrScore(m: Match) {
+  if (m.live || (m.homeScore != null && m.awayScore != null)) {
+    return `${m.homeScore ?? 0} - ${m.awayScore ?? 0}`;
+  }
+  if (!m.startTime) return "TBA";
+  const d = new Date(m.startTime);
+  if (Number.isNaN(d.getTime())) return "TBA";
+  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+}
+
+function shortTime(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString(undefined, {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function storyHref(item: Story) {
@@ -105,54 +134,71 @@ function openStory(item: Story) {
   window.location.href = storyHref(item);
 }
 
-function scoreText(m: Match) {
-  return m.homeScore == null && m.awayScore == null ? "—" : `${m.homeScore ?? 0} - ${m.awayScore ?? 0}`;
+function MatchRow({ match }: { match: Match }) {
+  return (
+    <article className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm sm:p-3.5">
+      <a href={`/sport/match/${encodeURIComponent(match.id)}`} className="block active:opacity-90">
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2 justify-self-end text-right">
+            <span className="truncate text-sm font-semibold">{match.home}</span>
+            {match.homeLogo ? (
+              <img src={match.homeLogo} alt="" className="size-7 shrink-0 object-contain" loading="lazy" />
+            ) : (
+              <span className="size-7 shrink-0 rounded-full bg-neutral-100" />
+            )}
+          </div>
+
+          <div className="min-w-[72px] text-center">
+            {match.live ? (
+              <span className="mb-1 inline-flex items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black tracking-wide text-white uppercase animate-pulse">
+                ● Live
+              </span>
+            ) : null}
+            <div className="font-display text-lg font-black tabular-nums leading-none sm:text-xl">
+              {timeOrScore(match)}
+            </div>
+            {!match.live ? (
+              <p className="mt-1 text-[10px] font-medium text-neutral-500">{match.status}</p>
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 items-center gap-2 justify-self-start text-left">
+            {match.awayLogo ? (
+              <img src={match.awayLogo} alt="" className="size-7 shrink-0 object-contain" loading="lazy" />
+            ) : (
+              <span className="size-7 shrink-0 rounded-full bg-neutral-100" />
+            )}
+            <span className="truncate text-sm font-semibold">{match.away}</span>
+          </div>
+        </div>
+        {match.venue ? (
+          <p className="mt-2 text-center text-[10px] text-neutral-400">{match.venue}</p>
+        ) : null}
+      </a>
+      <div className="mt-2.5 flex justify-center">
+        <a
+          href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
+          className="inline-flex items-center gap-1 rounded-full bg-amber-400 px-3 py-1.5 text-[11px] font-extrabold text-neutral-950 shadow-sm"
+        >
+          📊 View AI Prediction & Stats
+        </a>
+      </div>
+    </article>
+  );
 }
 
-function MatchCard({ match }: { match: Match }) {
+function seoBlurb(counts: { matches: number; live: number; leagues: string[] }) {
+  const leagueText =
+    counts.leagues.slice(0, 6).join(", ") ||
+    "the Premier League, Champions League, La Liga, Serie A and more";
   return (
-    <div className="rounded-2xl border border-neutral-200 bg-white p-3.5 shadow-sm sm:p-4">
-      <a href={matchPath(match.id)} className="block active:opacity-90">
-        <div className="flex items-center justify-between gap-2 text-[10px] font-bold tracking-wide uppercase">
-          <span className="truncate text-teal-800">{match.league}</span>
-          <span className={match.live ? "shrink-0 text-red-600" : "shrink-0 text-neutral-400"}>
-            {match.live ? "● LIVE" : match.status}
-          </span>
-        </div>
-        <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-2">
-          <div className="min-w-0 space-y-2.5 text-sm font-semibold">
-            <div className="flex items-center gap-2">
-              {match.homeLogo ? (
-                <img src={match.homeLogo} alt="" className="size-5 shrink-0 object-contain sm:size-6" />
-              ) : (
-                <span className="size-5 shrink-0 rounded-full bg-neutral-100 sm:size-6" />
-              )}
-              <span className="truncate">{match.home}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {match.awayLogo ? (
-                <img src={match.awayLogo} alt="" className="size-5 shrink-0 object-contain sm:size-6" />
-              ) : (
-                <span className="size-5 shrink-0 rounded-full bg-neutral-100 sm:size-6" />
-              )}
-              <span className="truncate">{match.away}</span>
-            </div>
-          </div>
-          <div className="text-right font-display text-base font-bold tabular-nums sm:text-lg">
-            <div>{match.homeScore ?? "—"}</div>
-            <div>{match.awayScore ?? "—"}</div>
-          </div>
-        </div>
-        <p className="mt-3 text-[10px] text-neutral-400">{timeLabel(match.startTime)}</p>
-        <p className="mt-1.5 text-xs font-extrabold text-teal-800">Match centre →</p>
-      </a>
-      <a
-        href={`/sport/predictions?id=${encodeURIComponent(match.id)}`}
-        className="mt-2 inline-block text-xs font-extrabold text-amber-700"
-      >
-        Predict →
-      </a>
-    </div>
+    `Get the latest live football scores, fixtures and AI-driven match predictions on RWDNEWS Sports. ` +
+    `Today’s board covers ${counts.matches} fixtures across ${leagueText}` +
+    (counts.live ? `, with ${counts.live} matches currently live` : "") +
+    `. Follow English Premier League, UEFA Champions League, La Liga, Serie A, Bundesliga, Ligue 1, NPFL and major world leagues in one mobile-friendly scoreboard. ` +
+    `Open any match for a cautious RWDNEWS outlook — probabilities, key talking points and source-backed sports news. ` +
+    `RWDNEWS summaries are short briefings; full reports remain with the original publishers. ` +
+    `Check live scores, results and tomorrow’s fixtures without leaving the site.`
   );
 }
 
@@ -161,14 +207,6 @@ export default function SportsPage() {
   const matchId = path.startsWith("/sport/match/")
     ? decodeURIComponent(path.slice("/sport/match/".length))
     : "";
-  const mode =
-    path === "/sport/live"
-      ? "live"
-      : path === "/sport/results"
-        ? "results"
-        : path === "/sport/fixtures"
-          ? "fixtures"
-          : "home";
 
   const [data, setData] = useState<{
     live: Match[];
@@ -176,29 +214,21 @@ export default function SportsPage() {
     upcoming: Match[];
     results: Match[];
     news: Story[];
-    rumors: Story[];
     affiliateUrl: string;
-    counts?: {
-      matches: number;
-      live: number;
-      results: number;
-      upcoming: number;
-      news: number;
-    };
+    counts?: { matches: number; live: number; results: number; upcoming: number; news: number };
   }>({
     live: [],
     featured: [],
     upcoming: [],
     results: [],
     news: [],
-    rumors: [],
     affiliateUrl: "",
   });
-  const [selectedSport, setSelectedSport] = useState("all");
+  const [day, setDay] = useState<DayFilter>("today");
+  const [league, setLeague] = useState("all");
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<any>(null);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [storyTab, setStoryTab] = useState<"news" | "rumors">("news");
   const [readIds, setReadIds] = useState<Set<string>>(() =>
     typeof window !== "undefined" ? loadReadIds() : new Set(),
   );
@@ -217,13 +247,13 @@ export default function SportsPage() {
         const newsData = await newsResponse.json();
         externalNews = Array.isArray(newsData?.articles)
           ? newsData.articles.filter((a: Story) =>
-              /sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|basketball|baseball|hockey|rugby|boxing|athletics|formula 1|transfer/i.test(
-                `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
+              /sports|football|soccer|premier|champions|nba|nfl|tennis|transfer/i.test(
+                `${a.original_title} ${a.ai_hook_title}`,
               ),
             )
           : [];
       }
-      const combined = [...(Array.isArray(sportsData?.news) ? sportsData.news : []), ...externalNews];
+      const combined = [...(sportsData.news || []), ...externalNews];
       const seen = new Set<string>();
       const news = combined
         .filter((a: Story) => {
@@ -233,127 +263,133 @@ export default function SportsPage() {
           return true;
         })
         .sort((a: Story, b: Story) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-        .slice(0, 120);
+        .slice(0, 24);
+
       setData({
-        live: Array.isArray(sportsData.live) ? sportsData.live : [],
-        featured: Array.isArray(sportsData.featured) ? sportsData.featured : [],
-        upcoming: Array.isArray(sportsData.upcoming) ? sportsData.upcoming : [],
-        results: Array.isArray(sportsData.results) ? sportsData.results : [],
+        live: sportsData.live || [],
+        featured: sportsData.featured || [],
+        upcoming: sportsData.upcoming || [],
+        results: sportsData.results || [],
         news,
-        rumors: news.filter((a) =>
-          /transfer|rumou?r|linked|bid|offer|talks|negotiat|target|loan|interest|set to join/i.test(
-            `${a.original_title} ${a.original_description} ${a.ai_hook_title}`,
-          ),
-        ),
-        affiliateUrl: typeof sportsData.affiliateUrl === "string" ? sportsData.affiliateUrl : "",
+        affiliateUrl: sportsData.affiliateUrl || "",
         counts: sportsData.counts,
       });
+
+      // Prefer live tab when games are on
+      if ((sportsData.live || []).length > 0) setDay("live");
     } finally {
       setLoading(false);
     }
   };
 
-  const loadDetail = async () => {
-    if (!matchId) return;
-    setDetailLoading(true);
-    try {
-      const r = await fetch(`/api/sports?action=match&id=${encodeURIComponent(matchId)}`);
-      if (!r.ok) throw new Error("Match unavailable");
-      setDetail(await r.json());
-    } catch {
-      setDetail(null);
-    } finally {
-      setDetailLoading(false);
-    }
-  };
-
   useEffect(() => {
     void load();
-    const refreshMs = mode === "live" ? 15000 : 30000;
-    const t = window.setInterval(() => void load(), refreshMs);
+    const t = window.setInterval(() => void load(), day === "live" ? 15000 : 45000);
     return () => window.clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   useEffect(() => {
-    if (matchId) void loadDetail();
+    if (!matchId) return;
+    setDetailLoading(true);
+    fetch(`/api/sports?action=match&id=${encodeURIComponent(matchId)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then(setDetail)
+      .catch(() => setDetail(null))
+      .finally(() => setDetailLoading(false));
   }, [matchId]);
 
-  const filtered = useMemo(() => {
-    let source: Match[];
-    if (mode === "live") source = data.live;
-    else if (mode === "results") source = data.results.length ? data.results : data.featured;
-    else if (mode === "fixtures") source = data.upcoming;
-    else source = [...data.live, ...data.featured, ...data.upcoming, ...data.results];
-    const unique = source.filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
-    return unique.filter((m) => selectedSport === "all" || m.sport === selectedSport).slice(0, 100);
-  }, [data, mode, selectedSport]);
+  const pool = useMemo(() => {
+    const all = [...data.live, ...data.featured, ...data.upcoming, ...data.results];
+    return all.filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i);
+  }, [data]);
 
+  const filtered = useMemo(() => {
+    return pool
+      .filter((m) => matchInDay(m, day))
+      .filter((m) => league === "all" || m.league.toLowerCase().includes(league))
+      .sort((a, b) => {
+        if (a.live !== b.live) return a.live ? -1 : 1;
+        return new Date(a.startTime || 0).getTime() - new Date(b.startTime || 0).getTime();
+      });
+  }, [pool, day, league]);
+
+  const byLeague = useMemo(() => {
+    const map = new Map<string, Match[]>();
+    for (const m of filtered) {
+      const key = m.league || "Other";
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(m);
+    }
+    return Array.from(map.entries());
+  }, [filtered]);
+
+  const leaguesForSeo = useMemo(
+    () => Array.from(new Set(filtered.map((m) => m.league).filter(Boolean))),
+    [filtered],
+  );
+
+  // ——— Match centre detail ———
   if (matchId) {
     const m = detail?.match as Match | undefined;
     const aff = detail?.affiliateUrl || data.affiliateUrl || "";
     return (
       <main className="min-h-dvh bg-[#f4f4f2] pb-20 text-neutral-950">
         <Helmet>
-          <title>{m ? `${m.home} vs ${m.away} | RWDNEWS Sports` : "Match Centre | RWDNEWS Sports"}</title>
+          <title>{m ? `${m.home} vs ${m.away} | RWDNEWS Sports` : "Match Centre | RWDNEWS"}</title>
         </Helmet>
         <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950 text-white">
-          <div className="mx-auto flex max-w-6xl items-center justify-between px-3 py-3 sm:px-4">
-            <a href="/sport" className="font-display text-sm font-bold sm:text-base">
-              RWDNEWS SPORTS
+          <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-3">
+            <a href="/sport" className="text-sm font-bold">
+              ← Sports
             </a>
-            <a href="/" className="text-xs text-neutral-300">
+            <a href="/" className="text-xs text-neutral-400">
               News
             </a>
           </div>
         </header>
-        <div className="mx-auto max-w-5xl px-3 py-5 sm:px-4 sm:py-10">
-          <a href="/sport" className="text-xs font-bold text-teal-800">
-            ← Back to Sports
-          </a>
+        <div className="mx-auto max-w-3xl px-3 py-6">
           {detailLoading ? (
-            <div className="mt-6 rounded-2xl bg-white p-8 text-sm">Loading match centre…</div>
+            <p className="text-sm text-neutral-500">Loading match…</p>
           ) : m ? (
-            <section className="mt-4 rounded-3xl bg-neutral-950 p-5 text-white shadow-xl sm:p-10">
-              <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">
-                {m.league} · {m.sportLabel || m.sport}
+            <section className="rounded-3xl bg-neutral-950 p-6 text-white shadow-xl">
+              <p className="text-center text-[10px] font-extrabold tracking-[0.18em] text-amber-400 uppercase">
+                {m.league}
               </p>
-              <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:mt-8 sm:gap-3">
-                <div className="min-w-0 text-center">
+              <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
+                <div className="text-center">
                   {m.homeLogo ? (
-                    <img src={m.homeLogo} alt="" className="mx-auto size-12 object-contain sm:size-16" />
+                    <img src={m.homeLogo} alt="" className="mx-auto size-14 object-contain" />
                   ) : null}
-                  <h1 className="font-display mt-2 truncate text-sm font-bold sm:mt-3 sm:text-2xl">{m.home}</h1>
+                  <h1 className="mt-2 text-sm font-bold sm:text-lg">{m.home}</h1>
                 </div>
                 <div className="text-center">
-                  <div className="font-display text-2xl font-black sm:text-5xl">{scoreText(m)}</div>
-                  <p className={m.live ? "mt-2 text-xs font-bold text-red-400" : "mt-2 text-xs text-neutral-400"}>
+                  <div className="font-display text-3xl font-black">{timeOrScore(m)}</div>
+                  <p className={m.live ? "mt-1 text-xs font-bold text-red-400" : "mt-1 text-xs text-neutral-400"}>
                     {m.live ? "LIVE" : m.status}
                   </p>
                 </div>
-                <div className="min-w-0 text-center">
+                <div className="text-center">
                   {m.awayLogo ? (
-                    <img src={m.awayLogo} alt="" className="mx-auto size-12 object-contain sm:size-16" />
+                    <img src={m.awayLogo} alt="" className="mx-auto size-14 object-contain" />
                   ) : null}
-                  <h2 className="font-display mt-2 truncate text-sm font-bold sm:mt-3 sm:text-2xl">{m.away}</h2>
+                  <h2 className="mt-2 text-sm font-bold sm:text-lg">{m.away}</h2>
                 </div>
               </div>
-              <p className="mt-5 text-center text-xs text-neutral-400">
-                {timeLabel(m.startTime)}
-                {m.venue ? ` · ${m.venue}` : ""}
-              </p>
-              <div className="mt-5 flex flex-col items-stretch justify-center gap-2 sm:flex-row sm:items-center">
+              <p className="mt-4 text-center text-xs text-neutral-400">{shortTime(m.startTime)}</p>
+              <div className="mt-5 flex flex-col gap-2">
                 <a
                   href={`/sport/predictions?id=${encodeURIComponent(m.id)}`}
-                  className="rounded-full bg-amber-400 px-5 py-2.5 text-center text-xs font-extrabold text-neutral-950"
+                  className="rounded-full bg-amber-400 py-3 text-center text-xs font-extrabold text-neutral-950"
                 >
-                  Prediction outlook →
+                  📊 View AI Prediction & Stats
                 </a>
                 {aff ? (
                   <a
                     href={aff}
                     target="_blank"
                     rel="noopener noreferrer sponsored"
-                    className="rounded-full border border-emerald-400/50 px-5 py-2.5 text-center text-xs font-extrabold text-emerald-300"
+                    className="rounded-full border border-emerald-400/40 py-3 text-center text-xs font-extrabold text-emerald-300"
                   >
                     Compare odds →
                   </a>
@@ -361,191 +397,126 @@ export default function SportsPage() {
               </div>
             </section>
           ) : (
-            <div className="mt-6 rounded-2xl border bg-white p-8 text-center text-sm">
-              This match is no longer in the live feed.
-            </div>
+            <p className="text-sm text-neutral-500">Match no longer in feed.</p>
           )}
         </div>
       </main>
     );
   }
 
-  const sportStoryRe: Record<string, RegExp> = {
-    football: /football|soccer|premier league|champions league|uefa|fifa|transfer|arsenal|chelsea|liverpool|manchester|barcelona|real madrid|nfl/i,
-    basketball: /basketball|nba|wnba/i,
-    tennis: /tennis|atp|wta/i,
-    baseball: /baseball|mlb/i,
-    hockey: /hockey|nhl/i,
-  };
-  const storyPool = storyTab === "rumors" ? data.rumors : data.news;
-  const stories = storyPool
-    .filter(
-      (s) =>
-        selectedSport === "all" ||
-        sportStoryRe[selectedSport]?.test(
-          `${s.original_title} ${s.original_description} ${s.ai_hook_title}`,
-        ),
-    )
-    .slice(0, 36);
-
-  const title =
-    mode === "live"
-      ? "Live Scores"
-      : mode === "fixtures"
-        ? "Fixtures"
-        : mode === "results"
-          ? "Results"
-          : "Sports";
+  const dayTabs: { id: DayFilter; label: string }[] = [
+    { id: "live", label: data.live.length ? `Live (${data.live.length})` : "Live" },
+    { id: "yesterday", label: "Yesterday" },
+    { id: "today", label: "Today" },
+    { id: "tomorrow", label: "Tomorrow" },
+  ];
 
   return (
-    <main className="min-h-dvh bg-[#f4f4f2] pb-24 text-neutral-950">
+    <main className="min-h-dvh bg-[#f4f4f2] pb-28 text-neutral-950">
       <Helmet>
-        <title>{title} | RWDNEWS</title>
+        <title>Live Scores & Fixtures | RWDNEWS Sports</title>
         <meta
           name="description"
-          content="Live scores, fixtures, results, sports news and match predictions on RWDNEWS."
+          content="Live football scores, Premier League fixtures, Champions League results and AI match predictions on RWDNEWS."
         />
       </Helmet>
 
-      <header className="sticky top-0 z-30 border-b border-neutral-800 bg-neutral-950/95 text-white backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:px-6">
-          <a href="/sport" className="font-display text-base font-black tracking-tight sm:text-lg">
+      {/* Zone 1 — sticky header */}
+      <header className="sticky top-0 z-40 border-b border-neutral-800 bg-neutral-950 text-white">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-3 py-3">
+          <a href="/sport" className="font-display text-base font-black tracking-tight">
             RWDNEWS SPORTS
           </a>
           <a href="/" className="text-xs font-semibold text-neutral-300">
-            News home
+            News
           </a>
+        </div>
+
+        {/* Date ticker */}
+        <div className="border-t border-white/10">
+          <div className="mx-auto flex max-w-3xl gap-2 overflow-x-auto px-3 py-2.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {dayTabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setDay(t.id)}
+                className={
+                  day === t.id
+                    ? "shrink-0 rounded-full bg-amber-400 px-3.5 py-1.5 text-xs font-black text-neutral-950"
+                    : "shrink-0 rounded-full border border-white/20 px-3.5 py-1.5 text-xs font-bold text-white"
+                }
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* League chips */}
+        <div className="border-t border-white/5 bg-neutral-900/80">
+          <div className="mx-auto flex max-w-3xl gap-1.5 overflow-x-auto px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {LEAGUE_CHIPS.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setLeague(c.id)}
+                className={
+                  league === c.id
+                    ? "shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-bold text-neutral-950"
+                    : "shrink-0 rounded-full border border-white/15 px-3 py-1 text-[11px] font-semibold text-neutral-300"
+                }
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
-      <div className="mx-auto max-w-7xl px-3 py-5 sm:px-6 sm:py-8">
-        <section className="rounded-3xl bg-neutral-950 p-5 text-white shadow-lg sm:p-9">
-          <p className="text-[10px] font-black tracking-[0.2em] text-amber-400 uppercase">
-            RWDNEWS Sports Centre
-          </p>
-          <h1 className="font-display mt-2 text-2xl font-black sm:text-5xl">{title}</h1>
-          <p className="mt-3 max-w-3xl text-sm leading-7 text-neutral-300">
-            Scores, fixtures, results and short sports briefings. Tap a story to read on RWDNEWS, then
-            open the full report on the publisher.
-          </p>
-          {data.counts ? (
-            <p className="mt-3 text-[11px] text-neutral-400">
-              {data.counts.matches} fixtures · {data.counts.live} live · {data.counts.results} results ·{" "}
-              {data.counts.news} stories
-            </p>
-          ) : null}
-          <div className="mt-5 flex gap-2 overflow-x-auto pb-1">
-            {[
-              ["/sport", "Sports"],
-              ["/sport/live", "Live"],
-              ["/sport/results", "Results"],
-              ["/sport/fixtures", "Fixtures"],
-              ["/sport/predictions", "Predict"],
-            ].map(([href, label]) => (
-              <a
-                key={href}
-                href={href}
-                className={
-                  path === href
-                    ? "shrink-0 rounded-full bg-amber-400 px-3.5 py-2 text-xs font-black text-neutral-950"
-                    : "shrink-0 rounded-full border border-neutral-700 px-3.5 py-2 text-xs font-bold text-white"
-                }
-              >
-                {label}
-              </a>
+      <div className="mx-auto max-w-3xl px-3 py-4">
+        <p className="text-[11px] text-neutral-500">
+          {filtered.length} matches · {day === "live" ? "live now" : day}
+          {league !== "all" ? ` · ${league}` : ""}
+        </p>
+
+        {/* Zone 2 — match feed grouped by league */}
+        {loading ? (
+          <div className="mt-8 space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 animate-pulse rounded-2xl bg-neutral-200/80" />
             ))}
           </div>
-        </section>
-
-        <section className="mt-5">
-          <div className="flex gap-2 overflow-x-auto pb-1">
-            {sports.map(([id, label, icon]) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setSelectedSport(id)}
-                className={
-                  selectedSport === id
-                    ? "shrink-0 rounded-full bg-neutral-950 px-3.5 py-2 text-xs font-bold text-white"
-                    : "shrink-0 rounded-full border bg-white px-3.5 py-2 text-xs font-bold text-neutral-700"
-                }
-              >
-                {icon} {label}
-              </button>
+        ) : byLeague.length ? (
+          <div className="mt-4 space-y-7">
+            {byLeague.map(([leagueName, matches]) => (
+              <section key={leagueName}>
+                <h2 className="mb-2 border-b border-neutral-300 pb-1.5 text-[11px] font-black tracking-[0.14em] text-teal-900 uppercase">
+                  {leagueName}
+                </h2>
+                <div className="space-y-2.5">
+                  {matches.map((m) => (
+                    <MatchRow key={m.id} match={m} />
+                  ))}
+                </div>
+              </section>
             ))}
           </div>
-        </section>
+        ) : (
+          <div className="mt-8 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
+            No matches for this filter. Try Today or another league.
+          </div>
+        )}
 
-        <section className="mt-7">
-          <div className="flex items-end justify-between border-b border-neutral-900 pb-3">
-            <div>
-              <p className="text-[10px] font-black tracking-[0.16em] text-red-700 uppercase">
-                {mode === "live" ? "Live scoreboard" : "Match centre"}
-              </p>
-              <h2 className="font-display text-xl font-black sm:text-2xl">
-                {mode === "live"
-                  ? "Live now"
-                  : mode === "results"
-                    ? "Latest results"
-                    : mode === "fixtures"
-                      ? "Upcoming fixtures"
-                      : "Matches"}
-              </h2>
-            </div>
-            <span className="text-xs text-neutral-500">{filtered.length}</span>
-          </div>
-          {loading ? (
-            <div className="py-10 text-sm text-neutral-500">Loading live sports data…</div>
-          ) : filtered.length ? (
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filtered.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
-            </div>
-          ) : (
-            <div className="mt-5 rounded-2xl border border-dashed bg-white p-8 text-center text-sm text-neutral-500">
-              No matches for this filter right now. Check sports news below.
-            </div>
-          )}
-          <div className="mt-5">
-            <AdSlot slot="sports_mid" variant="inline" label="Advertisement" className="min-h-[90px]" />
-          </div>
-        </section>
+        <div className="my-6">
+          <AdSlot slot="sports_mid" variant="inline" label="Advertisement" className="min-h-[90px]" />
+        </div>
 
-        <section className="mt-10">
-          <div className="flex flex-wrap items-end justify-between gap-3 border-b border-neutral-900 pb-3">
-            <div>
-              <p className="text-[10px] font-black tracking-[0.16em] text-teal-800 uppercase">Sports desk</p>
-              <h2 className="font-display text-xl font-black sm:text-2xl">Latest sports news</h2>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setStoryTab("news")}
-                className={
-                  storyTab === "news"
-                    ? "rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white"
-                    : "rounded-full border bg-white px-3 py-2 text-xs font-bold"
-                }
-              >
-                Latest
-              </button>
-              <button
-                type="button"
-                onClick={() => setStoryTab("rumors")}
-                className={
-                  storyTab === "rumors"
-                    ? "rounded-full bg-neutral-950 px-3 py-2 text-xs font-bold text-white"
-                    : "rounded-full border bg-white px-3 py-2 text-xs font-bold"
-                }
-              >
-                Transfers
-              </button>
-            </div>
-          </div>
-          {stories.length ? (
-            <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {stories.map((s) => {
+        {/* Sports news strip */}
+        {data.news.length ? (
+          <section className="mt-8">
+            <h2 className="font-display text-lg font-black">Sports news</h2>
+            <div className="mt-3 space-y-2">
+              {data.news.slice(0, 8).map((s) => {
                 const isRead = readIds.has(s.id);
                 return (
                   <button
@@ -555,50 +526,61 @@ export default function SportsPage() {
                       openStory(s);
                       setReadIds(loadReadIds());
                     }}
-                    className={`overflow-hidden rounded-2xl border bg-white text-left shadow-sm transition active:scale-[0.99] ${
-                      isRead ? "border-neutral-100 opacity-75" : "border-neutral-200"
+                    className={`flex w-full gap-3 rounded-xl border bg-white p-2.5 text-left ${
+                      isRead ? "opacity-70" : ""
                     }`}
                   >
-                    <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[120px_1fr]">
-                      {s.image ? (
-                        <img src={s.image} alt="" className="h-full min-h-[96px] w-full object-cover" />
-                      ) : (
-                        <div className="min-h-[96px] bg-neutral-100" />
-                      )}
-                      <div className="p-3">
-                        <div className="flex items-center gap-2">
-                          <p className="text-[9px] font-extrabold tracking-wider text-amber-800 uppercase">
-                            {s.source}
-                          </p>
-                          {isRead ? (
-                            <span className="text-[9px] font-bold text-neutral-400">Read</span>
-                          ) : (
-                            <span className="size-1.5 rounded-full bg-teal-600" title="Unread" />
-                          )}
-                        </div>
-                        <h3 className="font-display mt-1 line-clamp-3 text-[15px] font-semibold leading-snug">
-                          {s.ai_hook_title || s.original_title}
-                        </h3>
-                      </div>
+                    {s.image ? (
+                      <img
+                        src={s.image}
+                        alt=""
+                        className="size-16 shrink-0 rounded-lg object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="size-16 shrink-0 rounded-lg bg-neutral-100" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-[9px] font-bold text-amber-800 uppercase">{s.source}</p>
+                      <p className="mt-0.5 line-clamp-2 text-sm font-semibold leading-snug">
+                        {s.ai_hook_title || s.original_title}
+                      </p>
                     </div>
                   </button>
                 );
               })}
             </div>
-          ) : (
-            <p className="mt-6 text-sm text-neutral-500">No sports stories in this filter yet.</p>
-          )}
+          </section>
+        ) : null}
+
+        {/* Zone 3 — SEO footer text for Google */}
+        <section className="mt-10 rounded-2xl border border-neutral-200 bg-white p-5 text-sm leading-7 text-neutral-700">
+          <h2 className="font-display text-base font-bold text-neutral-950">
+            Live scores & match predictions — RWDNEWS Sports
+          </h2>
+          <p className="mt-2">{seoBlurb({
+            matches: filtered.length || data.counts?.matches || 0,
+            live: data.live.length,
+            leagues: leaguesForSeo,
+          })}</p>
+          <p className="mt-3 text-xs text-neutral-500">
+            Predictions are informational commentary only — not betting advice. 18+ where applicable.
+          </p>
         </section>
       </div>
 
-      {data.live.length > 0 && mode !== "live" ? (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 px-3 py-2.5 backdrop-blur sm:hidden">
-          <a
-            href="/sport/live"
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-2.5 text-xs font-extrabold text-white"
+      {data.live.length > 0 && day !== "live" ? (
+        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-800 bg-neutral-950/95 px-3 py-2.5 sm:hidden">
+          <button
+            type="button"
+            onClick={() => {
+              setDay("live");
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            className="flex w-full items-center justify-center rounded-xl bg-red-600 py-2.5 text-xs font-extrabold text-white"
           >
-            ● {data.live.length} live now — open scoreboard
-          </a>
+            ● {data.live.length} live — jump to scoreboard
+          </button>
         </div>
       ) : (
         <div className="sm:hidden">
