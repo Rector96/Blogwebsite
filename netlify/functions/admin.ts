@@ -79,20 +79,21 @@ export default async (req: Request) => {
       const ctaUrl = clean(body.cta_url, 500);
       if (!sponsorName || !headline || !/^https?:\/\//i.test(ctaUrl)) return json({ error: "Sponsor name, headline and a valid website URL are required." }, 400);
       const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
-      const currency = String(body.currency || "USD").toUpperCase() === "NGN" ? "NGN" : "USD";
+      const currency = "USD";
       const amount = Number(body.amount || 0);
+      const durationMonths = Math.max(1, Math.min(12, Math.floor(Number(body.duration_months) || 1)));
       const placement = clean(body.placement || "sidebar", 30);
       if (!["sidebar", "in_feed", "both"].includes(placement)) return json({ error: "Invalid sponsor placement." }, 400);
-      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Sponsor fee must be greater than zero." }, 400);
+      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Monthly sponsor fee must be greater than zero." }, 400);
       const { data, error } = await database.from("sponsors").insert({
         slug, sponsor_name: sponsorName, headline, why_matters: [], cta_text: clean(body.cta_text || "Learn more", 80),
         cta_url: ctaUrl, rate_highlight: "", disclosure: clean(body.disclosure || "Sponsored · Paid placement", 160),
         placement, priority: Number(body.priority || 100),
-        currency, monthly_fee_usd: currency === "USD" ? amount || null : null, monthly_fee_naira: currency === "NGN" ? amount || null : null,
-        active: false, starts_at: body.starts_at || null, ends_at: body.ends_at || null,
+        currency, monthly_fee_usd: amount || null, monthly_fee_naira: null, duration_months: durationMonths,
+        active: false, starts_at: body.starts_at || new Date().toISOString(), ends_at: body.ends_at || new Date(Date.now() + durationMonths * 30 * 86400000).toISOString(),
       }).select("id").single();
       if (error) return json({ error: error.message }, 400);
-      await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, amount, currency });
+      await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, monthly_rate_usd: amount, duration_months: durationMonths, currency });
       return json({ ok: true });
     }
 
