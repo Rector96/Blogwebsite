@@ -76,7 +76,12 @@
   status = 200
   force = true
 
-# Keep /sports URLs working if anyone bookmarks them
+[[redirects]]
+  from = "/news-sitemap.xml"
+  to = "/.netlify/functions/news-sitemap"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/sports"
   to = "/sport"
@@ -92,7 +97,6 @@
   to = "/sport/predictions/:splat"
   status = 301
 
-# SPA fallback MUST NOT use force=true or JS/CSS assets become HTML and the site goes blank
 [[redirects]]
   from = "/*"
   to = "/index.html"

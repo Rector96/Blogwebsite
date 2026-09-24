@@ -9,6 +9,7 @@ import { logRwdNewsEvent } from "./lib/analytics";
 import { filterArticlesByTab, withInferredCategory } from "./lib/filterArticles";
 import { matchesCategory } from "./lib/categories";
 import { HomeView } from "./HomeView";
+import { Helmet } from "react-helmet-async";
 
 export interface EnrichedArticle {
   id: string;
@@ -219,13 +220,11 @@ export default function RwdNewsApp() {
   }, []);
 
   useEffect(() => {
+    // Visitor polling reads stored wire data. It must not trigger a new RSS/Gemini
+    // ingest from every browser session. Explicit refreshes can still ingest.
     void fetchNews(false);
-    const firstRefresh = window.setTimeout(() => void fetchNews(true), 1200);
-    const timer = window.setInterval(() => void fetchNews(true), 60_000);
-    return () => {
-      window.clearTimeout(firstRefresh);
-      window.clearInterval(timer);
-    };
+    const timer = window.setInterval(() => void fetchNews(false), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const openArticle = (article: EnrichedArticle) => {
@@ -288,6 +287,22 @@ export default function RwdNewsApp() {
   }, [articles, sportsFeed.news]);
 
   const displayList = selectedTag === "Sports" && sportsMerged.length ? sportsMerged : filtered;
+
+  const homeSeo = useMemo(() => {
+    const isCategory = selectedTag !== "All";
+    const label = isCategory ? selectedTag : "Global News";
+    const title = isCategory
+      ? `${label} News & Briefings — RWDNEWS`
+      : "RWDNEWS — Global News, Trends & Briefings";
+    const description = isCategory
+      ? `Latest source-backed ${label.toLowerCase()} news and concise briefings from RWDNEWS.`
+      : "RWDNEWS delivers clear, source-backed global news briefings across world affairs, business, technology, Africa, sports and markets.";
+    const canonical =
+      typeof window !== "undefined"
+        ? window.location.origin + (window.location.pathname || "/")
+        : "https://rwdnews.netlify.app/";
+    return { title, description, canonical, label };
+  }, [selectedTag]);
 
   const recommended = useMemo(() => {
     const categoryWeight = new Map<string, number>();
@@ -386,7 +401,28 @@ export default function RwdNewsApp() {
       : null;
 
   return (
-    <HomeView
+    <>
+      <Helmet>
+        <title>{homeSeo.title}</title>
+        <meta name="description" content={homeSeo.description} />
+        <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+        <link rel="canonical" href={homeSeo.canonical} />
+        <meta property="og:title" content={homeSeo.title} />
+        <meta property="og:description" content={homeSeo.description} />
+        <meta property="og:url" content={homeSeo.canonical} />
+        <meta property="og:type" content="website" />
+        <script type="application/ld+json">
+          {JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "WebPage",
+            name: homeSeo.title,
+            description: homeSeo.description,
+            url: homeSeo.canonical,
+            isPartOf: { "@type": "WebSite", name: "RWDNEWS", url: "https://rwdnews.netlify.app/" },
+          })}
+        </script>
+      </Helmet>
+      <HomeView
       emptyForTab={emptyForTab}
       displayList={displayList}
       hero={hero}
@@ -433,6 +469,7 @@ export default function RwdNewsApp() {
       todayLabel={todayLabel}
       storyPath={storyPath}
       normalizeTags={normalizeTags}
-    />
+      />
+    </>
   );
 }

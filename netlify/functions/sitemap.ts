@@ -25,18 +25,21 @@ export async function handler() {
       const db = createClient(url, key);
       const { data } = await db
         .from("articles")
-        .select("id,original_title,ai_hook_title,timestamp")
+        .select("id,original_title,ai_hook_title,timestamp,original_description,editorial_status")
+        .eq("editorial_status", "published")
         .order("timestamp", { ascending: false })
         .limit(500);
-      storyUrls = (data || []).map((a: any) => {
-        const title = String(a.ai_hook_title || a.original_title || "")
-          .toLowerCase()
-          .normalize("NFKD")
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, "")
-          .slice(0, 90);
-        return site + "/news/" + title + "--" + encodeURIComponent(String(a.id));
-      });
+      storyUrls = (data || [])
+        .filter((a: any) => String(a.original_description || "").replace(/<[^>]*>/g, " ").trim().length >= 40)
+        .map((a: any) => {
+          const title = String(a.ai_hook_title || a.original_title || "")
+            .toLowerCase()
+            .normalize("NFKD")
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-|-$/g, "")
+            .slice(0, 90);
+          return site + "/news/" + title + "--" + encodeURIComponent(String(a.id));
+        });
     } catch {
       storyUrls = [];
     }

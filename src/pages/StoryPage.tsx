@@ -134,10 +134,30 @@ export default function StoryPage() {
             const response = await fetch("/api/news");
             const payload = await response.json();
             const pool = Array.isArray(payload.articles) ? (payload.articles as EnrichedArticle[]) : [];
+            const baseWords = new Set(
+              cleanText(foundArticle!.ai_hook_title || foundArticle!.original_title || "")
+                .toLowerCase()
+                .split(/[^a-z0-9]+/)
+                .filter((word) => word.length >= 4),
+            );
             const candidates = pool
               .filter((x) => x.id !== foundArticle!.id)
-              .filter((x) => !foundArticle!.category || x.category === foundArticle!.category)
-              .slice(0, 6);
+              .map((x) => {
+                const titleWords = cleanText(x.ai_hook_title || x.original_title || "")
+                  .toLowerCase()
+                  .split(/[^a-z0-9]+/)
+                  .filter((word) => word.length >= 4);
+                const overlap = titleWords.filter((word) => baseWords.has(word)).length;
+                const sameCategory = x.category && x.category === foundArticle!.category ? 3 : 0;
+                const freshness = Math.max(
+                  0,
+                  2 - Math.max(0, (Date.now() - Date.parse(x.timestamp || "")) / 3600000) / 48,
+                );
+                return { article: x, score: overlap * 2 + sameCategory + freshness };
+              })
+              .sort((a, b) => b.score - a.score)
+              .slice(0, 6)
+              .map((item) => item.article);
             if (!cancelled) setRelated(candidates);
           } catch {
             /* ignore */
@@ -189,6 +209,9 @@ export default function StoryPage() {
             headline: title,
             description,
             datePublished: article.timestamp,
+            dateModified: article.timestamp,
+            articleSection: article.category || "News",
+            keywords: Array.isArray(article.tags) ? article.tags.map((tag) => String(tag).replace(/^#/, "")).join(", ") : undefined,
             mainEntityOfPage: canonical,
             url: canonical,
             image: article.image ? [article.image] : undefined,
@@ -257,6 +280,10 @@ export default function StoryPage() {
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
         <meta property="og:image" content={article.image || "https://rwdnews.netlify.app/rwdnews-logo.svg"} />
+        <meta property="og:type" content="article" />
+        <meta property="article:published_time" content={article.timestamp} />
+        <meta property="article:section" content={article.category || "News"} />
+        <meta property="article:publisher" content="RWDNEWS" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
