@@ -139,7 +139,7 @@ function AdvertisePage() {
     const reference = params.get("reference");
     if (!reference || params.get("payment") !== "callback") return;
     setBusy(true);
-    fetch("/api/paystack/verify?reference=" + encodeURIComponent(reference))
+    fetch("/api/kora/verify?reference=" + encodeURIComponent(reference))
       .then((r) => r.json())
       .then((result) =>
         setMessage(
@@ -168,7 +168,7 @@ function AdvertisePage() {
     setBusy(true);
     setMessage("");
     try {
-      const result = await fetch("/api/paystack/init", {
+      const result = await fetch("/api/kora/init", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ package_code: selected, currency, ...form }),
@@ -314,7 +314,7 @@ function AdvertisePage() {
                 disabled={busy}
                 className="h-12 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50"
               >
-                Pay {money(price, currency)} with Paystack
+                Pay {money(price, currency)} securely with Kora
               </button>
             </form>
           </section>
