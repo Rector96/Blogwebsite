@@ -34,7 +34,7 @@ export async function handler() {
       const db = createClient(url, key);
       const { data } = await db
         .from("articles")
-        .select("id,original_title,ai_hook_title,timestamp,category,editorial_status")
+        .select("id,original_title,ai_hook_title,timestamp,category,editorial_status,original_description")
         .eq("editorial_status", "published")
         .gte("timestamp", new Date(cutoff).toISOString())
         .order("timestamp", { ascending: false })
@@ -51,6 +51,7 @@ export async function handler() {
     'xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">' +
     articles
       .filter((article) => article?.timestamp && !Number.isNaN(new Date(article.timestamp).getTime()))
+      .filter((article) => String(article?.original_description || "").replace(/<[^>]*>/g, " ").trim().length >= 40)
       .map((article) => {
         const title = String(article.ai_hook_title || article.original_title || "").trim();
         const publicationDate = new Date(article.timestamp).toISOString();
