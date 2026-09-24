@@ -135,7 +135,7 @@ export default async (req: Request) => {
     if (body.action === "article_create") {
       const headline = clean(body.headline, 220);
       const description = clean(body.description, 1000);
-      const bodyText = clean(body.body, 30000);
+      const bodyText = String(body.body ?? "").trim().slice(0, 30000);
       const image = clean(body.image, 2000);
       const originalUrl = clean(body.original_url, 1000);
       const category = clean(body.category || "Business", 50);
