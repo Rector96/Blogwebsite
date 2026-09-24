@@ -11,7 +11,7 @@ export default async (req:Request)=>{
   const mime=String(body.mime_type||"");
   if(!/^data:image\\/(jpeg|png|webp|avif);base64,/i.test(data)) return json({error:"Use JPG, PNG, WebP or AVIF."},400);
   const raw=Buffer.from(data.split(",")[1]||"","base64");
-  if(raw.length>5*1024*1024) return json({error:"Image must be 5 MB or smaller."},400);
+  if(raw.length>4*1024*1024) return json({error:"Image must be 5 MB or smaller."},400);
   const ext=mime.includes("png")?"png":mime.includes("webp")?"webp":mime.includes("avif")?"avif":"jpg";
   const path="advertiser-creatives/"+Date.now().toString(36)+"-"+crypto.randomUUID()+"."+ext;
   const db=createClient(url,key);
@@ -20,3 +20,5 @@ export default async (req:Request)=>{
   const {data:pub}=db.storage.from("rwdnews-images").getPublicUrl(path);
   return json({ok:true,url:pub.publicUrl});
 };
+
+export const config = { path: "/api/advertiser/creative-upload", rateLimit: { windowLimit: 20, windowSize: 60, aggregateBy: ["ip"] } };\n
