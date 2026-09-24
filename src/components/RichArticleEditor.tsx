@@ -38,13 +38,13 @@ export default function RichArticleEditor({ value, onChange, placeholder, onImag
 
   return <div className="overflow-hidden border bg-white">
     <div className="flex flex-wrap items-center gap-1 border-b bg-neutral-50 p-2">
-      {commands.map(([cmd,label]) => <button key={cmd+label} type="button" title={cmd} onMouseDown={e=>e.preventDefault()} onClick={()=>run(cmd, cmd==="formatBlock" ? "<h2>" : undefined)} className="grid h-8 min-w-8 place-items-center rounded border bg-white px-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100">{label}</button>)}
+      {commands.map(([cmd,label]) => <button key={cmd+label} type="button" title={cmd} onMouseDown={e=>e.preventDefault()} onClick={()=>run(cmd, cmd==="formatBlock" ? (label==="H3" ? "<h3>" : "<h2>") : undefined)} className="grid h-8 min-w-8 place-items-center rounded border bg-white px-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100">{label}</button>)}
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>{const url=window.prompt("Image URL"); if(url) run("insertImage",url)}} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Image URL</button>
       {onImageUpload ? <label className="grid h-8 cursor-pointer place-items-center rounded border bg-white px-2 text-xs font-bold">Upload Image<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={async e=>{const f=e.target.files?.[0]; if(!f) return; const url=await onImageUpload(f); if(url) run("insertImage",url); e.currentTarget.value="";}} /></label> : null}
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>{const url=window.prompt("Link URL"); if(url) run("createLink",url)}} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Link</button>
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>run("removeFormat")} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Clear</button>
     </div>
     <div ref={ref} contentEditable suppressContentEditableWarning onInput={()=>onChange(ref.current?.innerHTML || "")} onPaste={onPaste} data-placeholder={placeholder || "Write the article here…"} className="min-h-[360px] p-4 text-[16px] leading-7 outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-neutral-400" />
-    <div className="border-t px-3 py-2 text-[11px] text-neutral-500">Paste from Word is cleaned and preserved where supported. Use the image button below to add inline media.</div>
+    <div className="border-t px-3 py-2 text-[11px] text-neutral-500">Paste from Word is cleaned and preserved where supported. Use the image buttons above to add inline media.</div>
   </div>;
 }
