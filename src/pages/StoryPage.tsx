@@ -1,3 +1,4 @@
+import { sanitizeArticleHtml } from "../lib/rich-content";
 import { useEffect, useMemo, useState } from "react";
 import { Helmet } from "react-helmet-async";
 import { Check, Copy, ExternalLink, MessageCircle, Send } from "lucide-react";
@@ -317,9 +318,7 @@ export default function StoryPage() {
           </ul>
 
           {briefing.isOriginal && article.body ? (
-            <div className="mt-8 whitespace-pre-wrap text-[17px] leading-[1.75] text-neutral-800 sm:text-[18px]">
-              {article.body}
-            </div>
+            <div className="mt-8 text-[17px] leading-[1.75] text-neutral-800 sm:text-[18px] [&_a]:underline [&_[data-align=center]]:text-center [&_[data-align=left]]:text-left [&_[data-align=right]]:text-right [&_blockquote]:my-6 [&_blockquote]:border-l-4 [&_blockquote]:pl-4 [&_blockquote]:italic [&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:font-display [&_h3]:text-xl [&_h3]:font-semibold [&_img]:my-6 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-4 [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(article.body) }} />
           ) : null}
 
           {/* Primary value exchange: send reader to the publisher */}
@@ -356,7 +355,7 @@ export default function StoryPage() {
         {sponsor ? (
           <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
             <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p>
-            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
+            {sponsor.creativeUrl ? <img src={sponsor.creativeUrl} alt="" className="mb-4 max-h-56 w-full rounded object-contain" loading="lazy" /> : null}\n            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
             <a
               href={sponsor.ctaUrl}
               target="_blank"

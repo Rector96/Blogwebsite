@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env, json, SPONSOR_PACKAGES, paystackRequest } from "../../src/lib/paystack-server";
+import { koraRequest } from "../../src/lib/kora-server";
 
 function db() {
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
@@ -135,7 +136,7 @@ export default async (req: Request) => {
     if (body.action === "article_create") {
       const headline = clean(body.headline, 220);
       const description = clean(body.description, 1000);
-      const bodyText = clean(body.body, 30000);
+      const bodyText = String(body.body ?? "").trim().slice(0, 30000);
       const image = clean(body.image, 2000);
       const originalUrl = clean(body.original_url, 1000);
       const category = clean(body.category || "Business", 50);
@@ -188,6 +189,7 @@ export default async (req: Request) => {
       if (!payment || payment.status !== "paid") return json({ error: "Only verified paid transactions can be activated." }, 400);
 
       const pkg = SPONSOR_PACKAGES[payment.package_code as keyof typeof SPONSOR_PACKAGES];
+      if (payment.design_requested && !payment.creative_url) return json({ error: "This campaign requested RWDNEWS design. Upload the finished creative before activating it." }, 400);
       const starts = payment.starts_at || new Date().toISOString();
       const ends = payment.ends_at || new Date(Date.parse(starts) + Number(payment.duration_days || pkg?.days || 30) * 86400000).toISOString();
       let sponsorId = payment.sponsor_id as string | null;
@@ -199,6 +201,9 @@ export default async (req: Request) => {
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
           why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rwdnews.netlify.app", 500),
           rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement || "sidebar",
+          creative_url: clean(payment.creative_url || "", 1000) || null,
+          logo_url: clean(payment.logo_url || "", 1000) || null,
+          creative_alt: clean(payment.headline || sponsorName, 180),
           active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, starts_at: starts, ends_at: ends,
         }).select("id").single();
         if (error) return json({ error: error.message }, 400);
@@ -224,19 +229,35 @@ export default async (req: Request) => {
 
     if (body.action === "payment_verify") {
       const reference = clean(body.reference, 120);
-      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,currency").eq("reference", reference).maybeSingle()).data;
+      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,amount,currency,payment_provider").eq("reference", reference).maybeSingle()).data;
       if (!paymentRow) return json({ error: "Payment reference not found." }, 404);
-      const response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
+
+      const provider = String(paymentRow.payment_provider || "kora").toLowerCase();
+      let response: Response;
+      if (provider === "kora") {
+        response = await koraRequest("/api/v1/charges/" + encodeURIComponent(reference));
+      } else {
+        response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
+      }
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload?.status) return json({ error: payload?.message || "Paystack verification failed." }, 502);
+      if (!response.ok || !payload?.status) return json({ error: payload?.message || provider.toUpperCase() + " verification failed." }, 502);
+
       const expectedCurrency = String(paymentRow.currency || "NGN").toUpperCase();
-      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? 0);
+      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? paymentRow?.amount ?? 0);
       const amountOk = String(payload.data?.currency || "").toUpperCase() === expectedCurrency
-        && Number(payload.data?.amount) === expectedAmount;
+        && Number(payload.data?.amount ?? payload.data?.amount_paid ?? 0) === expectedAmount;
       const status = payload.data?.status === "success" && amountOk ? "paid" : (payload.data?.status === "failed" ? "failed" : "pending");
-      await database.from("sponsor_payments").update({ status, paystack_status: String(payload.data?.status || ""), paystack_transaction_id: payload.data?.id ? String(payload.data.id) : null, paid_at: status === "paid" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq("reference", reference);
-      await audit(database, "payment_verified", "sponsor_payment", reference, { status });
-      return json({ ok: true, status });
+      const providerTransactionId = payload.data?.payment_reference || payload.data?.reference || payload.data?.id || null;
+      await database.from("sponsor_payments").update({
+        status,
+        provider_status: String(payload.data?.status || ""),
+        provider_transaction_id: providerTransactionId ? String(providerTransactionId) : null,
+        provider_currency: payload.data?.currency ? String(payload.data.currency).toUpperCase() : null,
+        paid_at: status === "paid" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }).eq("reference", reference);
+      await audit(database, "payment_verified", "sponsor_payment", reference, { status, provider });
+      return json({ ok: true, status, payment_provider: provider });
     }
 
     return json({ error: "Unknown action" }, 400);
@@ -252,7 +273,7 @@ export default async (req: Request) => {
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
     database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").gte("created_at", thirtyDaysAgo).order("created_at", { ascending: false }).range(0, 49999),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
+    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned,story_type,category,region,subject,author_name,image").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
@@ -293,7 +314,12 @@ export default async (req: Request) => {
     clickMap.set(key, (clickMap.get(key) || 0) + 1);
   }
   const paid = (payments.data || []).filter((p: any) => p.status === "paid");
-  const revenue = paid.reduce((sum: number, p: any) => sum + Number(p.amount_naira || 0), 0);
+  const revenueNaira = paid
+    .filter((p: any) => String(p.currency || "NGN").toUpperCase() === "NGN")
+    .reduce((sum: number, p: any) => sum + Number(p.amount_naira ?? p.amount ?? 0), 0);
+  const revenueUsd = paid
+    .filter((p: any) => String(p.currency || "").toUpperCase() === "USD")
+    .reduce((sum: number, p: any) => sum + Number(p.amount_usd ?? p.amount ?? 0), 0);
   const recommendationImpressions = rows.filter((r: any) => r.event_name === "recommendation_impression").length;
   const recommendationClicks = rows.filter((r: any) => r.event_name === "recommendation_click").length;
   const engagedReads = rows.filter((r: any) => r.event_name === "reading_engaged").length;
@@ -326,9 +352,10 @@ export default async (req: Request) => {
       shares: Number(shareCount.count || 0),
       saves: rows.filter((r:any)=>r.event_name==="article_save").length,
       sponsor_clicks: Number(sponsorClickCount.count || 0),
-      advertiser_leads: (leads.data || []).length,
+      advertiser_leads: (leads.data || []).filter((l:any) => new Date(l.created_at).getTime() >= Date.parse(thirtyDaysAgo)).length,
       newsletter_subscribers: (newsletter.data || []).filter((n:any)=>n.status==="active").length,
-      paid_revenue_naira: revenue,
+      paid_revenue_naira: revenueNaira,
+      paid_revenue_usd: revenueUsd,
       pending_payments: (payments.data || []).filter((p:any)=>p.status==="pending").length,
     },
     daily: Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).slice(-30).map(([day,value])=>({day,value})),
