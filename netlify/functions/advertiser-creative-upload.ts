@@ -9,7 +9,7 @@ export default async (req:Request)=>{
   const body=await req.json().catch(()=>({}));
   const data=String(body.data||"");
   const mime=String(body.mime_type||"");
-  if(!/^data:image\\/(jpeg|png|webp|avif);base64,/i.test(data)) return json({error:"Use JPG, PNG, WebP or AVIF."},400);
+  if(!/^data:image\/(jpeg|png|webp|avif);base64,/i.test(data)) return json({error:"Use JPG, PNG, WebP or AVIF."},400);
   const raw=Buffer.from(data.split(",")[1]||"","base64");
   if(raw.length>4*1024*1024) return json({error:"Image must be 4 MB or smaller."},400);
   const ext=mime.includes("png")?"png":mime.includes("webp")?"webp":mime.includes("avif")?"avif":"jpg";
@@ -21,4 +21,4 @@ export default async (req:Request)=>{
   return json({ok:true,url:pub.publicUrl});
 };
 
-export const config = { path: "/api/advertiser/creative-upload", rateLimit: { windowLimit: 20, windowSize: 60, aggregateBy: ["ip"] } };\n
+export const config = { path: "/api/advertiser/creative-upload", rateLimit: { windowLimit: 20, windowSize: 60, aggregateBy: ["ip"] } };
