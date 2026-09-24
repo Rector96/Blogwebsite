@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Helmet } from "react-helmet-async";
 import { BarChart3, Copy, DollarSign, Globe2, LogOut, Megaphone, Newspaper, Settings, Share2, ShieldCheck, Users, Search } from "lucide-react";
+import RichArticleEditor from "../components/RichArticleEditor";
 
 type Dashboard = {
   generated_at: string;
@@ -110,9 +111,9 @@ export default function AdminPage() {
     setSponsorForm({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", disclosure: "Sponsored · Paid placement" });
   };
 
-  const uploadStoryImage = async (file: File) => {
-    if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) { setError("Use JPG, PNG, WebP or AVIF."); return; }
-    if (file.size > 5 * 1024 * 1024) { setError("Image must be 5 MB or smaller."); return; }
+  const uploadStoryImage = async (file: File): Promise<string | null> => {
+    if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) { setError("Use JPG, PNG, WebP or AVIF."); return null; }
+    if (file.size > 5 * 1024 * 1024) { setError("Image must be 5 MB or smaller."); return null; }
     setBusy(true); setError("");
     try {
       const data = await new Promise<string>((resolve, reject) => {
@@ -122,8 +123,10 @@ export default function AdminPage() {
         reader.readAsDataURL(file);
       });
       const result = await api({ method: "POST", body: JSON.stringify({ action: "article_image_upload", filename: file.name, mime_type: file.type, data }) });
-      setStoryForm(v => ({ ...v, image: String(result.url || "") }));
-    } catch (e) { setError(e instanceof Error ? e.message : "Image upload failed"); }
+      const url = String(result.url || "");
+      setStoryForm(v => ({ ...v, image: url }));
+      return url || null;
+    } catch (e) { setError(e instanceof Error ? e.message : "Image upload failed"); return null; }
     finally { setBusy(false); }
   };
 
@@ -278,7 +281,7 @@ export default function AdminPage() {
           <form onSubmit={createStory} className="grid gap-3 md:grid-cols-2">
             <input required placeholder="Headline" value={storyForm.headline} onChange={e=>setStoryForm(v=>({...v,headline:e.target.value}))} className="h-11 border px-3 text-sm md:col-span-2" />
             <textarea required placeholder="Short description / lead" value={storyForm.description} onChange={e=>setStoryForm(v=>({...v,description:e.target.value}))} className="min-h-24 border p-3 text-sm md:col-span-2" />
-            <textarea required placeholder="Full article / briefing" value={storyForm.body} onChange={e=>setStoryForm(v=>({...v,body:e.target.value}))} className="min-h-52 border p-3 text-sm md:col-span-2" />
+            <div className="md:col-span-2"><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-neutral-500">Article editor</label><RichArticleEditor value={storyForm.body} onChange={body=>setStoryForm(v=>({...v,body}))} onImageUpload={uploadStoryImage} placeholder="Write or paste the full article here…" /></div>
             <select value={storyForm.category} onChange={e=>setStoryForm(v=>({...v,category:e.target.value}))} className="h-11 border px-3 text-sm"><option>Business</option><option>World</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Sports</option><option>Tech</option><option>Crypto</option><option>Entertainment</option></select>
             <select value={storyForm.region} onChange={e=>setStoryForm(v=>({...v,region:e.target.value}))} className="h-11 border px-3 text-sm"><option>Global</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>North America</option><option>South America</option></select>
             <select value={storyForm.story_type} onChange={e=>setStoryForm(v=>({...v,story_type:e.target.value}))} className="h-11 border px-3 text-sm"><option>RWDNEWS ORIGINAL</option><option>DEVELOPING</option><option>WIRE</option></select>
