@@ -118,9 +118,15 @@ export default async (req: Request) => {
     if (body.action === "sponsor_status") {
       const id = clean(body.id, 100);
       const active = Boolean(body.active);
-      const { error } = await database.from("sponsors").update({ active, updated_at: new Date().toISOString() }).eq("id", id);
+      const sponsorRow = (await database.from("sponsors").select("duration_months").eq("id", id).maybeSingle()).data;
+      const now = new Date();
+      const durationMonths = Math.max(1, Math.min(12, Number(sponsorRow?.duration_months || 1)));
+      const patch = active
+        ? { active: true, starts_at: now.toISOString(), ends_at: new Date(now.getTime() + durationMonths * 30 * 86400000).toISOString(), updated_at: now.toISOString() }
+        : { active: false, updated_at: now.toISOString() };
+      const { error } = await database.from("sponsors").update(patch).eq("id", id);
       if (error) return json({ error: error.message }, 400);
-      await audit(database, active ? "sponsor_activated" : "sponsor_paused", "sponsor", id);
+      await audit(database, active ? "sponsor_activated" : "sponsor_paused", "sponsor", id, { duration_months: durationMonths });
       return json({ ok: true });
     }
 
