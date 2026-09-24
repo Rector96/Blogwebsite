@@ -220,13 +220,11 @@ export default function RwdNewsApp() {
   }, []);
 
   useEffect(() => {
+    // Visitor polling reads stored wire data. It must not trigger a new RSS/Gemini
+    // ingest from every browser session. Explicit refreshes can still ingest.
     void fetchNews(false);
-    const firstRefresh = window.setTimeout(() => void fetchNews(true), 1200);
-    const timer = window.setInterval(() => void fetchNews(true), 60_000);
-    return () => {
-      window.clearTimeout(firstRefresh);
-      window.clearInterval(timer);
-    };
+    const timer = window.setInterval(() => void fetchNews(false), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const openArticle = (article: EnrichedArticle) => {
