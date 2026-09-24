@@ -107,31 +107,44 @@ const content: Record<string, { title: string; intro: string; sections: Array<[s
 };
 
 const packages = [
-  { code: "sidebar", name: "Sidebar Sponsor", usd: 75, ngn: 75000, detail: "30 days · sidebar placement" },
-  { code: "in_feed", name: "In-feed Sponsor", usd: 100, ngn: 100000, detail: "30 days · inside the news feed" },
-  { code: "newsletter", name: "Newsletter Sponsor", usd: 75, ngn: 75000, detail: "Per issue · newsletter placement" },
-  { code: "homepage", name: "Homepage Featured", usd: 150, ngn: 150000, detail: "30 days · premium homepage placement" },
-  { code: "homepage_sidebar", name: "Homepage + Sidebar", usd: 200, ngn: 200000, detail: "30 days · homepage + sidebar" },
-  { code: "sponsored_story", name: "Sponsored Article / Briefing", usd: 150, ngn: 150000, detail: "Sponsored content · clearly labeled" },
-  { code: "premium", name: "Premium Monthly", usd: 300, ngn: 300000, detail: "30 days · homepage + sidebar + in-feed priority" },
-];
+  { code: "sidebar", name: "Sidebar Sponsor", usd: 75, placement: "sidebar", detail: "Premium sidebar visibility" },
+  { code: "in_feed", name: "In-feed Sponsor", usd: 100, placement: "in_feed", detail: "Native placement within the news experience" },
+  { code: "homepage", name: "Homepage Featured", usd: 150, placement: "both", detail: "High-visibility homepage placement" },
+  { code: "homepage_sidebar", name: "Homepage + Sidebar", usd: 200, placement: "both", detail: "Homepage visibility plus sidebar presence" },
+  { code: "newsletter", name: "Newsletter Sponsor", usd: 75, placement: "newsletter", detail: "One featured sponsor placement per month" },
+  { code: "sponsored_story", name: "Sponsored Article / Briefing", usd: 150, placement: "in_feed", detail: "One clearly labeled sponsored briefing per month" },
+  { code: "premium", name: "Premium Campaign", usd: 300, placement: "both", detail: "Homepage + sidebar + in-feed priority" },
+] as const;
 
-function money(value: number, currency: "USD" | "NGN") {
-  return currency === "USD"
-    ? "$" + value.toLocaleString("en-US")
-    : "₦" + value.toLocaleString("en-NG");
+function money(value: number) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(value);
+}
+
+function addMonths(date: Date, months: number) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
 }
 
 function AdvertisePage() {
   const [selected, setSelected] = useState(packages[0].code);
-  const [currency, setCurrency] = useState<"USD" | "NGN">("NGN");
-  const [form, setForm] = useState({ email: "", name: "", company: "", headline: "", cta_url: "", creative_mode: "upload", creative_url: "", creative_notes: "" });
+  const [months, setMonths] = useState(1);
+  const [form, setForm] = useState({
+    email: "", name: "", company: "", headline: "", cta_url: "",
+    creative_mode: "upload", creative_url: "", creative_notes: "",
+  });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const selectedPackage = packages.find((p) => p.code === selected) || packages[0];
-  const creativeSpec = selected === "sidebar" ? "Vertical creative · mobile-safe" : selected === "newsletter" ? "Email banner · landscape" : "Landscape creative · responsive desktop + mobile";
-  const price = currency === "USD" ? selectedPackage.usd : selectedPackage.ngn;
+  const total = selectedPackage.usd * months;
+  const startDate = new Date();
+  const endDate = addMonths(startDate, months);
+  const creativeSpec = selected === "sidebar"
+    ? "Vertical or square creative · mobile-safe"
+    : selected === "newsletter"
+      ? "Landscape email banner · mobile-safe"
+      : "Responsive landscape creative · desktop + mobile";
 
   useEffect(() => {
     void logRwdNewsEvent({ event: "page_view", placement: "advertise_page" });
@@ -144,23 +157,31 @@ function AdvertisePage() {
       .then((result) =>
         setMessage(
           result.ok
-            ? "Payment received. Your campaign is now awaiting admin approval."
+            ? "Payment received. Your campaign is now awaiting review."
             : "We could not confirm this payment yet. Please contact RWDNEWS with your payment reference.",
         ),
       )
-      .catch(() =>
-        setMessage("We could not confirm the payment yet. Please contact RWDNEWS with your payment reference."),
-      )
+      .catch(() => setMessage("We could not confirm the payment yet. Please contact RWDNEWS with your payment reference."))
       .finally(() => setBusy(false));
   }, []);
 
   const uploadCreative = async (file: File) => {
     if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) throw new Error("Use JPG, PNG, WebP or AVIF.");
     if (file.size > 4 * 1024 * 1024) throw new Error("Creative must be 4 MB or smaller.");
-    const data = await new Promise<string>((resolve,reject)=>{const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result||"")); reader.onerror=()=>reject(new Error("Could not read creative.")); reader.readAsDataURL(file);});
-    const response=await fetch("/api/advertiser/creative-upload",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({data,mime_type:file.type})});
-    const payload=await response.json().catch(()=>({})); if(!response.ok) throw new Error(payload.error||"Creative upload failed.");
-    setForm(v=>({...v,creative_url:String(payload.url||"")}));
+    const data = await new Promise<string>((resolve,reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Could not read creative."));
+      reader.readAsDataURL(file);
+    });
+    const response = await fetch("/api/advertiser/creative-upload", {
+      method: "POST",
+      headers: {"content-type":"application/json"},
+      body: JSON.stringify({data,mime_type:file.type}),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload.error || "Creative upload failed.");
+    setForm(v => ({...v, creative_url: String(payload.url || "")}));
   };
 
   const submit = async (e: FormEvent) => {
@@ -170,11 +191,12 @@ function AdvertisePage() {
     try {
       const result = await fetch("/api/kora/init", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ package_code: selected, currency, ...form }),
+        headers: {"content-type":"application/json"},
+        body: JSON.stringify({ package_code: selected, months, currency: "USD", ...form }),
       });
-      const payload = await result.json();
+      const payload = await result.json().catch(() => ({}));
       if (!result.ok) throw new Error(payload.error || "Could not start payment.");
+      if (!payload.authorization_url) throw new Error("Payment checkout URL was not returned.");
       window.location.assign(payload.authorization_url);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not start payment.");
@@ -186,152 +208,142 @@ function AdvertisePage() {
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
         <title>Advertise with RWDNEWS</title>
-        <meta
-          name="description"
-          content="Global sponsorship opportunities on RWDNEWS with USD and NGN payment options."
-        />
+        <meta name="description" content="Global advertising opportunities on RWDNEWS with flexible monthly campaigns and secure USD checkout." />
       </Helmet>
-      <header className="border-b border-neutral-200">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6">
-          <a href="/" className="font-display text-2xl font-bold">
-            RWDNEWS
-          </a>
-          <a href="/" className="text-sm font-semibold text-teal-800">
-            Back to news
-          </a>
+      <header className="sticky top-0 z-30 border-b border-neutral-200/80 bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
+          <a href="/" className="font-display text-2xl font-bold tracking-tight">RWDNEWS</a>
+          <a href="/" className="rounded-full px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50">Back to news</a>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="max-w-3xl">
-          <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">
-            For brands worldwide
-          </p>
-          <h1 className="font-display mt-2 text-4xl font-semibold sm:text-5xl">Advertise on RWDNEWS</h1>
-          <p className="mt-4 text-lg leading-relaxed text-neutral-600">
-            Reach a global news audience with clearly labeled sponsorships. Editorial and advertising stay
-            separate.
+          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-amber-800">Global advertising</p>
+          <h1 className="font-display mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">Put your brand in the story.</h1>
+          <p className="mt-4 text-base leading-relaxed text-neutral-600 sm:text-lg">
+            Choose a placement, select how long you want to run it, and review your exact campaign total before checkout.
           </p>
         </div>
-        {message ? (
-          <div className="mt-6 border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">{message}</div>
-        ) : null}
-        <div className="mt-8 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-bold uppercase tracking-wider text-neutral-500">Display currency</span>
-          <button
-            type="button"
-            disabled
-            className="border border-dashed px-4 py-2 text-xs font-bold text-neutral-400"
-          >
-            USD — Global (coming soon)
-          </button>
-          <button
-            type="button"
-            onClick={() => setCurrency("NGN")}
-            className={
-              currency === "NGN"
-                ? "bg-neutral-950 px-4 py-2 text-xs font-bold text-white"
-                : "border px-4 py-2 text-xs font-bold"
-            }
-          >
-            NGN — Nigeria
-          </button>
-        </div>
-        <section className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {packages.map((p) => (
-            <button
-              type="button"
-              key={p.code}
-              onClick={() => setSelected(p.code)}
-              className={
-                selected === p.code
-                  ? "border-2 border-neutral-950 bg-neutral-950 p-5 text-left text-white"
-                  : "border border-neutral-200 bg-white p-5 text-left hover:border-neutral-400"
-              }
-            >
-              <p className="text-xs font-bold uppercase tracking-wider">{p.name}</p>
-              <p className="font-display mt-2 text-3xl font-semibold">
-                {money(currency === "USD" ? p.usd : p.ngn, currency)}
-              </p>
-              <p className={selected === p.code ? "mt-1 text-sm text-neutral-300" : "mt-1 text-sm text-neutral-500"}>
-                {p.detail}
-              </p>
-            </button>
-          ))}
-        </section>
-        <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_360px]">
-          <section className="border border-neutral-200 p-5 sm:p-7">
-            <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Selected package</p>
-            <h2 className="font-display mt-1 text-2xl font-semibold">{selectedPackage.name}</h2>
-            <p className="mt-1 text-sm text-neutral-500">
-              {money(price, currency)} · 30 days
-            </p>
-            <form onSubmit={submit} className="mt-6 space-y-3">
-              <input
-                required
-                type="email"
-                placeholder="Business email"
-                value={form.email}
-                onChange={(e) => setForm((v) => ({ ...v, email: e.target.value }))}
-                className="h-11 w-full border px-3 text-sm"
-              />
-              <input
-                placeholder="Your name"
-                value={form.name}
-                onChange={(e) => setForm((v) => ({ ...v, name: e.target.value }))}
-                className="h-11 w-full border px-3 text-sm"
-              />
-              <input
-                required
-                placeholder="Company / brand"
-                value={form.company}
-                onChange={(e) => setForm((v) => ({ ...v, company: e.target.value }))}
-                className="h-11 w-full border px-3 text-sm"
-              />
-              <input
-                required
-                placeholder="Campaign headline"
-                value={form.headline}
-                onChange={(e) => setForm((v) => ({ ...v, headline: e.target.value }))}
-                className="h-11 w-full border px-3 text-sm"
-              />
-              <input
-                type="url"
-                placeholder="Website URL / destination"
-                value={form.cta_url}
-                onChange={(e) => setForm((v) => ({ ...v, cta_url: e.target.value }))}
-                className="h-11 w-full border px-3 text-sm"
-              />
-              <div className="border bg-neutral-50 p-4">
-                <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Creative</p>
-                <p className="mt-1 text-xs text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 4 MB.</p>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"upload"}))} className={form.creative_mode==="upload"?"bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"border px-3 py-2 text-xs font-bold"}>I have my advert</button>
-                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"border px-3 py-2 text-xs font-bold"}>RWDNEWS design it</button>
-                </div>
-                {form.creative_mode==="upload" ? <div className="mt-3"><label className="block cursor-pointer border border-dashed bg-white p-4 text-center text-xs font-semibold">Upload advert creative<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={e=>{const f=e.target.files?.[0]; if(f) void uploadCreative(f).catch(err=>setMessage(err instanceof Error?err.message:"Creative upload failed."));}} /></label>{form.creative_url ? <img src={form.creative_url} alt="Advert creative preview" className="mt-3 max-h-48 w-full rounded object-contain" /> : null}</div> : <textarea placeholder="Tell our design team what you want: product, offer, colors, CTA, preferred style…" value={form.creative_notes} onChange={e=>setForm(v=>({...v,creative_notes:e.target.value}))} className="mt-3 min-h-24 w-full border bg-white p-3 text-sm" />}
-              </div>
+
+        {message ? <div role="status" className="mt-6 rounded-2xl border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">{message}</div> : null}
+
+        <section className="mt-8">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">1. Choose placement</p>
+              <h2 className="font-display mt-1 text-2xl font-semibold">Build your campaign</h2>
+            </div>
+            <span className="hidden rounded-full bg-neutral-100 px-3 py-1 text-xs font-semibold text-neutral-600 sm:inline-flex">Prices in USD</span>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {packages.map((p) => (
               <button
-                disabled={busy}
-                className="h-12 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50"
+                type="button"
+                key={p.code}
+                aria-pressed={selected === p.code}
+                onClick={() => setSelected(p.code)}
+                className={selected === p.code
+                  ? "rounded-2xl border-2 border-neutral-950 bg-neutral-950 p-5 text-left text-white shadow-lg"
+                  : "rounded-2xl border border-neutral-200 bg-white p-5 text-left transition hover:-translate-y-0.5 hover:border-neutral-400 hover:shadow-md"}
               >
-                Pay {money(price, currency)} securely with Kora
+                <div className="flex items-start justify-between gap-3">
+                  <p className="text-xs font-bold uppercase tracking-wider">{p.name}</p>
+                  {selected === p.code ? <span className="rounded-full bg-white/15 px-2 py-1 text-[10px] font-bold">Selected</span> : null}
+                </div>
+                <p className="font-display mt-3 text-3xl font-semibold">{money(p.usd)}<span className={selected === p.code ? "text-sm font-medium text-neutral-300" : "text-sm font-medium text-neutral-500"}>/month</span></p>
+                <p className={selected === p.code ? "mt-2 text-sm leading-relaxed text-neutral-300" : "mt-2 text-sm leading-relaxed text-neutral-500"}>{p.detail}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <div className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">2. Choose duration</p>
+                <h2 className="font-display mt-1 text-2xl font-semibold">{selectedPackage.name}</h2>
+              </div>
+              <span className="rounded-full bg-neutral-100 px-3 py-1 text-xs font-bold text-neutral-700">USD</span>
+            </div>
+
+            <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {[1,2,3,4].map((value) => (
+                <button key={value} type="button" onClick={() => setMonths(value)} aria-pressed={months === value}
+                  className={months === value ? "rounded-xl bg-neutral-950 px-3 py-3 text-sm font-bold text-white" : "rounded-xl border border-neutral-200 px-3 py-3 text-sm font-bold text-neutral-700 hover:border-neutral-400"}>
+                  {value} month{value > 1 ? "s" : ""}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3">
+              <label className="text-xs font-semibold text-neutral-600" htmlFor="campaign-months">Custom duration</label>
+              <select id="campaign-months" value={months} onChange={(e) => setMonths(Math.max(1, Math.min(12, Number(e.target.value))))}
+                className="mt-1 h-11 w-full rounded-xl border border-neutral-200 bg-white px-3 text-sm sm:max-w-xs">
+                {Array.from({length:12},(_,i)=>i+1).map(value => <option key={value} value={value}>{value} month{value > 1 ? "s" : ""}</option>)}
+              </select>
+              <p className="mt-2 text-xs text-neutral-500">Run from checkout for 1–12 months. Your campaign end date is calculated automatically.</p>
+            </div>
+
+            <form onSubmit={submit} className="mt-7 space-y-4">
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">3. Campaign details</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <input required type="email" placeholder="Business email" value={form.email} onChange={e=>setForm(v=>({...v,email:e.target.value}))} className="h-12 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+                <input placeholder="Your name" value={form.name} onChange={e=>setForm(v=>({...v,name:e.target.value}))} className="h-12 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+              </div>
+              <input required placeholder="Company / brand" value={form.company} onChange={e=>setForm(v=>({...v,company:e.target.value}))} className="h-12 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+              <input required placeholder="Campaign headline" value={form.headline} onChange={e=>setForm(v=>({...v,headline:e.target.value}))} className="h-12 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+              <input type="url" placeholder="Website URL / destination" value={form.cta_url} onChange={e=>setForm(v=>({...v,cta_url:e.target.value}))} className="h-12 w-full rounded-xl border border-neutral-200 px-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+
+              <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:p-5">
+                <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">4. Creative</p>
+                <p className="mt-1 text-xs leading-relaxed text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 4 MB.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"upload"}))} className={form.creative_mode==="upload"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>I have my advert</button>
+                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>Have RWDNEWS design it</button>
+                </div>
+                {form.creative_mode==="upload" ? (
+                  <div className="mt-3">
+                    <label className="block cursor-pointer rounded-xl border border-dashed border-neutral-300 bg-white p-5 text-center text-xs font-semibold hover:border-neutral-500">
+                      Upload advert creative
+                      <input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={e=>{const f=e.target.files?.[0]; if(f) void uploadCreative(f).catch(err=>setMessage(err instanceof Error?err.message:"Creative upload failed."));}} />
+                    </label>
+                    {form.creative_url ? <img src={form.creative_url} alt="Advert creative preview" className="mt-3 max-h-56 w-full rounded-xl object-contain" /> : null}
+                  </div>
+                ) : (
+                  <textarea required placeholder="Tell the RWDNEWS design team about your product, offer, CTA and preferred style…" value={form.creative_notes} onChange={e=>setForm(v=>({...v,creative_notes:e.target.value}))} className="mt-3 min-h-28 w-full rounded-xl border border-neutral-200 bg-white p-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+                )}
+              </div>
+
+              <button disabled={busy} className="h-13 w-full rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white shadow-lg transition hover:opacity-90 disabled:opacity-50">
+                {busy ? "Preparing secure checkout…" : "Continue to secure checkout"}
               </button>
             </form>
           </section>
-          <aside className="space-y-4">
-            <div className="border border-neutral-200 bg-neutral-50 p-5">
-              <h3 className="font-display text-xl font-semibold">Payment notes</h3>
-              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-                NGN is available now. USD/global card payments depend on Paystack configuration for your
-                business.
-              </p>
+
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <div className="rounded-3xl border border-neutral-200 bg-neutral-950 p-6 text-white shadow-xl">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-neutral-400">Campaign summary</p>
+              <h3 className="font-display mt-2 text-2xl font-semibold">{selectedPackage.name}</h3>
+              <div className="mt-5 space-y-3 text-sm">
+                <div className="flex justify-between gap-4"><span className="text-neutral-400">Monthly rate</span><strong>{money(selectedPackage.usd)}</strong></div>
+                <div className="flex justify-between gap-4"><span className="text-neutral-400">Duration</span><strong>{months} month{months > 1 ? "s" : ""}</strong></div>
+                <div className="border-t border-white/10 pt-3 flex justify-between gap-4"><span className="text-neutral-400">Campaign total</span><strong className="text-2xl">{money(total)}</strong></div>
+              </div>
+              <div className="mt-5 rounded-2xl bg-white/5 p-4 text-xs leading-relaxed text-neutral-300">
+                Starts after payment and review. End date: {endDate.toLocaleDateString("en-US", {month:"short",day:"numeric",year:"numeric"})}.
+              </div>
             </div>
-            <div className="border border-neutral-200 p-5">
-              <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Editorial separation</p>
-              <p className="mt-2 text-sm leading-relaxed text-neutral-600">
-                Paid placements are clearly labeled and do not purchase editorial treatment.
-              </p>
+            <div className="mt-4 rounded-2xl border border-neutral-200 p-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">How it works</p>
+              <ol className="mt-3 space-y-3 text-sm text-neutral-600">
+                <li><strong>1.</strong> Choose your placement and duration.</li>
+                <li><strong>2.</strong> Submit your campaign and creative.</li>
+                <li><strong>3.</strong> Complete secure USD payment.</li>
+                <li><strong>4.</strong> Our team reviews and activates the campaign.</li>
+              </ol>
             </div>
+            <p className="mt-4 text-xs leading-relaxed text-neutral-500">Paid placements are clearly labeled and remain separate from editorial coverage.</p>
           </aside>
         </div>
       </main>
