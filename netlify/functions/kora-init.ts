@@ -8,6 +8,8 @@ import {
   koraRequest,
   type SponsorPackageCode,
   type SponsorCurrency,
+  SPONSOR_MAX_MONTHS,
+  sponsorTotalUsd,
 } from "../../src/lib/kora-server";
 
 export default async (req: Request) => {
@@ -17,8 +19,8 @@ export default async (req: Request) => {
 
   const body = await req.json().catch(() => ({}));
   const packageCode = cleanText(body.package_code, 40) as SponsorPackageCode;
-  const currency = (String(body.currency || "NGN").toUpperCase() === "NGN" ? "NGN" : "USD") as SponsorCurrency;
-  if (currency !== "NGN") return json({ error: "Kora sponsorship checkout is currently configured for NGN." }, 400);
+  const currency = "USD" as SponsorCurrency;
+  const months = Math.max(1, Math.min(SPONSOR_MAX_MONTHS, Math.floor(Number(body.months) || 1)));
 
   const pkg = SPONSOR_PACKAGES[packageCode];
   const email = cleanText(body.email, 160).toLowerCase();
@@ -29,9 +31,9 @@ export default async (req: Request) => {
   const creativeMode = String(body.creative_mode || "upload") === "design" ? "design" : "upload";
   const creativeUrl = cleanText(body.creative_url, 1000);
   const creativeNotes = cleanText(body.creative_notes, 1000);
-  const baseAmount = pkg?.ngn || 0;
+  const baseAmount = sponsorTotalUsd(packageCode, months);
 
-  if (!pkg || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+  if (!pkg || !baseAmount || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
     return json({ error: "Choose a valid sponsorship package and enter a valid email." }, 400);
   }
   if (ctaUrl && !/^https?:\\/\\//i.test(ctaUrl)) {
@@ -49,9 +51,9 @@ export default async (req: Request) => {
     currency,
     amount: baseAmount,
     amount_subunit: baseAmount,
-    amount_usd: null,
-    amount_naira: baseAmount,
-    amount_kobo: baseAmount * 100,
+    amount_usd: baseAmount,
+    amount_naira: null,
+    amount_kobo: null,
     email,
     name: name || null,
     company: company || null,
@@ -62,12 +64,13 @@ export default async (req: Request) => {
     creative_notes: creativeNotes || null,
     design_requested: creativeMode === "design",
     placement: pkg.placement,
-    duration_days: pkg.days,
+    duration_days: months * 30,
+    duration_months: months,
     status: "pending",
     payment_provider: "kora",
     provider_status: "initialized",
     provider_currency: currency,
-    metadata: { source: "rwdnews_advertise", currency, payment_provider: "kora" },
+    metadata: { source: "rwdnews_advertise", currency, payment_provider: "kora", duration_months: months, monthly_rate_usd: pkg.usd },
   });
 
   if (insertError) return json({ error: "Could not create payment record." }, 500);
@@ -81,7 +84,7 @@ export default async (req: Request) => {
       method: "POST",
       body: JSON.stringify({
         amount: baseAmount,
-        currency: "NGN",
+        currency: "USD",
         reference,
         redirect_url: redirectUrl,
         notification_url: notificationUrl,
@@ -113,8 +116,10 @@ export default async (req: Request) => {
       reference,
       authorization_url: checkoutUrl,
       amount: baseAmount,
-      currency: "NGN",
+      currency: "USD",
       package_name: pkg.name,
+      months,
+      monthly_rate_usd: pkg.usd,
       payment_provider: "kora",
     });
   } catch (error) {
