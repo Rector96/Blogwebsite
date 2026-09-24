@@ -297,7 +297,12 @@ export default async (req: Request) => {
     clickMap.set(key, (clickMap.get(key) || 0) + 1);
   }
   const paid = (payments.data || []).filter((p: any) => p.status === "paid");
-  const revenue = paid.reduce((sum: number, p: any) => sum + Number(p.amount_naira || 0), 0);
+  const revenueNaira = paid
+    .filter((p: any) => String(p.currency || "NGN").toUpperCase() === "NGN")
+    .reduce((sum: number, p: any) => sum + Number(p.amount_naira ?? p.amount ?? 0), 0);
+  const revenueUsd = paid
+    .filter((p: any) => String(p.currency || "").toUpperCase() === "USD")
+    .reduce((sum: number, p: any) => sum + Number(p.amount_usd ?? p.amount ?? 0), 0);
   const recommendationImpressions = rows.filter((r: any) => r.event_name === "recommendation_impression").length;
   const recommendationClicks = rows.filter((r: any) => r.event_name === "recommendation_click").length;
   const engagedReads = rows.filter((r: any) => r.event_name === "reading_engaged").length;
@@ -330,7 +335,7 @@ export default async (req: Request) => {
       shares: Number(shareCount.count || 0),
       saves: rows.filter((r:any)=>r.event_name==="article_save").length,
       sponsor_clicks: Number(sponsorClickCount.count || 0),
-      advertiser_leads: (leads.data || []).length,
+      advertiser_leads: (leads.data || []).filter((l:any) => new Date(l.created_at).getTime() >= Date.parse(thirtyDaysAgo)).length,
       newsletter_subscribers: (newsletter.data || []).filter((n:any)=>n.status==="active").length,
       paid_revenue_naira: revenueNaira,
       paid_revenue_usd: revenueUsd,
