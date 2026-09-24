@@ -156,7 +156,7 @@ function AdvertisePage() {
 
   const uploadCreative = async (file: File) => {
     if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) throw new Error("Use JPG, PNG, WebP or AVIF.");
-    if (file.size > 4 * 1024 * 1024) throw new Error("Creative must be 5 MB or smaller.");
+    if (file.size > 4 * 1024 * 1024) throw new Error("Creative must be 4 MB or smaller.");
     const data = await new Promise<string>((resolve,reject)=>{const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result||"")); reader.onerror=()=>reject(new Error("Could not read creative.")); reader.readAsDataURL(file);});
     const response=await fetch("/api/advertiser/creative-upload",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({data,mime_type:file.type})});
     const payload=await response.json().catch(()=>({})); if(!response.ok) throw new Error(payload.error||"Creative upload failed.");
