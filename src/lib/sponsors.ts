@@ -11,6 +11,7 @@ export type SponsoredOffer = {
   rateHighlight: string;
   disclosure: string;
   placement?: string;
+  creativeUrl?: string;
 };
 
 export async function fetchSponsors(): Promise<SponsoredOffer[]> {
@@ -18,7 +19,7 @@ export async function fetchSponsors(): Promise<SponsoredOffer[]> {
   const { data, error } = await supabase
     .from("sponsors")
     .select(
-      "id, slug, sponsor_name, headline, why_matters, cta_text, cta_url, rate_highlight, disclosure, placement, priority",
+      "id, slug, sponsor_name, headline, why_matters, cta_text, cta_url, rate_highlight, disclosure, placement, priority, creative_url, creative_alt",
     )
     .eq("active", true)
     .order("priority", { ascending: true });
@@ -38,6 +39,7 @@ export async function fetchSponsors(): Promise<SponsoredOffer[]> {
     rateHighlight: String(row.rate_highlight || ""),
     disclosure: String(row.disclosure || "Sponsored"),
     placement: String(row.placement || "sidebar"),
+    creativeUrl: row.creative_url ? String(row.creative_url) : undefined,
   }));
 }
 
