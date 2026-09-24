@@ -156,7 +156,7 @@ function AdvertisePage() {
 
   const uploadCreative = async (file: File) => {
     if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) throw new Error("Use JPG, PNG, WebP or AVIF.");
-    if (file.size > 5 * 1024 * 1024) throw new Error("Creative must be 5 MB or smaller.");
+    if (file.size > 4 * 1024 * 1024) throw new Error("Creative must be 5 MB or smaller.");
     const data = await new Promise<string>((resolve,reject)=>{const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result||"")); reader.onerror=()=>reject(new Error("Could not read creative.")); reader.readAsDataURL(file);});
     const response=await fetch("/api/advertiser/creative-upload",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({data,mime_type:file.type})});
     const payload=await response.json().catch(()=>({})); if(!response.ok) throw new Error(payload.error||"Creative upload failed.");
@@ -303,7 +303,7 @@ function AdvertisePage() {
               />
               <div className="border bg-neutral-50 p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Creative</p>
-                <p className="mt-1 text-xs text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 5 MB.</p>
+                <p className="mt-1 text-xs text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 4 MB.</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"upload"}))} className={form.creative_mode==="upload"?"bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"border px-3 py-2 text-xs font-bold"}>I have my advert</button>
                   <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"border px-3 py-2 text-xs font-bold"}>RWDNEWS design it</button>
