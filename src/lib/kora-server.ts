@@ -22,6 +22,8 @@ export {
   cleanText,
   makeReference,
   SPONSOR_PACKAGES,
+  SPONSOR_MAX_MONTHS,
+  sponsorTotalUsd,
 };
 
 export type { SponsorPackageCode, SponsorCurrency };
