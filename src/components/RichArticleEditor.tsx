@@ -10,8 +10,9 @@ function cleanWordHtml(html: string) {
   const doc = new DOMParser().parseFromString(html, "text/html");
   doc.querySelectorAll("script,style,meta,link,xml,o\\:p").forEach((n) => n.remove());
   doc.querySelectorAll("*").forEach((el) => {
+    const style = el.getAttribute("style") || ""; const align = style.match(/text-align\\s*:\\s*(left|center|right)/i)?.[1]; if (align) el.setAttribute("data-align", align.toLowerCase());
     [...el.attributes].forEach((a) => {
-      if (!["href","src","alt","title"].includes(a.name.toLowerCase())) el.removeAttribute(a.name);
+      if (!["href","src","alt","title","data-align"].includes(a.name.toLowerCase())) el.removeAttribute(a.name);
     });
   });
   return doc.body.innerHTML;
