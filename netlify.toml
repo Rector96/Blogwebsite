@@ -41,6 +41,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/advertiser/creative-upload"
+  to = "/.netlify/functions/advertiser-creative-upload"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/paystack/init"
   to = "/.netlify/functions/paystack-init"
   status = 200
