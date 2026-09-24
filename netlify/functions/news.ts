@@ -462,7 +462,12 @@ function dedupe(items: any[]) {
 async function buildArticles(): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
-  const items = pickBalanced(scored, 48);
+  // Do not turn a title-only feed hit into an indexable story. Prefer items with
+  // source context, or stories independently covered by multiple domains.
+  const qualityGate = scored.filter(
+    (item) => stripJunk(item.desc).length >= 40 || item.sources.length >= 2,
+  );
+  const items = pickBalanced(qualityGate, 48);
   const results = (
     await Promise.all(
       items.map(async (item) => {
