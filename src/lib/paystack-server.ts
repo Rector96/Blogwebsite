@@ -1,16 +1,22 @@
 import { createClient } from "@supabase/supabase-js";
 
 export const SPONSOR_PACKAGES = {
-  sidebar: { name: "Sidebar Sponsor", usd: 75, ngn: 75000, placement: "sidebar", days: 30 },
-  in_feed: { name: "In-feed Sponsor", usd: 100, ngn: 100000, placement: "in_feed", days: 30 },
-  homepage: { name: "Homepage Featured Sponsor", usd: 150, ngn: 150000, placement: "both", days: 30 },
-  homepage_sidebar: { name: "Homepage + Sidebar", usd: 200, ngn: 200000, placement: "both", days: 30 },
-  newsletter: { name: "Newsletter Sponsor", usd: 75, ngn: 75000, placement: "newsletter", days: 30 },
-  sponsored_story: { name: "Sponsored Article / Briefing", usd: 150, ngn: 150000, placement: "in_feed", days: 30 },
-  premium: { name: "Premium Monthly Package", usd: 300, ngn: 300000, placement: "both", days: 30 },
+  sidebar: { name: "Sidebar Sponsor", usd: 75, ngn: 0, placement: "sidebar", days: 30, months: 1 },
+  in_feed: { name: "In-feed Sponsor", usd: 100, ngn: 0, placement: "in_feed", days: 30, months: 1 },
+  homepage: { name: "Homepage Featured Sponsor", usd: 150, ngn: 0, placement: "both", days: 30, months: 1 },
+  homepage_sidebar: { name: "Homepage + Sidebar", usd: 200, ngn: 0, placement: "both", days: 30, months: 1 },
+  newsletter: { name: "Newsletter Sponsor", usd: 75, ngn: 0, placement: "newsletter", days: 30, months: 1 },
+  sponsored_story: { name: "Sponsored Article / Briefing", usd: 150, ngn: 0, placement: "in_feed", days: 30, months: 1 },
+  premium: { name: "Premium Monthly Package", usd: 300, ngn: 0, placement: "both", days: 30, months: 1 },
 } as const;
 
 export type SponsorCurrency = "USD" | "NGN";
+export const SPONSOR_MAX_MONTHS = 12;
+export function sponsorTotalUsd(packageCode: SponsorPackageCode, months: number) {
+  const pkg = SPONSOR_PACKAGES[packageCode];
+  const safeMonths = Math.max(1, Math.min(SPONSOR_MAX_MONTHS, Math.floor(Number(months) || 1)));
+  return pkg ? pkg.usd * safeMonths : 0;
+}
 
 export type SponsorPackageCode = keyof typeof SPONSOR_PACKAGES;
 
