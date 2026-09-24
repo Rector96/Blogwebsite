@@ -10,7 +10,7 @@ export function sanitizeArticleHtml(input: string) {
       const name=a.name.toLowerCase(), val=a.value.trim();
       if (name.startsWith("on") || name==="style" || name==="class") el.removeAttribute(a.name);
       if (name==="data-align" && !/^(left|center|right)$/.test(val)) el.removeAttribute(a.name);
-      if (name==="href" && !/^https?:\\/\\//i.test(val)) el.removeAttribute(a.name);
+      if (name==="href" && !/^https?:\/\//i.test(val)) el.removeAttribute(a.name);
       if (name==="src" && !/^https?:\\/\\//i.test(val)) el.removeAttribute(a.name);
     });
   });
