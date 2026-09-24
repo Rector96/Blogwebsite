@@ -93,6 +93,45 @@ const words = (text: string) =>
     .split(/\s+/)
     .filter((x) => x.length >= 4 && !stop.has(x));
 
+function headlineForDisplay(value: string) {
+  return stripJunk(value)
+    .replace(/^(BREAKING|LIVE|JUST IN|UPDATE)\s*[:|-]\s*/i, "")
+    .replace(/\s*[|–—-]\s*(BBC|Reuters|AP|CNN|CNBC|TechCrunch|Al Jazeera|The Guardian)\s*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 180);
+}
+
+function headlineOverlap(original: string, candidate: string) {
+  const sourceWords = new Set(words(original));
+  const candidateWords = words(candidate);
+  if (!sourceWords.size || !candidateWords.length) return 0;
+  const matches = candidateWords.filter((word) => sourceWords.has(word)).length;
+  return matches / Math.min(sourceWords.size, candidateWords.length);
+}
+
+function trustedHeadline(original: string, candidate: string) {
+  const source = headlineForDisplay(original);
+  const proposed = headlineForDisplay(candidate);
+  if (!proposed || proposed.length < 20) return source;
+  if (proposed.length > 150) return source;
+  // AI may polish wording, but it must retain meaningful source facts/entities.
+  if (headlineOverlap(source, proposed) < 0.2) return source;
+  return proposed;
+}
+
+function deterministicTags(title: string, section: string, region: string) {
+  const tags = new Set<string>();
+  if (section) tags.add("#" + section.replace(/[^A-Za-z0-9]+/g, ""));
+  if (region && region !== "Global") tags.add("#" + region.replace(/[^A-Za-z0-9]+/g, ""));
+  for (const word of words(title)) {
+    if (tags.size >= 3) break;
+    if (/^(sources?|mexicotimes|350btimes|new|news|report|reports)$/i.test(word)) continue;
+    tags.add("#" + word[0].toUpperCase() + word.slice(1));
+  }
+  return Array.from(tags).slice(0, 4);
+}
+
 function category(text: string, hint?: string, region?: string) {
   const x = text.toLowerCase();
   if (/\b(sport|sports|football|soccer|premier league|champions league|uefa|fifa|nba|nfl|mlb|nhl|tennis|cricket|formula\s?1|f1|olympics|athletics|basketball|baseball|rugby|boxing|ufc|transfer)\b/.test(x))
@@ -346,11 +385,12 @@ function expandFallbackSummary(title: string, desc: string): string[] {
   return sanitizeSummary([d || t]).slice(0, 5);
 }
 
-async function aiBrief(title: string, desc: string) {
+async function aiBrief(title: string, desc: string, section: string) {
+  const sourceHeadline = headlineForDisplay(title);
   const fallback = {
-    ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
-    ai_summary: expandFallbackSummary(title, desc),
-    tags: ["#World"],
+    ai_hook_title: sourceHeadline,
+    ai_summary: expandFallbackSummary(sourceHeadline, desc),
+    tags: deterministicTags(sourceHeadline, section, ""),
   };
   const key = process.env["GEMINI_API_KEY"] || "";
   if (!key) return fallback;
@@ -360,12 +400,14 @@ async function aiBrief(title: string, desc: string) {
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "Write a short news briefing for an aggregator. Return JSON only. " +
-          "(1) ai_hook_title: clear headline. " +
-          "(2) ai_summary: exactly 3 to 5 short bullet points. One sentence each. " +
-          "Total 60–100 words max. Facts only from the title and description. " +
-          "Do not invent, do not copy long passages, no disclaimers, no URLs, no Read More, no why it matters. " +
-          "(3) tags: 2–4 hashtags. " +
+          "Write a concise news briefing from ONE source item. Return JSON only. " +
+          "(1) ai_hook_title: a factual headline. Preserve the original people, organizations, places, numbers and key claim. " +
+          "Make only a minimal clarity edit; if the original headline is already clear, return it essentially unchanged. " +
+          "Never merge facts from other stories, never invent context, never add clickbait, and never turn a source label into a claim. " +
+          "(2) ai_summary: exactly 3 to 5 short bullet points, one sentence each, 60–100 words total. " +
+          "Use only facts explicitly supported by TITLE and DESCRIPTION. " +
+          "Do not add predictions, opinions, background facts, URLs, disclaimers, Read More text, or why-it-matters language. " +
+          "(3) tags: 2–4 simple topic words only. " +
           "TITLE: " +
           title +
           " DESCRIPTION: " +
@@ -389,12 +431,11 @@ async function aiBrief(title: string, desc: string) {
     if (!text) return fallback;
     const parsed = JSON.parse(text);
     const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 5);
+    const candidateTitle = trustedHeadline(sourceHeadline, clean(parsed.ai_hook_title));
     return {
-      ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
+      ai_hook_title: candidateTitle,
       ai_summary: summary.length ? summary : fallback.ai_summary,
-      tags: (Array.isArray(parsed.tags) ? parsed.tags : ["#World"])
-        .map((x: string) => (x.startsWith("#") ? x : "#" + x))
-        .slice(0, 4),
+      tags: deterministicTags(candidateTitle, section, ""),
     };
   } catch {
     return fallback;
@@ -426,7 +467,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
     await Promise.all(
       items.map(async (item) => {
         const section = category(item.title + " " + item.desc, item.category, item.region);
-        const brief = await aiBrief(item.title, item.desc);
+        const brief = await aiBrief(item.title, item.desc, section);
         const safe = await resolveSafeImage(item.image || "", section);
         return {
           id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
@@ -437,7 +478,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
               ? new Date(item.date).toISOString()
               : new Date().toISOString(),
           source: item.source,
-          original_title: item.title,
+          original_title: headlineForDisplay(item.title),
           original_description: stripJunk(item.desc),
           ai_hook_title: brief.ai_hook_title,
           ai_summary: sanitizeSummary(brief.ai_summary),
