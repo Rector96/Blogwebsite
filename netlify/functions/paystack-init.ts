@@ -14,6 +14,9 @@ export default async (req: Request) => {
   const company = cleanText(body.company, 160);
   const headline = cleanText(body.headline, 180);
   const ctaUrl = cleanText(body.cta_url, 500);
+  const creativeMode = String(body.creative_mode || "upload") === "design" ? "design" : "upload";
+  const creativeUrl = cleanText(body.creative_url, 1000);
+  const creativeNotes = cleanText(body.creative_notes, 1000);
   const baseAmount = pkg ? (currency === "USD" ? pkg.usd : pkg.ngn) : 0;
   const amountSubunit = baseAmount * 100;
 
@@ -24,6 +27,7 @@ export default async (req: Request) => {
     return json({ error: "Choose a valid sponsorship package and enter a valid email." }, 400);
   }
   if (ctaUrl && !/^https?:\/\//i.test(ctaUrl)) return json({ error: "Website URL must start with http:// or https://." }, 400);
+  if (creativeMode === "upload" && !creativeUrl) return json({ error: "Upload your advert creative or choose RWDNEWS design it." }, 400);
 
   const reference = makeReference();
   const { error: insertError } = await db.from("sponsor_payments").insert({
@@ -41,6 +45,10 @@ export default async (req: Request) => {
     company: company || null,
     headline: headline || null,
     cta_url: ctaUrl || null,
+    creative_mode: creativeMode,
+    creative_url: creativeUrl || null,
+    creative_notes: creativeNotes || null,
+    design_requested: creativeMode === "design",
     placement: pkg.placement,
     duration_days: pkg.days,
     status: "pending",
