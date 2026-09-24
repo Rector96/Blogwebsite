@@ -125,11 +125,12 @@ function money(value: number, currency: "USD" | "NGN") {
 function AdvertisePage() {
   const [selected, setSelected] = useState(packages[0].code);
   const [currency, setCurrency] = useState<"USD" | "NGN">("NGN");
-  const [form, setForm] = useState({ email: "", name: "", company: "", headline: "", cta_url: "" });
+  const [form, setForm] = useState({ email: "", name: "", company: "", headline: "", cta_url: "", creative_mode: "upload", creative_url: "", creative_notes: "" });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const selectedPackage = packages.find((p) => p.code === selected) || packages[0];
+  const creativeSpec = selected === "sidebar" ? "Vertical creative · mobile-safe" : selected === "newsletter" ? "Email banner · landscape" : "Landscape creative · responsive desktop + mobile";
   const price = currency === "USD" ? selectedPackage.usd : selectedPackage.ngn;
 
   useEffect(() => {
@@ -152,6 +153,15 @@ function AdvertisePage() {
       )
       .finally(() => setBusy(false));
   }, []);
+
+  const uploadCreative = async (file: File) => {
+    if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) throw new Error("Use JPG, PNG, WebP or AVIF.");
+    if (file.size > 5 * 1024 * 1024) throw new Error("Creative must be 5 MB or smaller.");
+    const data = await new Promise<string>((resolve,reject)=>{const reader=new FileReader(); reader.onload=()=>resolve(String(reader.result||"")); reader.onerror=()=>reject(new Error("Could not read creative.")); reader.readAsDataURL(file);});
+    const response=await fetch("/api/advertiser/creative-upload",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({data,mime_type:file.type})});
+    const payload=await response.json().catch(()=>({})); if(!response.ok) throw new Error(payload.error||"Creative upload failed.");
+    setForm(v=>({...v,creative_url:String(payload.url||"")}));
+  };
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -286,11 +296,20 @@ function AdvertisePage() {
               />
               <input
                 type="url"
-                placeholder="Website URL"
+                placeholder="Website URL / destination"
                 value={form.cta_url}
                 onChange={(e) => setForm((v) => ({ ...v, cta_url: e.target.value }))}
                 className="h-11 w-full border px-3 text-sm"
               />
+              <div className="border bg-neutral-50 p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Creative</p>
+                <p className="mt-1 text-xs text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 5 MB.</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"upload"}))} className={form.creative_mode==="upload"?"bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"border px-3 py-2 text-xs font-bold"}>I have my advert</button>
+                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"bg-neutral-950 px-3 py-2 text-xs font-bold text-white":"border px-3 py-2 text-xs font-bold"}>RWDNEWS design it</button>
+                </div>
+                {form.creative_mode==="upload" ? <div className="mt-3"><label className="block cursor-pointer border border-dashed bg-white p-4 text-center text-xs font-semibold">Upload advert creative<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={e=>{const f=e.target.files?.[0]; if(f) void uploadCreative(f).catch(err=>setMessage(err instanceof Error?err.message:"Creative upload failed."));}} /></label>{form.creative_url ? <img src={form.creative_url} alt="Advert creative preview" className="mt-3 max-h-48 w-full rounded object-contain" /> : null}</div> : <textarea placeholder="Tell our design team what you want: product, offer, colors, CTA, preferred style…" value={form.creative_notes} onChange={e=>setForm(v=>({...v,creative_notes:e.target.value}))} className="mt-3 min-h-24 w-full border bg-white p-3 text-sm" />}
+              </div>
               <button
                 disabled={busy}
                 className="h-12 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50"
