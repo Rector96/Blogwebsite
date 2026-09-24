@@ -199,6 +199,9 @@ export default async (req: Request) => {
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
           why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rwdnews.netlify.app", 500),
           rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement || "sidebar",
+          creative_url: clean(payment.creative_url || "", 1000) || null,
+          logo_url: clean(payment.logo_url || "", 1000) || null,
+          creative_alt: clean(payment.headline || sponsorName, 180),
           active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, starts_at: starts, ends_at: ends,
         }).select("id").single();
         if (error) return json({ error: error.message }, 400);
