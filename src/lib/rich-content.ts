@@ -6,7 +6,7 @@ export function sanitizeArticleHtml(input: string) {
   doc.querySelectorAll("script,style,iframe,object,embed,form,svg").forEach(n=>n.remove());
   doc.body.querySelectorAll("*").forEach((el) => {
     if (!allowed.has(el.tagName)) { el.replaceWith(...Array.from(el.childNodes)); return; }
-    [...el.attributes].forEach(a => {
+    Array.from(el.attributes).forEach(a => {
       const name=a.name.toLowerCase(), val=a.value.trim();
       if (name.startsWith("on") || name==="style" || name==="class") el.removeAttribute(a.name);
       if (name==="data-align" && !/^(left|center|right)$/.test(val)) el.removeAttribute(a.name);
