@@ -189,6 +189,9 @@ export default function StoryPage() {
             headline: title,
             description,
             datePublished: article.timestamp,
+            dateModified: article.timestamp,
+            articleSection: article.category || "News",
+            keywords: Array.isArray(article.tags) ? article.tags.map((tag) => String(tag).replace(/^#/, "")).join(", ") : undefined,
             mainEntityOfPage: canonical,
             url: canonical,
             image: article.image ? [article.image] : undefined,
@@ -257,6 +260,10 @@ export default function StoryPage() {
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
         <meta property="og:image" content={article.image || "https://rwdnews.netlify.app/rwdnews-logo.svg"} />
+        <meta property="og:type" content="article" />
+        <meta property="article:published_time" content={article.timestamp} />
+        <meta property="article:section" content={article.category || "News"} />
+        <meta property="article:publisher" content="RWDNEWS" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
