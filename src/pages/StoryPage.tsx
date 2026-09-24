@@ -355,7 +355,7 @@ export default function StoryPage() {
         {sponsor ? (
           <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
             <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p>
-            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
+            {sponsor.creativeUrl ? <img src={sponsor.creativeUrl} alt="" className="mb-4 max-h-56 w-full rounded object-contain" loading="lazy" /> : null}\n            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
             <a
               href={sponsor.ctaUrl}
               target="_blank"
