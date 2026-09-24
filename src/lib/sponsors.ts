@@ -22,6 +22,8 @@ export async function fetchSponsors(): Promise<SponsoredOffer[]> {
       "id, slug, sponsor_name, headline, why_matters, cta_text, cta_url, rate_highlight, disclosure, placement, priority, creative_url, creative_alt",
     )
     .eq("active", true)
+    .or("starts_at.is.null,starts_at.lte." + new Date().toISOString())
+    .or("ends_at.is.null,ends_at.gte." + new Date().toISOString())
     .order("priority", { ascending: true });
 
   if (error || !data?.length) return [];
