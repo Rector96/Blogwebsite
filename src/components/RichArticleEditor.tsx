@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ClipboardEvent } from "react";
 
-type Props = { value: string; onChange: (value: string) => void; placeholder?: string };
+type Props = { value: string; onChange: (value: string) => void; placeholder?: string; onImageUpload?: (file: File) => Promise<string | null> };
 
 const commands = [
   ["bold","B"],["italic","I"],["underline","U"],["formatBlock","H2"],["insertUnorderedList","•"],["insertOrderedList","1."],["justifyLeft","L"],["justifyCenter","C"],["justifyRight","R"],
@@ -17,7 +17,7 @@ function cleanWordHtml(html: string) {
   return doc.body.innerHTML;
 }
 
-export default function RichArticleEditor({ value, onChange, placeholder }: Props) {
+export default function RichArticleEditor({ value, onChange, placeholder, onImageUpload }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (ref.current && ref.current.innerHTML !== value) ref.current.innerHTML = value; }, [value]);
 
@@ -27,7 +27,7 @@ export default function RichArticleEditor({ value, onChange, placeholder }: Prop
     onChange(ref.current?.innerHTML || "");
   };
 
-  const onPaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+  const onPaste = (e: ClipboardEvent<HTMLDivElement>) => {
     const html = e.clipboardData.getData("text/html");
     if (!html) return;
     e.preventDefault();
@@ -38,6 +38,8 @@ export default function RichArticleEditor({ value, onChange, placeholder }: Prop
   return <div className="overflow-hidden border bg-white">
     <div className="flex flex-wrap items-center gap-1 border-b bg-neutral-50 p-2">
       {commands.map(([cmd,label]) => <button key={cmd+label} type="button" title={cmd} onMouseDown={e=>e.preventDefault()} onClick={()=>run(cmd, cmd==="formatBlock" ? "<h2>" : undefined)} className="grid h-8 min-w-8 place-items-center rounded border bg-white px-2 text-xs font-bold text-neutral-700 hover:bg-neutral-100">{label}</button>)}
+      <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>{const url=window.prompt("Image URL"); if(url) run("insertImage",url)}} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Image URL</button>
+      {onImageUpload ? <label className="grid h-8 cursor-pointer place-items-center rounded border bg-white px-2 text-xs font-bold">Upload Image<input type="file" accept="image/jpeg,image/png,image/webp,image/avif" className="hidden" onChange={async e=>{const f=e.target.files?.[0]; if(!f) return; const url=await onImageUpload(f); if(url) run("insertImage",url); e.currentTarget.value="";}} /></label> : null}
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>{const url=window.prompt("Link URL"); if(url) run("createLink",url)}} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Link</button>
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>run("removeFormat")} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Clear</button>
     </div>
