@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import { randomUUID } from "node:crypto";
 
 const json=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{"content-type":"application/json"}});
 export default async (req:Request)=>{
@@ -13,7 +14,7 @@ export default async (req:Request)=>{
   const raw=Buffer.from(data.split(",")[1]||"","base64");
   if(raw.length>4*1024*1024) return json({error:"Image must be 4 MB or smaller."},400);
   const ext=mime.includes("png")?"png":mime.includes("webp")?"webp":mime.includes("avif")?"avif":"jpg";
-  const path="advertiser-creatives/"+Date.now().toString(36)+"-"+crypto.randomUUID()+"."+ext;
+  const path="advertiser-creatives/"+Date.now().toString(36)+"-"+randomUUID()+"."+ext;
   const db=createClient(url,key);
   const {error}=await db.storage.from("rwdnews-images").upload(path,raw,{contentType:mime||"image/jpeg",upsert:false});
   if(error) return json({error:"Could not store creative."},500);
