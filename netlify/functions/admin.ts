@@ -204,12 +204,12 @@ export default async (req: Request) => {
           creative_url: clean(payment.creative_url || "", 1000) || null,
           logo_url: clean(payment.logo_url || "", 1000) || null,
           creative_alt: clean(payment.headline || sponsorName, 180),
-          active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, starts_at: starts, ends_at: ends,
+          active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount / Math.max(1, Number(payment.duration_months || 1)) : null, monthly_fee_naira: null, starts_at: starts, ends_at: ends,
         }).select("id").single();
         if (error) return json({ error: error.message }, 400);
         sponsorId = sponsor?.id || null;
       } else {
-        await database.from("sponsors").update({ active: true, starts_at: starts, ends_at: ends, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, updated_at: new Date().toISOString() }).eq("id", sponsorId);
+        await database.from("sponsors").update({ active: true, starts_at: starts, ends_at: ends, currency: "USD", monthly_fee_usd: payment.currency === "USD" ? payment.amount / Math.max(1, Number(payment.duration_months || 1)) : null, monthly_fee_naira: null, updated_at: new Date().toISOString() }).eq("id", sponsorId);
       }
 
       await database.from("sponsor_payments").update({ sponsor_id: sponsorId, starts_at: starts, ends_at: ends, updated_at: new Date().toISOString() }).eq("reference", reference);
@@ -242,8 +242,8 @@ export default async (req: Request) => {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload?.status) return json({ error: payload?.message || provider.toUpperCase() + " verification failed." }, 502);
 
-      const expectedCurrency = String(paymentRow.currency || "NGN").toUpperCase();
-      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? paymentRow?.amount ?? 0);
+      const expectedCurrency = String(paymentRow.currency || "USD").toUpperCase();
+      const expectedAmount = Number(paymentRow?.amount ?? paymentRow?.amount_subunit ?? 0);
       const amountOk = String(payload.data?.currency || "").toUpperCase() === expectedCurrency
         && Number(payload.data?.amount ?? payload.data?.amount_paid ?? 0) === expectedAmount;
       const status = payload.data?.status === "success" && amountOk ? "paid" : (payload.data?.status === "failed" ? "failed" : "pending");
