@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env, json, SPONSOR_PACKAGES, paystackRequest } from "../../src/lib/paystack-server";
+import { koraRequest } from "../../src/lib/kora-server";
 
 function db() {
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
@@ -228,19 +229,35 @@ export default async (req: Request) => {
 
     if (body.action === "payment_verify") {
       const reference = clean(body.reference, 120);
-      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,currency").eq("reference", reference).maybeSingle()).data;
+      const paymentRow = (await database.from("sponsor_payments").select("amount_subunit,amount_kobo,amount,currency,payment_provider").eq("reference", reference).maybeSingle()).data;
       if (!paymentRow) return json({ error: "Payment reference not found." }, 404);
-      const response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
+
+      const provider = String(paymentRow.payment_provider || "kora").toLowerCase();
+      let response: Response;
+      if (provider === "kora") {
+        response = await koraRequest("/api/v1/charges/" + encodeURIComponent(reference));
+      } else {
+        response = await paystackRequest("/transaction/verify/" + encodeURIComponent(reference));
+      }
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || !payload?.status) return json({ error: payload?.message || "Paystack verification failed." }, 502);
+      if (!response.ok || !payload?.status) return json({ error: payload?.message || provider.toUpperCase() + " verification failed." }, 502);
+
       const expectedCurrency = String(paymentRow.currency || "NGN").toUpperCase();
-      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? 0);
+      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? paymentRow?.amount ?? 0);
       const amountOk = String(payload.data?.currency || "").toUpperCase() === expectedCurrency
-        && Number(payload.data?.amount) === expectedAmount;
+        && Number(payload.data?.amount ?? payload.data?.amount_paid ?? 0) === expectedAmount;
       const status = payload.data?.status === "success" && amountOk ? "paid" : (payload.data?.status === "failed" ? "failed" : "pending");
-      await database.from("sponsor_payments").update({ status, paystack_status: String(payload.data?.status || ""), paystack_transaction_id: payload.data?.id ? String(payload.data.id) : null, paid_at: status === "paid" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }).eq("reference", reference);
-      await audit(database, "payment_verified", "sponsor_payment", reference, { status });
-      return json({ ok: true, status });
+      const providerTransactionId = payload.data?.payment_reference || payload.data?.reference || payload.data?.id || null;
+      await database.from("sponsor_payments").update({
+        status,
+        provider_status: String(payload.data?.status || ""),
+        provider_transaction_id: providerTransactionId ? String(providerTransactionId) : null,
+        provider_currency: payload.data?.currency ? String(payload.data.currency).toUpperCase() : null,
+        paid_at: status === "paid" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
+      }).eq("reference", reference);
+      await audit(database, "payment_verified", "sponsor_payment", reference, { status, provider });
+      return json({ ok: true, status, payment_provider: provider });
     }
 
     return json({ error: "Unknown action" }, 400);
