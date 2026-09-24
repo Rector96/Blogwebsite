@@ -188,6 +188,7 @@ export default async (req: Request) => {
       if (!payment || payment.status !== "paid") return json({ error: "Only verified paid transactions can be activated." }, 400);
 
       const pkg = SPONSOR_PACKAGES[payment.package_code as keyof typeof SPONSOR_PACKAGES];
+      if (payment.design_requested && !payment.creative_url) return json({ error: "This campaign requested RWDNEWS design. Upload the finished creative before activating it." }, 400);
       const starts = payment.starts_at || new Date().toISOString();
       const ends = payment.ends_at || new Date(Date.parse(starts) + Number(payment.duration_days || pkg?.days || 30) * 86400000).toISOString();
       let sponsorId = payment.sponsor_id as string | null;
@@ -255,7 +256,7 @@ export default async (req: Request) => {
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
     database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").gte("created_at", thirtyDaysAgo).order("created_at", { ascending: false }).range(0, 49999),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
+    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
     database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned,story_type,category,region,subject,author_name,image").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
@@ -331,7 +332,8 @@ export default async (req: Request) => {
       sponsor_clicks: Number(sponsorClickCount.count || 0),
       advertiser_leads: (leads.data || []).length,
       newsletter_subscribers: (newsletter.data || []).filter((n:any)=>n.status==="active").length,
-      paid_revenue_naira: revenue,
+      paid_revenue_naira: revenueNaira,
+      paid_revenue_usd: revenueUsd,
       pending_payments: (payments.data || []).filter((p:any)=>p.status==="pending").length,
     },
     daily: Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).slice(-30).map(([day,value])=>({day,value})),
