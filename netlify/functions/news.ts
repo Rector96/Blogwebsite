@@ -131,69 +131,66 @@ function rssImage(item: any) {
   return match?.[1] || "";
 }
 
-/** Category keyword for Unsplash — generic stock, not publisher photos */
-function unsplashQuery(cat: string) {
+/** Build a stock-photo search phrase from the actual story, with a category fallback. */
+function stockImageQuery(title: string, cat: string) {
+  const titleWords = clean(title).toLowerCase().replace(/[^a-z0-9\\s]/g, " ").split(/\\s+/)
+    .filter((w) => w.length >= 4 && !stop.has(w)).slice(0, 6);
+  if (titleWords.length >= 2) return titleWords.join(" ");
   const map: Record<string, string> = {
-    Sports: "football stadium match",
-    Tech: "technology computer abstract",
-    Business: "business finance office",
-    Crypto: "cryptocurrency digital finance",
-    Entertainment: "entertainment stage lights",
-    Nigeria: "lagos nigeria city",
-    Ghana: "accra ghana africa",
-    Africa: "africa landscape city",
-    World: "world news city skyline",
-    Europe: "europe city architecture",
-    Asia: "asia city skyline",
-    "Middle East": "middle east city",
+    Sports: "football stadium sports match", Tech: "technology computer innovation", Business: "business finance markets",
+    Crypto: "cryptocurrency digital finance", Entertainment: "entertainment music film stage", Nigeria: "Nigeria Lagos city",
+    Ghana: "Ghana Accra city", Africa: "Africa city economy", World: "world news city", Europe: "Europe city",
+    Asia: "Asia city technology", "Middle East": "Middle East city",
   };
-  return map[cat] || "news journalism desk";
+  return map[cat] || "global news journalism";
 }
 
-/**
- * Safe image policy:
- * 1) RSS / GDELT thumbnail URL only (hotlink, not re-hosted)
- * 2) Unsplash royalty-free category image if key set
- * 3) RWDNEWS logo placeholder
- * We do NOT scrape publisher og:image HTML (copyright risk).
- */
-async function resolveSafeImage(rssOrGdeltImage: string, section: string) {
-  if (rssOrGdeltImage && /^https?:\/\//i.test(rssOrGdeltImage)) {
-    return {
-      image: rssOrGdeltImage,
-      image_credit: "Publisher feed",
-      image_license: "Feed preview",
-    };
+async function pexelsImage(query: string) {
+  const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
+  if (!key) return null;
+  try {
+    const u = new URL("https://api.pexels.com/v1/search");
+    u.searchParams.set("query", query); u.searchParams.set("per_page", "5"); u.searchParams.set("orientation", "landscape");
+    const r = await fetch(u, { headers: { Authorization: key, Accept: "application/json" }, signal: AbortSignal.timeout(4500) });
+    if (!r.ok) return null;
+    const photos = Array.isArray((await r.json())?.photos) ? (await r.clone().json().catch(() => [])) : [];
+    return null;
+  } catch { return null; }
+}
+
+async function resolveSafeImage(rssOrGdeltImage: string, title: string, section: string) {
+  if (rssOrGdeltImage && /^https?:\\/\\//i.test(rssOrGdeltImage)) {
+    return { image: rssOrGdeltImage, image_credit: "Publisher feed", image_license: "Feed preview" };
   }
-  const key = process.env["UNSPLASH_ACCESS_KEY"] || "";
+  const query = stockImageQuery(title, section);
+  const pexelsKey = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
+  if (pexelsKey) {
+    try {
+      const u = new URL("https://api.pexels.com/v1/search");
+      u.searchParams.set("query", query); u.searchParams.set("per_page", "5"); u.searchParams.set("orientation", "landscape");
+      const r = await fetch(u, { headers: { Authorization: pexelsKey, Accept: "application/json" }, signal: AbortSignal.timeout(4500) });
+      if (r.ok) {
+        const data = await r.json() as any;
+        const photo = Array.isArray(data?.photos) ? data.photos.find((p: any) => p?.src?.large || p?.src?.medium) : null;
+        const url = photo?.src?.large || photo?.src?.medium || "";
+        if (url) return { image: String(url), image_credit: photo?.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Photos provided by Pexels", image_license: "Pexels License" };
+      }
+    } catch { /* fall through to Unsplash */ }
+  }
+  const key = process.env.UNSPLASH_ACCESS_KEY || "";
   if (key) {
     try {
-      const q = encodeURIComponent(unsplashQuery(section));
-      const u = `https://api.unsplash.com/photos/random?query=${q}&orientation=landscape&content_filter=high`;
-      const r = await fetch(u, {
-        headers: { Authorization: `Client-ID ${key}`, "Accept-Version": "v1" },
-        signal: AbortSignal.timeout(4000),
-      });
+      const u = new URL("https://api.unsplash.com/photos/random");
+      u.searchParams.set("query", query); u.searchParams.set("orientation", "landscape"); u.searchParams.set("content_filter", "high");
+      const r = await fetch(u, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" }, signal: AbortSignal.timeout(4500) });
       if (r.ok) {
-        const data = (await r.json()) as any;
+        const data = await r.json() as any;
         const url = data?.urls?.regular || data?.urls?.small || "";
-        if (url) {
-          return {
-            image: String(url),
-            image_credit: data?.user?.name ? `Photo: ${data.user.name} / Unsplash` : "Unsplash",
-            image_license: "Unsplash License",
-          };
-        }
+        if (url) return { image: String(url), image_credit: data?.user?.name ? "Photo: " + data.user.name + " / Unsplash" : "Unsplash", image_license: "Unsplash License" };
       }
-    } catch {
-      /* fall through */
-    }
+    } catch { /* fall through */ }
   }
-  return {
-    image: PLACEHOLDER_IMAGE,
-    image_credit: "RockBrief",
-    image_license: "Site asset",
-  };
+  return { image: PLACEHOLDER_IMAGE, image_credit: "RockBrief", image_license: "Site asset" };
 }
 
 async function getRss() {
@@ -445,7 +442,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
       qualityItems.map(async (item) => {
         const section = category(item.title + " " + item.desc, item.category, item.region);
         const brief = await aiBrief(item.title, item.desc);
-        const safe = await resolveSafeImage(item.image || "", section);
+        const safe = await resolveSafeImage(item.image || "", item.title, section);
         return {
           id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
           original_url: item.link,
