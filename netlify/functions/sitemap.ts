@@ -52,6 +52,13 @@ export async function handler(event: any) {
 
   const staticPaths = [
     "/",
+    "/world",
+    "/africa",
+    "/nigeria",
+    "/business",
+    "/tech",
+    "/crypto",
+    "/entertainment",
     "/sport",
     "/sport/predictions",
     "/about",
