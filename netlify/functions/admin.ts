@@ -317,11 +317,6 @@ export default async (req: Request) => {
     const key = String(row.sponsor_id || row.sponsor_slug || "unknown");
     clickMap.set(key, (clickMap.get(key) || 0) + 1);
   }
-  const paid = (payments.data || []).filter((p: any) => p.status === "paid");
-  const revenueNaira = paid.filter((p: any) => String(p.currency || "").toUpperCase() === "NGN")
-    .reduce((sum: number, p: any) => sum + Number(p.amount_naira ?? p.amount ?? 0), 0);
-  const revenueUsd = paid.filter((p: any) => String(p.currency || "").toUpperCase() === "USD")
-    .reduce((sum: number, p: any) => sum + Number(p.amount_usd ?? p.amount ?? 0), 0);
   const recommendationImpressions = Number(metrics.engagement?.recommendation_impressions || 0);
   const recommendationClicks = Number(metrics.engagement?.recommendation_clicks || 0);
   return json({
@@ -345,8 +340,8 @@ export default async (req: Request) => {
       sponsor_clicks: Number(metrics.sponsor_clicks || 0),
       advertiser_leads: Number(metrics.advertiser_leads || 0),
       newsletter_subscribers: Number(metrics.newsletter_subscribers || 0),
-      paid_revenue_naira: revenueNaira,
-      paid_revenue_usd: revenueUsd,
+      paid_revenue_naira: Number(metrics.paid_revenue_naira || 0),
+      paid_revenue_usd: Number(metrics.paid_revenue_usd || 0),
       pending_payments: Number(metrics.pending_payments || 0),
     },
     daily: metrics.daily || [],
