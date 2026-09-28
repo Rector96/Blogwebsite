@@ -286,6 +286,13 @@ function scoreItems(items: any[]) {
     const score = Math.round(Math.min(100, freshness + domains.size * 8 + cluster.length * 7 + catBoost));
     return {
       ...item,
+      desc:
+        stripJunk(item.desc || "") ||
+        cluster
+          .map((x) => stripJunk(x.desc || ""))
+          .filter((x) => x.length >= 80)
+          .sort((a, b) => b.length - a.length)[0] ||
+        "",
       trendScore: score,
       trendLabel:
         cluster.length >= 3 || score >= 70
@@ -296,6 +303,15 @@ function scoreItems(items: any[]) {
       sources: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 5),
     };
   });
+}
+
+function collapseNearDuplicates(items: any[]) {
+  const kept: any[] = [];
+  for (const item of [...items].sort((a, b) => b.trendScore - a.trendScore)) {
+    if (kept.some((existing) => similarity(item.title, existing.title) >= 0.86)) continue;
+    kept.push(item);
+  }
+  return kept;
 }
 
 function pickBalanced(items: any[], limit = 48) {
@@ -421,7 +437,7 @@ function dedupe(items: any[]) {
 async function buildArticles(): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
-  const items = pickBalanced(scored, 48);
+  const items = pickBalanced(collapseNearDuplicates(scored), 48);
   const results = (
     await Promise.all(
       items.map(async (item) => {
