@@ -153,25 +153,27 @@ export function HomeView({
         <div className="border-t border-neutral-100 bg-neutral-50/70">
           <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6">
             <div className="flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {tags.map((t: string) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTag(t);
-                    const target =
-                      t === "All" ? "/" : t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
-                    window.history.pushState({ category: t }, "", target);
-                  }}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
-                    selectedTag === t
-                      ? "border-neutral-950 bg-neutral-950 text-white shadow-sm"
-                      : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+              {tags.map((t: string) => {
+                const target = t === "All" ? "/" : t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
+                return (
+                  <a
+                    key={t}
+                    href={target}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setSelectedTag(t);
+                      window.history.pushState({ category: t }, "", target);
+                    }}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                      selectedTag === t
+                        ? "border-neutral-950 bg-neutral-950 text-white shadow-sm"
+                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+                    }`}
+                  >
+                    {t}
+                  </a>
+                );
+              })}
             </div>
             <p className="mt-1.5 text-[10px] text-neutral-400">
               {selectedTag === "All"
