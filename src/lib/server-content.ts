@@ -2,17 +2,17 @@ const allowedTags = new Set(["P","BR","STRONG","B","EM","I","U","H2","H3","UL","
 
 export function sanitizeArticleHtmlServer(input: string) {
   let html = String(input || "");
-  html = html.replace(/<!--[\\s\\S]*?-->/g, "");
-  html = html.replace(/<\\/?(script|style|iframe|object|embed|form|svg|math|link|meta|base)[^>]*>/gi, "");
-  html = html.replace(/\\s+on[a-z0-9_-]+\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)/gi, "");
-  html = html.replace(/\\s+(style|class|id|srcdoc)\\s*=\\s*(?:"[^"]*"|'[^']*'|[^\\s>]+)/gi, "");
-  html = html.replace(/<(\\/?)([a-z0-9-]+)([^>]*)>/gi, (full, slash, tag, attrs) => {
+  html = html.replace(/<!--[\s\S]*?-->/g, "");
+  html = html.replace(/<\/?(script|style|iframe|object|embed|form|svg|math|link|meta|base)[^>]*>/gi, "");
+  html = html.replace(/\s+on[a-z0-9_-]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  html = html.replace(/\s+(style|class|id|srcdoc)\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  html = html.replace(/<(\/?)([a-z0-9-]+)([^>]*)>/gi, (full, slash, tag, attrs) => {
     const upper = String(tag).toUpperCase();
     if (!allowedTags.has(upper)) return "";
     if (slash) return "</" + String(tag).toLowerCase() + ">";
     if (upper === "BR") return "<br>";
     let safeAttrs = String(attrs || "");
-    safeAttrs = safeAttrs.replace(/\\s+([^\\s=]+)\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))/g, (_m, name, dq, sq, bare) => {
+    safeAttrs = safeAttrs.replace(/\s+([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g, (_m, name, dq, sq, bare) => {
       const key = String(name).toLowerCase();
       const value = String(dq ?? sq ?? bare ?? "").trim();
       if (key === "data-align") return /^(left|center|right)$/.test(value) ? ' data-align="' + value + '"' : "";
