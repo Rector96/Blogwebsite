@@ -293,7 +293,7 @@ function scoreItems(items: any[]) {
           : cluster.length >= 2 || score >= 48
             ? "Developing"
             : "Fresh",
-      sources: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 5),
+      sources: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 4),
     };
   });
 }
@@ -331,7 +331,7 @@ function expandFallbackSummary(title: string, desc: string): string[] {
   const t = stripJunk(title);
   if (d.length > 40) {
     const sentences = d.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 15);
-    if (sentences.length >= 2) return sanitizeSummary(sentences.slice(0, 5));
+    if (sentences.length >= 2) return sanitizeSummary(sentences.slice(0, 4));
     const chunks: string[] = [];
     let rest = d;
     while (rest.length > 100 && chunks.length < 4) {
@@ -341,9 +341,9 @@ function expandFallbackSummary(title: string, desc: string): string[] {
       rest = rest.slice(cut).trim();
     }
     if (rest) chunks.push(rest);
-    return sanitizeSummary(chunks.length ? chunks : [d]).slice(0, 5);
+    return sanitizeSummary(chunks.length ? chunks : [d]).slice(0, 4);
   }
-  return sanitizeSummary([d || t]).slice(0, 5);
+  return sanitizeSummary([d || t]).slice(0, 4);
 }
 
 async function aiBrief(title: string, desc: string) {
@@ -388,7 +388,7 @@ async function aiBrief(title: string, desc: string) {
     const text = (response as any)?.text;
     if (!text) return fallback;
     const parsed = JSON.parse(text);
-    const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 5);
+    const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 4);
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
       ai_summary: summary.length ? summary : fallback.ai_summary,
