@@ -62,7 +62,7 @@ export default function AdminPage() {
   const [researchMode, setResearchMode] = useState<"news" | "documentary">("news");
   const [researchResult, setResearchResult] = useState<any>(null);
   const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", duration_months: "1", disclosure: "Sponsored · Paid placement" });
-  const [storyForm, setStoryForm] = useState({
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);\n  const [editingArticleBusy, setEditingArticleBusy] = useState(false);\n  const [storyForm, setStoryForm] = useState({
     headline: "", description: "", body: "", category: "Business", region: "Global",
     story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
     image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
@@ -200,6 +200,58 @@ export default function AdminPage() {
     });
   };
 
+  const editArticle = async (id: string) => {
+    setEditingArticleBusy(true); setError("");
+    try {
+      const result = await api({ method: "POST", body: JSON.stringify({ action: "article_get", id }) });
+      const a = result.article;
+      setEditingArticleId(String(a.id));
+      setStoryForm({
+        headline: String(a.original_title || ""),
+        description: String(a.original_description || ""),
+        body: String(a.body || ""),
+        category: String(a.category || "Business"),
+        region: String(a.region || "Global"),
+        story_type: String(a.story_type || "RockBrief ORIGINAL"),
+        subject: String(a.subject || ""),
+        author_name: String(a.author_name || "RockBrief Editorial"),
+        image: String(a.image || ""),
+        image_credit: String(a.image_credit || ""),
+        image_license: String(a.image_license || ""),
+        image_source_url: String(a.image_source_url || ""),
+        original_url: String(a.original_url || ""),
+        tags: Array.isArray(a.tags) ? a.tags.map((x: unknown) => String(x).replace(/^#/, "")).join(", ") : "",
+        publish_at: a.timestamp ? new Date(a.timestamp).toISOString().slice(0,16) : "",
+        editorial_status: a.editorial_status === "hidden" ? "draft" : String(a.editorial_status || "published"),
+        featured: Boolean(a.featured), pinned: Boolean(a.pinned),
+      });
+      setTab("news");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { setError(e instanceof Error ? e.message : "Could not load article."); }
+    finally { setEditingArticleBusy(false); }
+  };
+
+  const saveEditedStory = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingArticleId) return;
+    setError("");
+    await post({
+      action: "article_update",
+      id: editingArticleId,
+      ...storyForm,
+      tags: storyForm.tags.split(",").map(x => x.trim()).filter(Boolean),
+      editorial_status: storyForm.editorial_status === "draft" ? "hidden" : storyForm.editorial_status,
+    });
+    setEditingArticleId(null);
+    setStoryForm({
+      headline: "", description: "", body: "", category: "Business", region: "Global",
+      story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
+      image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
+      image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
+      featured: false, pinned: false,
+    });
+  };
+
   const logout = async () => {
     await post({ action: "logout" });
     setAuthed(false); setData(null);
@@ -281,8 +333,8 @@ export default function AdminPage() {
 
       {tab === "news" ? <section className="space-y-6">
         <PageHeading title="News operations" subtitle="Publish original RockBrief stories and manage the source-backed wire." />
-        <Panel title="Create a story" subtitle="Use this for original reporting, interviews, analysis or verified announcements. Published stories appear in the public feed immediately.">
-          <form onSubmit={createStory} className="grid gap-3 md:grid-cols-2">
+        <Panel title={editingArticleId ? "Edit article" : "Create a story"} subtitle={editingArticleId ? "Update the complete article, metadata, image rights and publication state." : "Use this for original reporting, interviews, analysis or verified announcements. Published stories appear in the public feed immediately."}>
+          <form onSubmit={editingArticleId ? saveEditedStory : createStory} className="grid gap-3 md:grid-cols-2">
             <input required placeholder="Headline" value={storyForm.headline} onChange={e=>setStoryForm(v=>({...v,headline:e.target.value}))} className="h-11 border px-3 text-sm md:col-span-2" />
             <textarea required placeholder="Short description / lead" value={storyForm.description} onChange={e=>setStoryForm(v=>({...v,description:e.target.value}))} className="min-h-24 border p-3 text-sm md:col-span-2" />
             <div className="md:col-span-2"><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-neutral-500">Article editor</label><RichArticleEditor value={storyForm.body} onChange={body=>setStoryForm(v=>({...v,body}))} onImageUpload={uploadStoryImage} placeholder="Write or paste the full article here…" /></div>
@@ -309,11 +361,11 @@ export default function AdminPage() {
               <label className="flex items-center gap-2"><input type="checkbox" checked={storyForm.pinned} onChange={e=>setStoryForm(v=>({...v,pinned:e.target.checked}))} /> Pin story</label>
               <select value={storyForm.editorial_status} onChange={e=>setStoryForm(v=>({...v,editorial_status:e.target.value}))} className="h-9 border px-2"><option value="published">Publish now</option><option value="draft">Save as draft</option></select>
             </div>
-            <button disabled={busy} className="h-12 bg-neutral-950 px-5 text-xs font-bold text-white md:col-span-2">{storyForm.editorial_status === "draft" ? "Save draft" : "Publish story"}</button>
+            <button disabled={busy} className="h-12 bg-neutral-950 px-5 text-xs font-bold text-white md:col-span-2">{editingArticleId ? "Save article changes" : storyForm.editorial_status === "draft" ? "Save draft" : "Publish story"}</button>
             <p className="text-xs text-neutral-500 md:col-span-2">Image rights: only use images you own, licensed, or are otherwise permitted to publish. The source/credit fields are displayed on the story.</p>
           </form>
         </Panel>
-        <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {a.story_type || "WIRE"} · {a.category || "News"} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured })} className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
+        <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {a.story_type || "WIRE"} · {a.category || "News"} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy || editingArticleBusy} type="button" onClick={() => void editArticle(a.id)} className="border px-3 py-2 text-xs font-semibold">{editingArticleBusy ? "Loading…" : "Edit"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured }) className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
       </section> : null}
 
       {tab === "social" ? <SocialPanel articles={data.articles} copied={copied} onCopy={async (label, text) => { try { await navigator.clipboard.writeText(text); setCopied(label); window.setTimeout(() => setCopied(""), 1800); } catch { setCopied("Copy failed"); } }} /> : null}
