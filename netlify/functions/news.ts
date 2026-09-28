@@ -448,7 +448,12 @@ function dedupe(items: any[]) {
 
 async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
-  const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
+  const freshnessCutoff = Date.now() - 48 * 3600000;
+  const freshOnly = dedupe([...rssItems, ...gdeltItems]).filter((item) => {
+    const published = new Date(item.date || 0).getTime();
+    return Number.isFinite(published) && published >= freshnessCutoff;
+  });
+  const scored = scoreItems(freshOnly);
   const items = pickBalanced(collapseNearDuplicates(scored), 48);
   const qualityItems = items.filter((item) => stripJunk(item.desc || "").length >= 80);
   const maxNewAi = Math.max(0, Math.min(48, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 12)));
