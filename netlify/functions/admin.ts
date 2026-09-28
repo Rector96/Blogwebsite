@@ -14,15 +14,21 @@ function signature(payload: string) {
   if (!secret) throw new Error("ADMIN_SESSION_SECRET is not configured.");
   return createHmac("sha256", secret).update(payload).digest("hex");
 }
-function sessionCookie() {
+function sessionToken() {
   const payload = Buffer.from(JSON.stringify({ exp: Date.now() + 1000 * 60 * 60 * 12 })).toString("base64url");
-  return "rwdnews_admin=" + payload + "." + signature(payload) + "; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=43200";
+  return payload + "." + signature(payload);
+}
+function sessionCookie() {
+  return "rwdnews_admin=" + sessionToken() + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200";
 }
 function authorized(req: Request) {
+  const bearer = req.headers.get("authorization") || "";
+  const bearerToken = bearer.match(/^Bearer\s+(.+)$/i)?.[1] || "";
   const cookie = req.headers.get("cookie") || "";
-  const match = cookie.match(/(?:^|;\s*)rwdnews_admin=([^;]+)/);
-  if (!match) return false;
-  const parts = match[1].split(".");
+  const cookieToken = cookie.match(/(?:^|;\s*)rwdnews_admin=([^;]+)/)?.[1] || "";
+  const token = bearerToken || cookieToken;
+  if (!token) return false;
+  const parts = token.split(".");
   if (parts.length !== 2) return false;
   const [payload, sig] = parts;
   const expected = signature(payload);
@@ -54,7 +60,8 @@ export default async (req: Request) => {
       const password = env("ADMIN_PASSWORD");
       if (!password || !env("ADMIN_SESSION_SECRET")) return json({ error: "Admin login is not configured in Netlify." }, 503);
       if (String(body.password || "") !== password) return json({ error: "Invalid password." }, 401);
-      const token = sessionToken();\n      return json({ ok: true, session_token: token }, 200, { "set-cookie": "rwdnews_admin=" + token + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200", "cache-control": "no-store" });
+      const token = sessionToken();
+      return json({ ok: true, session_token: token }, 200, { "set-cookie": "rwdnews_admin=" + token + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200", "cache-control": "no-store" });
     }
 
     if (!authorized(req)) return json({ error: "Unauthorized" }, 401, { "cache-control": "no-store" });
