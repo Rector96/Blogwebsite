@@ -438,9 +438,11 @@ async function buildArticles(): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
   const items = pickBalanced(collapseNearDuplicates(scored), 48);
+  // Do not create indexable wire pages from title-only or otherwise thin source material.
+  const qualityItems = items.filter((item) => stripJunk(item.desc || "").length >= 80);
   const results = (
     await Promise.all(
-      items.map(async (item) => {
+      qualityItems.map(async (item) => {
         const section = category(item.title + " " + item.desc, item.category, item.region);
         const brief = await aiBrief(item.title, item.desc);
         const safe = await resolveSafeImage(item.image || "", section);
