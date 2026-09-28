@@ -17,8 +17,8 @@ export function sanitizeArticleHtmlServer(input: string) {
       const key = String(name).toLowerCase();
       const value = String(dq ?? sq ?? bare ?? "").trim();
       if (key === "data-align") return /^(left|center|right)$/.test(value) ? ' data-align="' + value + '"' : "";
-      if (key === "href") return /^https?:\\/\\//i.test(value) ? ' href="' + value.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener noreferrer"' : "";
-      if (key === "src") return /^https?:\\/\\//i.test(value) ? ' src="' + value.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '"' : "";
+      if (key === "href") return /^https?:\/\//i.test(value) ? ' href="' + value.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener noreferrer"' : "";
+      if (key === "src") return /^https?:\/\//i.test(value) ? ' src="' + value.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '"' : "";
       if (key === "alt" || key === "title") return ' ' + key + '="' + value.replace(/&/g, "&amp;").replace(/"/g, "&quot;") + '"';
       return "";
     });
