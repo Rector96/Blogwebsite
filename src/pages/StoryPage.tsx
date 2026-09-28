@@ -197,7 +197,7 @@ export default function StoryPage() {
               name: "RockBrief",
               logo: {
                 "@type": "ImageObject",
-                url: "https://rwdnews.netlify.app/rwdnews-logo.svg",
+                url: "/rwdnews-logo.svg",
               },
             },
           }
@@ -255,7 +255,7 @@ export default function StoryPage() {
         <meta property="og:title" content={`RockBrief — ${title}`} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={article.image || "https://rwdnews.netlify.app/rwdnews-logo.svg"} />
+        <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
 
@@ -353,7 +353,8 @@ export default function StoryPage() {
         {sponsor ? (
           <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
             <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p>
-            {sponsor.creativeUrl ? <img src={sponsor.creativeUrl} alt="" className="mb-4 max-h-56 w-full rounded object-contain" loading="lazy" /> : null}\n            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
+            {sponsor.creativeUrl ? <img src={sponsor.creativeUrl} alt="" className="mb-4 max-h-56 w-full rounded object-contain" loading="lazy" /> : null}
+            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
             <a
               href={sponsor.ctaUrl}
               target="_blank"
