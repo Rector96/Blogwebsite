@@ -323,7 +323,7 @@ ${canonical}`;
             {article.image_credit ? (
               <figcaption className="mt-2 text-xs leading-5 text-neutral-500">
                 {article.image_credit}
-                {article.image_source_url && /^https?:\\/\\//i.test(article.image_source_url) ? (
+                {article.image_source_url && /^https?:\/\//i.test(article.image_source_url) ? (
                   <>{" · "}<a href={article.image_source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Image source</a></>
                 ) : null}
               </figcaption>
