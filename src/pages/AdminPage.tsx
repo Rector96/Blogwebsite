@@ -56,6 +56,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState("dashboard");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<string>("");
   const [copied, setCopied] = useState("");
   const [researchTopic, setResearchTopic] = useState("");
   const [researchMode, setResearchMode] = useState<"news" | "documentary">("news");
@@ -73,6 +74,7 @@ export default function AdminPage() {
     try {
       const result = await api();
       setData(result);
+      setLastUpdated(String(result.generated_at || new Date().toISOString()));
       setAuthed(true);
       setError("");
       return true;
@@ -83,7 +85,11 @@ export default function AdminPage() {
       return false;
     }
   };
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const post = async (body: Record<string, unknown>) => {
     setBusy(true);
