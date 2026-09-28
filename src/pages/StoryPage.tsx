@@ -207,7 +207,11 @@ export default function StoryPage() {
             image: articleImage ? [articleImage] : undefined,
             author: article.author_name
               ? { "@type": "Person", name: article.author_name }
-              : { "@type": "Organization", name: "RockBrief" },
+              : {
+                  "@type": "Organization",
+                  name: "RockBrief Editorial Team",
+                  url: (typeof window !== "undefined" ? window.location.origin : "") + "/author/rockbrief-editorial",
+                },
             publisher: {
               "@type": "Organization",
               name: "RockBrief",
