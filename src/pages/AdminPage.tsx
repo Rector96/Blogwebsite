@@ -241,7 +241,7 @@ export default function AdminPage() {
       {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
 
       {tab === "dashboard" ? <section className="space-y-6">
-        <PageHeading title="Dashboard" subtitle="A live operating view of RockBrief." />
+        <PageHeading title="Dashboard" subtitle={lastUpdated ? `Live data · updated ${new Date(lastUpdated).toLocaleTimeString()}` : "Loading live data…"} />
         <MetricGrid overview={data.overview} />
         {data.engagement ? <EngagementPanel data={data.engagement} /> : null}
         <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
