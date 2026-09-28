@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { applyKoraPayment } from "./kora-verify";
-import { database, env, json } from "../../src/lib/kora-server";
+import { database, env, json, koraRequest } from "../../src/lib/kora-server";
 
 export default async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -36,7 +36,7 @@ export default async (req: Request) => {
   if (!reference) return json({ ok: true, ignored: true });
 
   try {
-    const result = await applyKoraPayment(reference, event.data);
+    // Re-query Kora so activation is based on the authoritative transaction record, not only the webhook payload.\n    const verificationResponse = await koraRequest("/api/v1/charges/" + encodeURIComponent(reference));\n    const verificationPayload = await verificationResponse.json().catch(() => ({}));\n    if (!verificationResponse.ok || !verificationPayload?.status || !verificationPayload?.data) {\n      return json({ error: "Transaction verification failed." }, 502);\n    }\n    const result = await applyKoraPayment(reference, verificationPayload.data);
     const db = database();
     if (db && result.ok) {
       await db.from("admin_audit_logs").insert({
