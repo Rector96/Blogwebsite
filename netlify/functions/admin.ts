@@ -34,6 +34,13 @@ function authorized(req: Request) {
   } catch { return false; }
 }
 function clean(value: unknown, max = 500) { return String(value ?? "").trim().slice(0, max); }
+function articleWordCount(html: string) {
+  return clean(String(html || "").replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " "), 100000)
+    .split(/\s+/).filter(Boolean).length;
+}
+function readingTime(words: number) {
+  return `${Math.max(1, Math.ceil(words / 180))} min read`;
+}
 function addMonthsIso(startIso: string, months: number) { const d = new Date(startIso); d.setMonth(d.getMonth() + Math.max(1, Math.floor(Number(months) || 1))); return d.toISOString(); }
 async function audit(database: any, action: string, entityType?: string, entityId?: string, details: Record<string, unknown> = {}) {
   await database.from("admin_audit_logs").insert({ action, entity_type: entityType || null, entity_id: entityId || null, details });
@@ -155,6 +162,7 @@ export default async (req: Request) => {
       const headline = clean(body.headline, 220);
       const description = clean(body.description, 1000);
       const bodyText = sanitizeArticleHtmlServer(String(body.body ?? "").trim().slice(0, 30000));
+      const bodyWords = articleWordCount(bodyText);
       const image = clean(body.image, 2000);
       const originalUrl = clean(body.original_url, 1000);
       const category = clean(body.category || "Business", 50);
@@ -167,6 +175,7 @@ export default async (req: Request) => {
       const imageSourceUrl = clean(body.image_source_url || originalUrl, 1000);
       const status = ["published","hidden","archived"].includes(String(body.editorial_status)) ? String(body.editorial_status) : "draft";
       if (!headline || !description || !bodyText || !image || !/^https?:\/\//i.test(image)) return json({ error: "Headline, description, article body and a valid image URL are required." }, 400);
+      if (status === "published" && bodyWords < 400) return json({ error: `Published stories require at least 400 words. Current count: ${bodyWords}.` }, 400);
       if (originalUrl && !/^https?:\/\//i.test(originalUrl)) return json({ error: "Original/source URL must be a valid URL." }, 400);
       if (!["Business","World","Europe","Middle East","Asia","Africa","Nigeria","Ghana","Sports","Tech","Crypto","Entertainment"].includes(category)) return json({ error: "Invalid category." }, 400);
       if (!["Global","Africa","Nigeria","Ghana","Europe","Middle East","Asia","North America","South America"].includes(region)) return json({ error: "Invalid region." }, 400);
@@ -179,7 +188,7 @@ export default async (req: Request) => {
         original_description: description, ai_hook_title: headline, ai_summary: [description],
         tags: Array.isArray(body.tags) ? body.tags.map((x: unknown) => "#" + clean(x, 40).replace(/^#/,"")).filter(Boolean).slice(0, 8) : [],
         source: storyType === "RockBrief ORIGINAL" ? "RockBrief" : clean(body.source || "RockBrief", 120),
-        image, read_time: clean(body.read_time || "3 min read", 30), timestamp,
+        image, read_time: readingTime(bodyWords), timestamp,
         editorial_status: status === "draft" ? "hidden" : status, featured: Boolean(body.featured), pinned: Boolean(body.pinned),
         story_type: storyType, body: bodyText, category, region, subject, author_name: authorName,
         image_credit: imageCredit, image_license: imageLicense, image_source_url: imageSourceUrl, published_by: "admin",
@@ -195,6 +204,9 @@ export default async (req: Request) => {
       if (typeof body.featured === "boolean") patch.featured = body.featured;
       if (typeof body.pinned === "boolean") patch.pinned = body.pinned;
       if (["published","hidden","archived"].includes(String(body.editorial_status))) patch.editorial_status = body.editorial_status;
+      const current = (typeof body.body === "string" || typeof body.editorial_status === "string")
+        ? (await database.from("articles").select("editorial_status").eq("id", id).maybeSingle()).data
+        : null;
       const textFields = ["headline","description","body","image","category","region","story_type","subject","author_name","image_credit","image_license","image_source_url","original_url"] as const;
       for (const field of textFields) {
         if (typeof body[field] === "string") {
@@ -204,7 +216,13 @@ export default async (req: Request) => {
           else patch[field] = value;
         }
       }
-      if (Array.isArray(body.tags)) patch.tags = body.tags.map((x: unknown) => clean(x, 80)).filter(Boolean).slice(0, 20);
+      if (typeof body.body === "string") {
+        const words = articleWordCount(String(patch.body || ""));
+        const targetStatus = String(body.editorial_status || current?.editorial_status || "published");
+        if (targetStatus === "published" && words < 400) return json({ error: `Published stories require at least 400 words. Current count: ${words}.` }, 400);
+        patch.read_time = readingTime(words);
+      }
+      if (Array.isArray(body.tags)) patch.tags = body.tags.map((x: unknown) => "#" + clean(x, 80).replace(/^#/, "")).filter(Boolean).slice(0, 20);
       if (typeof body.publish_at === "string" && !Number.isNaN(Date.parse(body.publish_at))) patch.timestamp = new Date(body.publish_at).toISOString();
       const { error } = await database.from("articles").update(patch).eq("id", id);
       if (error) return json({ error: error.message }, 400);
