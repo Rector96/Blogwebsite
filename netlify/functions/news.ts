@@ -482,7 +482,7 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
         original_title: String(a.original_title || a.ai_hook_title || ""),
         original_description: stripJunk(String(a.original_description || "")),
         ai_hook_title: String(a.ai_hook_title || a.original_title || ""),
-        ai_summary: sanitizeSummary(Array.isArray(a.ai_summary) ? a.ai_summary : []).slice(0, 5),
+        ai_summary: sanitizeSummary(Array.isArray(a.ai_summary) ? a.ai_summary : []).slice(0, 4),
         tags: Array.isArray(a.tags) ? a.tags : ["#World"],
         read_time: String(a.read_time || "1 min read"),
         category: String(a.category || category(String(a.original_title || ""), undefined, String(a.region || ""))),
