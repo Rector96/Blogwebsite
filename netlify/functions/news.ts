@@ -32,7 +32,7 @@ export type NewsArticle = {
   pinned?: boolean;
 };
 
-const PLACEHOLDER_IMAGE = "https://rwdnews.netlify.app/rwdnews-logo.svg";
+const PLACEHOLDER_IMAGE = "/rwdnews-logo.svg";
 
 const rss = new Parser({
   headers: {
@@ -191,7 +191,7 @@ async function resolveSafeImage(rssOrGdeltImage: string, section: string) {
   }
   return {
     image: PLACEHOLDER_IMAGE,
-    image_credit: "RWDNEWS",
+    image_credit: "RockBrief",
     image_license: "Site asset",
   };
 }
