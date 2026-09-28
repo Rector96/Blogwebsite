@@ -29,6 +29,7 @@ export async function handler(event: any) {
       const { data } = await db
         .from("articles")
         .select("id,original_title,ai_hook_title,timestamp")
+        .eq("editorial_status", "published")
         .order("timestamp", { ascending: false })
         .limit(5000);
       storyUrls = (data || []).map((a: any) => {
@@ -52,24 +53,13 @@ export async function handler(event: any) {
   const staticPaths = [
     "/",
     "/sport",
-    "/sport/live",
-    "/sport/fixtures",
-    "/sport/results",
     "/sport/predictions",
-    "/tech",
-    "/business",
-    "/crypto",
-    "/nigeria",
-    "/africa",
-    "/world",
-    "/entertainment",
     "/about",
     "/editorial",
     "/advertise",
     "/privacy",
     "/terms",
-  ];
-  const urls = [
+  ];  const urls = [
     ...staticPaths.map((p) => ({ url: site + p, lastmod: "" })),
     ...storyUrls,
   ];
