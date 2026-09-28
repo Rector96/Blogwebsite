@@ -8,6 +8,18 @@ import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import type { EnrichedArticle } from "./AppHome";
 
 /** Insert an ad cell after every N story cards in the grid. */
+const categoryMeta: Record<string, { title: string; description: string }> = {
+  All: { title: "RockBrief — Global News, Briefed Clearly", description: "Source-backed global news briefings across world affairs, business, technology, sports, Africa and more." },
+  World: { title: "World News — RockBrief", description: "Latest source-backed world news, international affairs and major global developments, briefed clearly by RockBrief." },
+  Africa: { title: "Africa News — RockBrief", description: "Source-backed Africa news, regional developments, business, technology, culture and major stories from across the continent." },
+  Nigeria: { title: "Nigeria News — RockBrief", description: "Latest source-backed Nigeria news, business, technology, society and major developments, briefed clearly." },
+  Business: { title: "Business News — RockBrief", description: "Latest source-backed business, markets, companies, finance, trade and economic news from around the world." },
+  Tech: { title: "Technology News — RockBrief", description: "Latest source-backed technology news covering AI, software, cybersecurity, chips, startups and digital innovation." },
+  Crypto: { title: "Crypto News — RockBrief", description: "Latest source-backed cryptocurrency, blockchain, Bitcoin, Ethereum and digital finance news, briefed clearly." },
+  Entertainment: { title: "Entertainment News — RockBrief", description: "Latest source-backed entertainment, film, music, celebrities and culture news from around the world." },
+  Sports: { title: "Sports News — RockBrief", description: "Latest source-backed sports news, football, basketball, tennis, motorsport and major sporting developments." },
+};
+
 function withFeedAds(items: EnrichedArticle[], every = 5) {
   const out: Array<{ type: "story"; item: EnrichedArticle } | { type: "ad"; key: string }> = [];
   items.forEach((item, i) => {
@@ -68,15 +80,22 @@ export function HomeView({
   normalizeTags,
 }: any) {
   const feedCells = withFeedAds(Array.isArray(rest) ? rest : [], 5);
+  const meta = categoryMeta[selectedTag] || categoryMeta.All;
+  const canonicalPath = selectedTag === "All" ? "/" : selectedTag === "Sports" ? "/sport" : `/${String(selectedTag).toLowerCase()}`;
+  const canonicalUrl = typeof window !== "undefined" ? `${window.location.origin}${canonicalPath}` : canonicalPath;
 
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>RockBrief — Global News, Briefed Clearly</title>
-        <meta
-          name="description"
-          content="RockBrief delivers source-backed global news briefings across world affairs, business, technology, sports, Africa and more, with original sources credited."
-        />
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:description" content={meta.description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="RockBrief" />
+        <meta property="og:url" content={canonicalUrl} />
       </Helmet>
 
       <div className="border-b border-neutral-200 bg-neutral-950 text-white">
@@ -380,7 +399,7 @@ export function HomeView({
             onSubmit={onLeadSubmit}
             className="relative z-10 w-full max-w-md space-y-3 border bg-white p-6 shadow-xl"
           >
-            <h3 className="font-display text-xl font-semibold">Advertise on RWDNEWS</h3>
+            <h3 className="font-display text-xl font-semibold">Advertise on RockBrief</h3>
             <input
               className="h-11 w-full border px-3 text-sm"
               placeholder="Name"
