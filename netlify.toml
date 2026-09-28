@@ -106,7 +106,13 @@
   status = 200
   force = true
 
-# Keep /sports URLs working if anyone bookmarks them
+# Explicit news sitemap — must be before SPA /* fallback so Google never gets index.html
+[[redirects]]
+  from = "/news-sitemap.xml"
+  to = "/.netlify/functions/news-sitemap"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/sports"
   to = "/sport"
