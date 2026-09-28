@@ -204,7 +204,7 @@ export default function StoryPage() {
             mainEntityOfPage: canonical,
             url: canonical,
             image: article.image ? [article.image] : undefined,
-            author: { "@type": "Organization", name: "RockBrief" },
+            author: article.author_name\n              ? { "@type": "Person", name: article.author_name }\n              : { "@type": "Organization", name: "RockBrief" },
             publisher: {
               "@type": "Organization",
               name: "RockBrief",
@@ -215,7 +215,7 @@ export default function StoryPage() {
             },
           }
         : null,
-    [article, title, description, canonical],
+    [article, title, description, canonical, absoluteLogo],
   );
 
   if (loading) return <PageLoader />;
@@ -272,7 +272,7 @@ ${canonical}`;
         <meta property="og:title" content={`RockBrief — ${title}`} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />
+        <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />\n        <meta property="og:type" content="article" />\n        <meta property="og:site_name" content="RockBrief" />
         <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
         <script type="application/ld+json">{JSON.stringify(breadcrumb)}</script>
