@@ -55,7 +55,7 @@ export default async (req: Request) => {
     if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
     if (body.action === "logout") return json({ ok: true }, 200, { "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
 
-    if (body.action === "article_image_upload") {
+    if (body.action === "article_get") {\n      const id = clean(body.id, 200);\n      if (!id) return json({ error: "Article ID is required." }, 400);\n      const { data, error } = await database.from("articles").select("*").eq("id", id).maybeSingle();\n      if (error) return json({ error: error.message }, 400);\n      if (!data) return json({ error: "Article not found." }, 404);\n      return json({ ok: true, article: data });\n    }\n\n    if (body.action === "article_image_upload") {
       const filename = clean(body.filename || "image", 120).replace(/[^a-zA-Z0-9._-]/g, "-");
       const mime = clean(body.mime_type, 80).toLowerCase();
       const allowed = ["image/jpeg", "image/png", "image/webp", "image/avif"];
