@@ -127,7 +127,7 @@ function addMonths(date: Date, months: number) {
 }
 
 function AdvertisePage() {
-  const [selected, setSelected] = useState(packages[0].code);
+  const [selected, setSelected] = useState<(typeof packages)[number]["code"]>(packages[0].code);
   const [months, setMonths] = useState(1);
   const [form, setForm] = useState({
     email: "", name: "", company: "", headline: "", cta_url: "",
