@@ -10,6 +10,10 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
+[[edge_functions]]
+  function = "news-og"
+  path = "/news/*"
+
 [[redirects]]
   from = "/api/news"
   to = "/.netlify/functions/news"
@@ -106,7 +110,6 @@
   status = 200
   force = true
 
-# Explicit news sitemap — must be before SPA /* fallback so Google never gets index.html
 [[redirects]]
   from = "/news-sitemap.xml"
   to = "/.netlify/functions/news-sitemap"
@@ -128,7 +131,6 @@
   to = "/sport/predictions/:splat"
   status = 301
 
-# SPA fallback MUST NOT use force=true or JS/CSS assets become HTML and the site goes blank
 [[redirects]]
   from = "/*"
   to = "/index.html"
