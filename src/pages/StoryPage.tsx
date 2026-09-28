@@ -190,6 +190,7 @@ export default function StoryPage() {
     : null;
   const briefing = article ? buildBriefing(article) : { points: [] as string[], isOriginal: false };
   const description = briefing.points[0] || cleanText(article?.original_description || "");
+  const articleImage = article?.image && !/\/rwdnews-logo\.svg(?:[?#]|$)/i.test(article.image) ? article.image : "";
 
   const jsonLd = useMemo(
     () =>
@@ -203,8 +204,10 @@ export default function StoryPage() {
             dateModified: article.timestamp,
             mainEntityOfPage: canonical,
             url: canonical,
-            image: article.image ? [article.image] : undefined,
-            author: article.author_name\n              ? { "@type": "Person", name: article.author_name }\n              : { "@type": "Organization", name: "RockBrief" },
+            image: articleImage ? [articleImage] : undefined,
+            author: article.author_name
+              ? { "@type": "Person", name: article.author_name }
+              : { "@type": "Organization", name: "RockBrief" },
             publisher: {
               "@type": "Organization",
               name: "RockBrief",
@@ -215,7 +218,7 @@ export default function StoryPage() {
             },
           }
         : null,
-    [article, title, description, canonical, absoluteLogo],
+    [article, title, description, canonical, absoluteLogo, articleImage],
   );
 
   if (loading) return <PageLoader />;
@@ -272,7 +275,9 @@ ${canonical}`;
         <meta property="og:title" content={`RockBrief — ${title}`} />
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />\n        <meta property="og:type" content="article" />\n        <meta property="og:site_name" content="RockBrief" />
+        <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />
+        <meta property="og:type" content="article" />
+        <meta property="og:site_name" content="RockBrief" />
         <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
         <script type="application/ld+json">{JSON.stringify(breadcrumb)}</script>
