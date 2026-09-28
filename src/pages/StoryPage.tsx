@@ -337,9 +337,20 @@ ${canonical}`;
           {article.category || "News"} · {article.source}
         </p>
         <h1 className="font-display mt-3 text-3xl leading-tight font-semibold sm:text-4xl">{title}</h1>
-        <p className="mt-3 text-xs text-neutral-400">
-          Briefing · {new Date(article.timestamp).toLocaleString()}
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+          <span>{article.read_time || "3 min read"}</span>
+          <span aria-hidden="true">·</span>
+          <span>{new Date(article.timestamp).toLocaleString()}</span>
+        </div>
+        {Array.isArray(article.tags) && article.tags.length ? (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {article.tags.map((tag) => (
+              <span key={tag} className="rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-600">
+                {String(tag).replace(/^#/, "")}
+              </span>
+            ))}
+          </div>
+        ) : null}
 
         {article.image ? (
           <figure className="mt-8">
