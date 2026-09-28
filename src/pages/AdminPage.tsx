@@ -156,19 +156,14 @@ export default function AdminPage() {
     }
     const sourceList = Array.isArray(researchResult.sources) ? researchResult.sources : [];
     const sourceLine = sourceList.length
-      ? "Sources researched: " + sourceList.slice(0, 8).map((s: any, i: number) => (i + 1) + ". " + s.source + " — " + s.url).join("
-")
+      ? "Sources researched: " + sourceList.slice(0, 8).map((s: any, i: number) => (i + 1) + ". " + s.source + " — " + s.url).join("\n")
       : "";
     const body = [
       report.summary || "",
-      ...(Array.isArray(report.sections) ? report.sections.map((s: any) => "## " + s.title + "
-
-" + s.body) : []),
+      ...(Array.isArray(report.sections) ? report.sections.map((s: any) => "## " + s.title + "\n\n" + s.body) : []),
       sourceLine,
       "RockBrief editorial note: This report was prepared from the source records shown in the Research Desk. Review the sources and verify the facts before publishing.",
-    ].filter(Boolean).join("
-
-");
+    ].filter(Boolean).join("\n\n");
     const firstSource = sourceList[0];
     setStoryForm(v => ({
       ...v,
