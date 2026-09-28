@@ -3,7 +3,7 @@ import { ArrowUp } from "lucide-react";
 import { HelmetProvider } from "react-helmet-async";
 import AdminPage from "./pages/AdminPage";
 import AdminSubmissionsPage from "./pages/AdminSubmissionsPage";
-import { InfoPage } from "./pages/InfoPage";
+import { InfoPage, EditorialProfilePage } from "./pages/InfoPage";
 import StoryPage from "./pages/StoryPage";
 import SportsPage from "./pages/SportsPage";
 import PredictionsPage from "./pages/PredictionsPage";
@@ -45,6 +45,7 @@ export default function App() {
   else if (path.startsWith("/admin")) page = <AdminPage />;
   else if (path.startsWith("/news/")) page = <StoryPage />;
   else if (path === "/submit") page = <SubmitPage />;
+  else if (path === "/author/rockbrief-editorial") page = <EditorialProfilePage />;
   else if (path === "/sport/predictions" || path.startsWith("/sport/predictions/"))
     page = <PredictionsPage />;
   else if (path === "/sport" || path.startsWith("/sport/")) page = <SportsPage />;
