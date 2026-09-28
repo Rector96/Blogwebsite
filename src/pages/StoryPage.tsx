@@ -183,7 +183,7 @@ export default function StoryPage() {
         "@type": "BreadcrumbList",
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "RockBrief", item: typeof window !== "undefined" ? window.location.origin + "/" : "/" },
-          { "@type": "ListItem", position: 2, name: article.category || "News", item: typeof window !== "undefined" ? window.location.origin + "/" + String(article.category || "news").toLowerCase().replace(/[^a-z0-9]+/g, "-") : "/" },
+          { "@type": "ListItem", position: 2, name: article.category || "News" },
           { "@type": "ListItem", position: 3, name: title, item: canonical },
         ],
       }
