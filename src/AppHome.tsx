@@ -15,6 +15,7 @@ export interface EnrichedArticle {
   original_url: string;
   image: string;
   timestamp: string;
+  updated_at?: string;
   source: string;
   original_title: string;
   original_description: string;
