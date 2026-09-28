@@ -260,6 +260,7 @@ function similarity(a: string, b: string) {
 }
 
 function scoreItems(items: any[]) {
+  const now = Date.now();
   return items.map((item) => {
     const cluster = items.filter((other) => similarity(item.title, other.title) >= 0.42);
     const domains = new Set(
@@ -271,18 +272,23 @@ function scoreItems(items: any[]) {
         }
       }),
     );
-    const published = new Date(item.date || Date.now()).getTime();
-    const age = Number.isNaN(published) ? 0 : Math.max(0, (Date.now() - published) / 3600000);
-    const freshness = Math.max(0, 38 - age * 4);
-    const catBoost =
+    const published = new Date(item.date || 0).getTime();
+    const ageHours = Number.isNaN(published) || published <= 0 ? 72 : Math.max(0, (now - published) / 3600000);
+    const freshness = Math.max(0, 42 - ageHours * 3.5);
+    const descriptionQuality = Math.min(10, Math.max(0, stripJunk(item.desc || "").length / 100));
+    const sourceBreadth = Math.min(20, domains.size * 6);
+    const corroboration = Math.min(18, Math.max(0, cluster.length - 1) * 6);
+    const categoryBoost =
       item.category === "Tech"
-        ? 12
-        : item.category === "Nigeria" || item.category === "Africa" || item.category === "Ghana"
-          ? 14
-          : item.category === "Sports"
-            ? 8
-            : 0;
-    const score = Math.round(Math.min(100, freshness + domains.size * 8 + cluster.length * 7 + catBoost));
+        ? 8
+        : item.category === "Business"
+          ? 7
+          : item.category === "Nigeria" || item.category === "Africa" || item.category === "Ghana"
+            ? 6
+            : item.category === "Sports"
+              ? 5
+              : 0;
+    const score = Math.round(Math.min(100, freshness + descriptionQuality + sourceBreadth + corroboration + categoryBoost));
     return {
       ...item,
       desc:
