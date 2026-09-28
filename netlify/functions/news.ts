@@ -367,9 +367,10 @@ function expandFallbackSummary(title: string, desc: string): string[] {
   return sanitizeSummary([d || t]).slice(0, 4);
 }
 
-async function aiBrief(title: string, desc: string) {
+async function aiBrief(title: string, desc: string, sourceMaterial = "") {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
+    body: "",
     ai_summary: expandFallbackSummary(title, desc),
     tags: ["#World"],
   };
@@ -381,26 +382,29 @@ async function aiBrief(title: string, desc: string) {
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "Write a short news briefing for an aggregator. Return JSON only. " +
-          "(1) ai_hook_title: clear headline. " +
-          "(2) ai_summary: exactly 4 substantial bullet points, each 30–55 words. " +
-          "Aim for about 140–220 words total. Facts only from the title and description. " +
-          "Do not invent, do not copy long passages, no disclaimers, no URLs, no Read More, no why it matters. " +
-          "(3) tags: 2–4 hashtags. " +
+          "Create an original RockBrief news report from the supplied source material. Return JSON only. " +
+          "(1) ai_hook_title: clear factual headline. " +
+          "(2) body: 450–650 words in 5–8 paragraphs. Use only facts explicitly supported by the supplied source material; attribute facts to named sources when the material identifies them. Do not invent names, numbers, quotes, motives, background facts, outcomes or predictions. Do not reproduce source wording or long quotations. The writing must be a transformative synthesis that adds editorial organization and context without adding unsupported facts. " +
+          "(3) ai_summary: exactly 4 substantial bullet points, each 30–55 words, drawn from the same verified material. " +
+          "(4) tags: 2–4 hashtags. " +
+          "If the supplied material is insufficient to produce a factual 450-word report, return body as an empty string rather than padding or inventing. " +
           "TITLE: " +
           title +
           " DESCRIPTION: " +
-          desc,
+          desc +
+          " SOURCE MATERIAL: " +
+          sourceMaterial,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
             properties: {
               ai_hook_title: { type: Type.STRING },
+              body: { type: Type.STRING },
               ai_summary: { type: Type.ARRAY, items: { type: Type.STRING } },
               tags: { type: Type.ARRAY, items: { type: Type.STRING } },
             },
-            required: ["ai_hook_title", "ai_summary", "tags"],
+            required: ["ai_hook_title", "body", "ai_summary", "tags"],
           },
         },
       }),
@@ -410,8 +414,11 @@ async function aiBrief(title: string, desc: string) {
     if (!text) return fallback;
     const parsed = JSON.parse(text);
     const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 4);
+    const body = stripJunk(String(parsed.body || "")).slice(0, 12000);
+    const bodyWordCount = body.split(/\s+/).filter(Boolean).length;
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
+      body: bodyWordCount >= 400 ? body : "",
       ai_summary: summary.length ? summary : fallback.ai_summary,
       tags: (Array.isArray(parsed.tags) ? parsed.tags : ["#World"])
         .map((x: string) => (x.startsWith("#") ? x : "#" + x))
@@ -441,7 +448,12 @@ function dedupe(items: any[]) {
 
 async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
-  const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
+  const freshnessCutoff = Date.now() - 48 * 3600000;
+  const freshOnly = dedupe([...rssItems, ...gdeltItems]).filter((item) => {
+    const published = new Date(item.date || 0).getTime();
+    return Number.isFinite(published) && published >= freshnessCutoff;
+  });
+  const scored = scoreItems(freshOnly);
   const items = pickBalanced(collapseNearDuplicates(scored), 48);
   const qualityItems = items.filter((item) => stripJunk(item.desc || "").length >= 80);
   const maxNewAi = Math.max(0, Math.min(48, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 12)));
@@ -452,29 +464,49 @@ async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Pr
     const section = category(item.title + " " + item.desc, item.category, item.region);
     const existing = existingByUrl.get(item.link);
     const sourceDescription = stripJunk(item.desc);
+    const relatedSources = items
+      .filter((candidate) => similarity(item.title, candidate.title) >= 0.42)
+      .slice(0, 6);
+    const sourceMaterial = relatedSources
+      .map((candidate) => {
+        const label = clean(candidate.source || "Source");
+        const title = stripJunk(candidate.title || "");
+        const description = stripJunk(candidate.desc || "");
+        return [label + ": " + title, description].filter(Boolean).join(" — ");
+      })
+      .filter(Boolean)
+      .join("\n");
     const existingSummary = Array.isArray(existing?.ai_summary) ? existing.ai_summary : [];
+    const existingBody = stripJunk(existing?.body || "");
     const existingComplete = Boolean(existing?.ai_hook_title) && existingSummary.length >= 4 &&
+      existingBody.split(/\s+/).filter(Boolean).length >= 400 &&
       Array.isArray(existing?.tags) && existing.tags.length > 0;
     const sourceChanged = Boolean(existing) &&
       stripJunk(existing?.original_description || "") !== sourceDescription;
 
-    let brief: { ai_hook_title: string; ai_summary: string[]; tags: string[] };
+    let brief: { ai_hook_title: string; body: string; ai_summary: string[]; tags: string[] };
     if (existingComplete && !sourceChanged) {
       brief = {
         ai_hook_title: existing!.ai_hook_title,
+        body: existingBody,
         ai_summary: existingSummary.slice(0, 4),
         tags: existing!.tags.slice(0, 4),
       };
     } else if (aiCalls < maxNewAi) {
       aiCalls += 1;
-      brief = await aiBrief(item.title, sourceDescription);
+      brief = await aiBrief(item.title, sourceDescription, sourceMaterial);
     } else {
       brief = {
         ai_hook_title: item.title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
+        body: "",
         ai_summary: expandFallbackSummary(item.title, sourceDescription),
         tags: ["#" + section.replace(/\s+/g, "")],
       };
     }
+
+    // Never publish an auto-generated wire story as a thin page. If AI cannot
+    // produce a 400+ word factual synthesis from the available material, skip it.
+    if (!brief.body || brief.body.split(/\s+/).filter(Boolean).length < 400) continue;
 
     const existingNeedsImageRefresh = Boolean(existing) &&
       (existing?.image_license === "Feed preview" ||
@@ -500,7 +532,8 @@ async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Pr
       ai_hook_title: brief.ai_hook_title,
       ai_summary: sanitizeSummary(brief.ai_summary),
       tags: brief.tags,
-      read_time: "1 min read",
+      read_time: Math.max(3, Math.ceil(brief.body.split(/\s+/).filter(Boolean).length / 180)) + " min read",
+      body: brief.body,
       category: section,
       region: item.region || "Global",
       trend_score: item.trendScore,
@@ -524,6 +557,7 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       .from("articles")
       .select("*")
       .eq("editorial_status", "published")
+      .gte("timestamp", new Date(Date.now() - 72 * 3600000).toISOString())
       .order("timestamp", { ascending: false })
       .limit(60);
     if (error || !Array.isArray(data)) return [];
@@ -584,6 +618,8 @@ export async function runIngest() {
         ai_summary: a.ai_summary,
         tags: a.tags,
         read_time: a.read_time,
+        body: a.body || "",
+
         category: a.category,
         region: a.region,
         editorial_status: "published",

@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ClipboardEvent } from "react";
 
-type Props = { value: string; onChange: (value: string) => void; placeholder?: string; onImageUpload?: (file: File) => Promise<string | null> };
+type Props = { value: string; onChange: (value: string) => void; placeholder?: string; onImageUpload?: (file: File) => Promise<string | null>; minWords?: number };
 
 const commands = [
   ["bold","B"],["italic","I"],["underline","U"],["formatBlock","H2"],["formatBlock","H3"],["insertUnorderedList","•"],["insertOrderedList","1."],["justifyLeft","L"],["justifyCenter","C"],["justifyRight","R"],
@@ -18,9 +18,11 @@ function cleanWordHtml(html: string) {
   return doc.body.innerHTML;
 }
 
-export default function RichArticleEditor({ value, onChange, placeholder, onImageUpload }: Props) {
+export default function RichArticleEditor({ value, onChange, placeholder, onImageUpload, minWords = 400 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (ref.current && ref.current.innerHTML !== value) ref.current.innerHTML = value; }, [value]);
+
+  const wordCount = (ref.current?.innerText || "").trim().split(/\s+/).filter(Boolean).length;
 
   const run = (command: string, arg?: string) => {
     ref.current?.focus();
@@ -52,6 +54,9 @@ export default function RichArticleEditor({ value, onChange, placeholder, onImag
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>run("removeFormat")} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Clear</button>
     </div>
     <div ref={ref} contentEditable suppressContentEditableWarning onInput={()=>onChange(ref.current?.innerHTML || "")} onPaste={onPaste} data-placeholder={placeholder || "Write the article here…"} className="min-h-[360px] p-4 text-[16px] leading-7 outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-neutral-400" />
-    <div className="border-t px-3 py-2 text-[11px] text-neutral-500">Paste from Word is cleaned and preserved where supported. Use the image buttons above to add inline media.</div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[11px]">
+      <span className={wordCount >= minWords ? "font-semibold text-teal-700" : "font-semibold text-amber-700"}>{wordCount.toLocaleString()} words · {Math.max(1, Math.ceil(wordCount / 180))} min read</span>
+      <span className="text-neutral-500">{minWords.toLocaleString()} words minimum for published stories. Paste from Word is cleaned and preserved where supported.</span>
+    </div>
   </div>;
 }

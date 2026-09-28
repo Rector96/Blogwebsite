@@ -36,10 +36,15 @@ const tabs = [
 ] as const;
 
 async function api(options?: RequestInit) {
+  const token = typeof window !== "undefined" ? window.sessionStorage.getItem("rwdnews_admin_token") : null;
   const response = await fetch("/api/admin", {
     credentials: "same-origin",
     ...options,
-    headers: { "content-type": "application/json", ...(options?.headers || {}) },
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...(options?.headers || {}),
+    },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Request failed");
@@ -67,7 +72,7 @@ export default function AdminPage() {
   const [storyForm, setStoryForm] = useState({
     headline: "", description: "", body: "", category: "Business", region: "Global",
     story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
-    image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
+    image: "", read_time: "3 min read", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
     image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
     featured: false, pinned: false,
   });
@@ -103,7 +108,8 @@ export default function AdminPage() {
   const login = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError("");
     try {
-      await api({ method: "POST", body: JSON.stringify({ action: "login", password }) });
+      const result = await api({ method: "POST", body: JSON.stringify({ action: "login", password }) });
+      if (result.session_token) window.sessionStorage.setItem("rwdnews_admin_token", String(result.session_token));
       setPassword("");
       const loaded = await load(true);
       if (!loaded) setError((current) => current || "Sign-in succeeded, but the admin dashboard session could not be loaded. Please refresh and try again.");
@@ -188,15 +194,21 @@ export default function AdminPage() {
   const createStory = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    const plainWords = storyForm.body.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim().split(/\s+/).filter(Boolean);
+    if (storyForm.editorial_status !== "draft" && plainWords.length < 400) {
+      setError(`Published stories must contain at least 400 words. Current count: ${plainWords.length}.`);
+      return;
+    }
     await post({
       action: "article_create",
       ...storyForm,
       tags: storyForm.tags.split(",").map(x => x.trim()).filter(Boolean),
+      read_time: `${Math.max(1, Math.ceil(plainWords.length / 180))} min read`,
     });
     setStoryForm({
       headline: "", description: "", body: "", category: "Business", region: "Global",
       story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
-      image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
+      image: "", read_time: "3 min read", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
       image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
       featured: false, pinned: false,
     });
@@ -218,6 +230,7 @@ export default function AdminPage() {
         subject: String(a.subject || ""),
         author_name: String(a.author_name || "RockBrief Editorial"),
         image: String(a.image || ""),
+        read_time: String(a.read_time || "3 min read"),
         image_credit: String(a.image_credit || ""),
         image_license: String(a.image_license || ""),
         image_source_url: String(a.image_source_url || ""),
@@ -237,11 +250,17 @@ export default function AdminPage() {
     e.preventDefault();
     if (!editingArticleId) return;
     setError("");
+    const plainWords = storyForm.body.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim().split(/\s+/).filter(Boolean);
+    if (storyForm.editorial_status !== "draft" && plainWords.length < 400) {
+      setError(`Published stories must contain at least 400 words. Current count: ${plainWords.length}.`);
+      return;
+    }
     await post({
       action: "article_update",
       id: editingArticleId,
       ...storyForm,
       tags: storyForm.tags.split(",").map(x => x.trim()).filter(Boolean),
+      read_time: `${Math.max(1, Math.ceil(plainWords.length / 180))} min read`,
       editorial_status: storyForm.editorial_status === "draft" ? "hidden" : storyForm.editorial_status,
     });
     setEditingArticleId(null);
@@ -256,6 +275,7 @@ export default function AdminPage() {
 
   const logout = async () => {
     await post({ action: "logout" });
+    window.sessionStorage.removeItem("rwdnews_admin_token");
     setAuthed(false); setData(null);
   };
 
@@ -339,7 +359,7 @@ export default function AdminPage() {
           <form onSubmit={editingArticleId ? saveEditedStory : createStory} className="grid gap-3 md:grid-cols-2">
             <input required placeholder="Headline" value={storyForm.headline} onChange={e=>setStoryForm(v=>({...v,headline:e.target.value}))} className="h-11 border px-3 text-sm md:col-span-2" />
             <textarea required placeholder="Short description / lead" value={storyForm.description} onChange={e=>setStoryForm(v=>({...v,description:e.target.value}))} className="min-h-24 border p-3 text-sm md:col-span-2" />
-            <div className="md:col-span-2"><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-neutral-500">Article editor</label><RichArticleEditor value={storyForm.body} onChange={body=>setStoryForm(v=>({...v,body}))} onImageUpload={uploadStoryImage} placeholder="Write or paste the full article here…" /></div>
+            <div className="md:col-span-2"><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-neutral-500">Article editor</label><RichArticleEditor value={storyForm.body} onChange={body=>setStoryForm(v=>({...v,body}))} onImageUpload={uploadStoryImage} minWords={400} placeholder="Write or paste the full article here…" /></div>
             <select value={storyForm.category} onChange={e=>setStoryForm(v=>({...v,category:e.target.value}))} className="h-11 border px-3 text-sm"><option>Business</option><option>World</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Sports</option><option>Tech</option><option>Crypto</option><option>Entertainment</option></select>
             <select value={storyForm.region} onChange={e=>setStoryForm(v=>({...v,region:e.target.value}))} className="h-11 border px-3 text-sm"><option>Global</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>North America</option><option>South America</option></select>
             <select value={storyForm.story_type} onChange={e=>setStoryForm(v=>({...v,story_type:e.target.value}))} className="h-11 border px-3 text-sm"><option>RockBrief ORIGINAL</option><option>DEVELOPING</option><option>WIRE</option></select>
@@ -356,7 +376,8 @@ export default function AdminPage() {
             <input placeholder="Image licence / rights note" value={storyForm.image_license} onChange={e=>setStoryForm(v=>({...v,image_license:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input type="url" placeholder="Image source URL (optional)" value={storyForm.image_source_url} onChange={e=>setStoryForm(v=>({...v,image_source_url:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input type="url" placeholder="Original/source article URL (optional)" value={storyForm.original_url} onChange={e=>setStoryForm(v=>({...v,original_url:e.target.value}))} className="h-11 border px-3 text-sm" />
-            <input placeholder="Tags, separated by commas" value={storyForm.tags} onChange={e=>setStoryForm(v=>({...v,tags:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input aria-label="Article tags" placeholder="Tags (comma separated)" value={storyForm.tags} onChange={e=>setStoryForm(v=>({...v,tags:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input aria-label="Reading time" placeholder="Reading time" value={storyForm.read_time} readOnly className="h-11 border bg-neutral-50 px-3 text-sm" />\n            <input aria-label="Reading time" placeholder="Reading time" value={storyForm.read_time} readOnly className="h-11 border bg-neutral-50 px-3 text-sm" />
             <input type="datetime-local" value={storyForm.publish_at} onChange={e=>setStoryForm(v=>({...v,publish_at:e.target.value}))} className="h-11 border px-3 text-sm" />
             <div className="flex flex-wrap items-center gap-4 border p-3 text-xs md:col-span-2">
               <label className="flex items-center gap-2"><input type="checkbox" checked={storyForm.featured} onChange={e=>setStoryForm(v=>({...v,featured:e.target.checked}))} /> Feature on homepage</label>
@@ -364,7 +385,7 @@ export default function AdminPage() {
               <select value={storyForm.editorial_status} onChange={e=>setStoryForm(v=>({...v,editorial_status:e.target.value}))} className="h-9 border px-2"><option value="published">Publish now</option><option value="draft">Save as draft</option></select>
             </div>
             <button disabled={busy} className="h-12 bg-neutral-950 px-5 text-xs font-bold text-white md:col-span-2">{editingArticleId ? "Save article changes" : storyForm.editorial_status === "draft" ? "Save draft" : "Publish story"}</button>
-            <p className="text-xs text-neutral-500 md:col-span-2">Image rights: only use images you own, licensed, or are otherwise permitted to publish. The source/credit fields are displayed on the story.</p>
+            <p className="text-xs text-neutral-500 md:col-span-2">The editor shows live word count and estimated reading time. Published stories require at least 400 words; drafts can be shorter. Tags are stored as searchable article metadata. Image rights: only use images you own, licensed, or are otherwise permitted to publish. The source/credit fields are displayed on the story.</p>
           </form>
         </Panel>
         <Panel title="Latest stories" subtitle="Hide, archive, feature or pin a story."><div className="divide-y">{data.articles.map(a => <div key={a.id} className="grid gap-3 py-4 lg:grid-cols-[1fr_auto] lg:items-center"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source} · {a.story_type || "WIRE"} · {a.category || "News"} · {new Date(a.timestamp).toLocaleString()}</p><p className="mt-1 font-display text-lg font-semibold">{a.ai_hook_title || a.original_title}</p><p className="text-xs text-neutral-500">{a.editorial_status || "published"}{a.featured ? " · featured" : ""}{a.pinned ? " · pinned" : ""}</p></div><div className="flex flex-wrap gap-2"><button disabled={busy || editingArticleBusy} type="button" onClick={() => void editArticle(a.id)} className="border px-3 py-2 text-xs font-semibold">{editingArticleBusy ? "Loading…" : "Edit"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, featured:!a.featured })} className="border px-3 py-2 text-xs font-semibold">{a.featured ? "Unfeature" : "Feature"}</button><button disabled={busy} onClick={() => void post({ action:"article_update", id:a.id, pinned:!a.pinned })} className="border px-3 py-2 text-xs font-semibold">{a.pinned ? "Unpin" : "Pin"}</button><select value={a.editorial_status || "published"} disabled={busy} onChange={e => void post({ action:"article_update", id:a.id, editorial_status:e.target.value })} className="border px-2 py-2 text-xs"><option>published</option><option>hidden</option><option>archived</option></select></div></div>)}</div></Panel>
