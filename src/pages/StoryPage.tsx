@@ -136,10 +136,25 @@ export default function StoryPage() {
             const response = await fetch("/api/news");
             const payload = await response.json();
             const pool = Array.isArray(payload.articles) ? (payload.articles as EnrichedArticle[]) : [];
+            const currentWords = new Set(
+              cleanText([foundArticle!.ai_hook_title, foundArticle!.original_title, foundArticle!.original_description].filter(Boolean).join(" "))
+                .toLowerCase()
+                .split(/\s+/)
+                .filter((w) => w.length >= 4),
+            );
+            const currentTags = new Set((foundArticle!.tags || []).map((t) => String(t).toLowerCase().replace(/^#/, "")));
             const candidates = pool
               .filter((x) => x.id !== foundArticle!.id)
-              .filter((x) => !foundArticle!.category || x.category === foundArticle!.category)
-              .slice(0, 6);
+              .map((x) => {
+                const text = cleanText([x.ai_hook_title, x.original_title, x.original_description].filter(Boolean).join(" ")).toLowerCase();
+                const overlap = [...currentWords].filter((w) => text.includes(w)).length;
+                const tagOverlap = (x.tags || []).filter((t) => currentTags.has(String(t).toLowerCase().replace(/^#/, ""))).length;
+                const categoryBoost = foundArticle!.category && x.category === foundArticle!.category ? 8 : 0;
+                return { x, relevance: overlap + tagOverlap * 4 + categoryBoost };
+              })
+              .sort((a, b) => b.relevance - a.relevance)
+              .slice(0, 6)
+              .map(({ x }) => x);
             if (!cancelled) setRelated(candidates);
           } catch {
             /* ignore */
@@ -190,7 +205,9 @@ export default function StoryPage() {
     : null;
   const briefing = article ? buildBriefing(article) : { points: [] as string[], isOriginal: false };
   const description = briefing.points[0] || cleanText(article?.original_description || "");
+  const seoDescription = cleanText(article?.original_description || "").slice(0, 160) || description.slice(0, 160);
   const articleImage = article?.image && !/\/rwdnews-logo\.svg(?:[?#]|$)/i.test(article.image) ? article.image : "";
+  const articleKeywords = Array.isArray(article?.tags) ? article.tags.filter(Boolean).join(", ") : "";
 
   const jsonLd = useMemo(
     () =>
@@ -199,8 +216,10 @@ export default function StoryPage() {
             "@context": "https://schema.org",
             "@type": "NewsArticle",
             headline: title,
-            description,
+            description: seoDescription,
             datePublished: article.timestamp,
+            articleSection: article.category || "News",
+            keywords: articleKeywords || undefined,
             dateModified: article.updated_at || article.timestamp,
             mainEntityOfPage: canonical,
             url: canonical,
@@ -274,10 +293,11 @@ ${canonical}`;
     <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950">
       <Helmet>
         <title>{title} — RockBrief</title>
-        <meta name="description" content={description} />
+        <meta name="description" content={seoDescription} />
+        {articleKeywords ? <meta name="keywords" content={articleKeywords} /> : null}
         <link rel="canonical" href={canonical} />
         <meta property="og:title" content={`RockBrief — ${title}`} />
-        <meta property="og:description" content={description} />
+        <meta property="og:description" content={seoDescription} />
         <meta property="og:url" content={canonical} />
         <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />
         <meta property="og:type" content="article" />
