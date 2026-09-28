@@ -145,19 +145,6 @@ function stockImageQuery(title: string, cat: string) {
   return map[cat] || "global news journalism";
 }
 
-async function pexelsImage(query: string) {
-  const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
-  if (!key) return null;
-  try {
-    const u = new URL("https://api.pexels.com/v1/search");
-    u.searchParams.set("query", query); u.searchParams.set("per_page", "5"); u.searchParams.set("orientation", "landscape");
-    const r = await fetch(u, { headers: { Authorization: key, Accept: "application/json" }, signal: AbortSignal.timeout(4500) });
-    if (!r.ok) return null;
-    const photos = Array.isArray((await r.json())?.photos) ? (await r.clone().json().catch(() => [])) : [];
-    return null;
-  } catch { return null; }
-}
-
 async function resolveSafeImage(rssOrGdeltImage: string, title: string, section: string) {
   if (rssOrGdeltImage && /^https?:\\/\\//i.test(rssOrGdeltImage)) {
     return { image: rssOrGdeltImage, image_credit: "Publisher feed", image_license: "Feed preview" };
