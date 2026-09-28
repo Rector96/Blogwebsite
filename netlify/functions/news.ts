@@ -362,7 +362,7 @@ async function aiBrief(title: string, desc: string) {
         contents:
           "Write a short news briefing for an aggregator. Return JSON only. " +
           "(1) ai_hook_title: clear headline. " +
-          "(2) ai_summary: exactly 3 to 5 short bullet points. One sentence each. " +
+          "(2) ai_summary: exactly 4 substantial bullet points, each 30–55 words. " +
           "Aim for about 140–220 words total. Facts only from the title and description. " +
           "Do not invent, do not copy long passages, no disclaimers, no URLs, no Read More, no why it matters. " +
           "(3) tags: 2–4 hashtags. " +
