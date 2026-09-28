@@ -1,18 +1,17 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config, Context } from "@netlify/functions";
-import { runIngest } from "./news";
 
 function env(name: string) {
-  return Netlify.env.get(name) || "";
+  return Netlify.env.get(name) || process.env[name] || "";
 }
 
 function escapeXml(value: string) {
   return String(value || "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+    .replace(/&/g, "&")
+    .replace(/</g, "<")
+    .replace(/>/g, ">")
+    .replace(/"/g, """)
+    .replace(/'/g, "'");
 }
 
 function slugify(value: string) {
@@ -27,7 +26,11 @@ function slugify(value: string) {
 function getSite(request: Request) {
   const configured = env("PUBLIC_SITE_URL").replace(/\/$/, "");
   if (configured) return configured;
-  return new URL(request.url).origin;
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return "https://rwdnews.netlify.app";
+  }
 }
 
 function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
@@ -38,34 +41,37 @@ function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
       const id = String(article.id || "");
       const publishedTime = Date.parse(String(article.timestamp || ""));
       if (!slug || !id || !Number.isFinite(publishedTime)) return "";
+      // Google News: only ~last 2 days
       if (Date.now() - publishedTime > 48 * 60 * 60 * 1000) return "";
 
       const loc = site + "/news/" + slug + "--" + encodeURIComponent(id);
       const published = new Date(publishedTime).toISOString();
 
       return [
-        "<url>",
-        "<loc>" + escapeXml(loc) + "</loc>",
-        "<news:news>",
-        "<news:publication>",
-        "<news:name>RockBrief</news:name>",
-        "<news:language>en</news:language>",
-        "</news:publication>",
-        "<news:publication_date>" + escapeXml(published) + "</news:publication_date>",
-        "<news:title>" + escapeXml(title) + "</news:title>",
-        "</news:news>",
-        "</url>",
-      ].join("");
+        "  <url>",
+        "    <loc>" + escapeXml(loc) + "</loc>",
+        "    <news:news>",
+        "      <news:publication>",
+        "        <news:name>RockBrief</news:name>",
+        "        <news:language>en</news:language>",
+        "      </news:publication>",
+        "      <news:publication_date>" + escapeXml(published) + "</news:publication_date>",
+        "      <news:title>" + escapeXml(title) + "</news:title>",
+        "    </news:news>",
+        "  </url>",
+      ].join("\n");
     })
     .filter(Boolean)
-    .join("");
+    .join("\n");
 
   return [
     '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">',
+    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
+    '        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">',
     urls,
     "</urlset>",
-  ].join("");
+    "",
+  ].join("\n");
 }
 
 async function getRecentStories(cutoff: string) {
@@ -98,22 +104,15 @@ export default async function handler(request: Request, _context: Context) {
   const site = getSite(request);
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
 
-  let stories = await getRecentStories(cutoff);
-
-  if (!stories.length) {
-    try {
-      await runIngest();
-      stories = await getRecentStories(cutoff);
-    } catch (error) {
-      console.error("[RockBrief] News Sitemap refresh failed", error);
-    }
-  }
+  // Fast path only — never run ingest here (timeouts cause Google "couldn't fetch")
+  const stories = await getRecentStories(cutoff);
 
   return new Response(xmlFor(stories, site), {
     status: 200,
     headers: {
       "Content-Type": "application/xml; charset=UTF-8",
       "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
+      "X-Robots-Tag": "noindex",
       "X-RockBrief-News-Sitemap": "1",
       "X-RockBrief-News-Count": String(stories.length),
     },
