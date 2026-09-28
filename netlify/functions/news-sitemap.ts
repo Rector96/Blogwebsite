@@ -38,6 +38,7 @@ function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
       const id = String(article.id || "");
       const publishedTime = Date.parse(String(article.timestamp || ""));
       if (!slug || !id || !Number.isFinite(publishedTime)) return "";
+      if (Date.now() - publishedTime > 48 * 60 * 60 * 1000) return "";
 
       const loc = site + "/news/" + slug + "--" + encodeURIComponent(id);
       const published = new Date(publishedTime).toISOString();
@@ -99,9 +100,6 @@ export default async function handler(request: Request, _context: Context) {
 
   let stories = await getRecentStories(cutoff);
 
-  // Google News requires <url> entries. If the wire has gone quiet for 48 hours,
-  // refresh the news feed once so a legitimate newly published story can populate
-  // the sitemap. We never add an older story just to satisfy the XML validator.
   if (!stories.length) {
     try {
       await runIngest();
@@ -117,6 +115,7 @@ export default async function handler(request: Request, _context: Context) {
       "Content-Type": "application/xml; charset=UTF-8",
       "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
       "X-RockBrief-News-Sitemap": "1",
+      "X-RockBrief-News-Count": String(stories.length),
     },
   });
 }
