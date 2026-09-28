@@ -143,7 +143,7 @@ export default function StoryPage() {
                 .filter((w) => w.length >= 4),
             );
             const currentTags = new Set((foundArticle!.tags || []).map((t) => String(t).toLowerCase().replace(/^#/, "")));
-            const candidates = pool
+            const ranked = pool
               .filter((x) => x.id !== foundArticle!.id)
               .map((x) => {
                 const text = cleanText([x.ai_hook_title, x.original_title, x.original_description].filter(Boolean).join(" ")).toLowerCase();
@@ -152,10 +152,10 @@ export default function StoryPage() {
                 const categoryBoost = foundArticle!.category && x.category === foundArticle!.category ? 8 : 0;
                 return { x, relevance: overlap + tagOverlap * 4 + categoryBoost };
               })
-              .sort((a, b) => b.relevance - a.relevance)
-              .slice(0, 6)
-              .map(({ x }) => x);
-            if (!cancelled) setRelated(candidates);
+              .sort((a, b) => b.relevance - a.relevance);
+            const sameCategory = ranked.filter(({ x }) => foundArticle!.category && x.category === foundArticle!.category);
+            const fallback = sameCategory.length ? sameCategory : ranked;
+            if (!cancelled) setRelated(fallback.slice(0, 6).map(({ x }) => x));
           } catch {
             /* ignore */
           }
@@ -451,7 +451,17 @@ ${canonical}`;
         </div>
 
         <section className="mt-10">
-          <h2 className="font-display text-2xl font-semibold">More on RockBrief</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-2xl font-semibold">More on RockBrief</h2>
+            {article.category ? (
+              <a
+                href={article.category === "Sports" ? "/sport" : `/${String(article.category).toLowerCase()}`}
+                className="text-xs font-bold text-teal-800 underline underline-offset-4"
+              >
+                More {article.category} news →
+              </a>
+            ) : null}
+          </div>
           {related.length ? (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {related.slice(0, 4).map((item) => (
