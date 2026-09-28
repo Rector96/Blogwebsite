@@ -5,13 +5,19 @@ function env(name: string) {
   return Netlify.env.get(name) || process.env[name] || "";
 }
 
+/** Split/join avoids entity corruption during tooling/deploy bundling */
 function escapeXml(value: string) {
   return String(value || "")
-    .replace(/&/g, "&")
-    .replace(/</g, "<")
-    .replace(/>/g, ">")
-    .replace(/"/g, """)
-    .replace(/'/g, "'");
+    .split("&")
+    .join("&" + "amp;")
+    .split("<")
+    .join("&" + "lt;")
+    .split(">")
+    .join("&" + "gt;")
+    .split('"')
+    .join("&" + "quot;")
+    .split("'")
+    .join("&" + "apos;");
 }
 
 function slugify(value: string) {
@@ -41,7 +47,6 @@ function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
       const id = String(article.id || "");
       const publishedTime = Date.parse(String(article.timestamp || ""));
       if (!slug || !id || !Number.isFinite(publishedTime)) return "";
-      // Google News: only ~last 2 days
       if (Date.now() - publishedTime > 48 * 60 * 60 * 1000) return "";
 
       const loc = site + "/news/" + slug + "--" + encodeURIComponent(id);
@@ -65,9 +70,9 @@ function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
     .join("\n");
 
   return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"',
-    '        xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">',
+    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\"",
+    "        xmlns:news=\"http://www.google.com/schemas/sitemap-news/0.9\">",
     urls,
     "</urlset>",
     "",
@@ -103,8 +108,6 @@ async function getRecentStories(cutoff: string) {
 export default async function handler(request: Request, _context: Context) {
   const site = getSite(request);
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-
-  // Fast path only — never run ingest here (timeouts cause Google "couldn't fetch")
   const stories = await getRecentStories(cutoff);
 
   return new Response(xmlFor(stories, site), {
