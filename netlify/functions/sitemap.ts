@@ -62,7 +62,10 @@ export async function handler() {
     "/privacy",
     "/terms",
   ];
-  const urls = [\n    ...staticPaths.map((p) => ({ url: site + p, lastmod: "" })),\n    ...storyUrls,\n  ];
+  const urls = [
+    ...staticPaths.map((p) => ({ url: site + p, lastmod: "" })),
+    ...storyUrls,
+  ];
   const body =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
     "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +
