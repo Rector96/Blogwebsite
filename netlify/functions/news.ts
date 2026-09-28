@@ -437,53 +437,74 @@ async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Pr
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
   const items = pickBalanced(collapseNearDuplicates(scored), 48);
-  // Do not create indexable wire pages from title-only or otherwise thin source material.
   const qualityItems = items.filter((item) => stripJunk(item.desc || "").length >= 80);
-  const results = (
-    await Promise.all(
-      qualityItems.map(async (item) => {
-        const section = category(item.title + " " + item.desc, item.category, item.region);
-        const brief = await aiBrief(item.title, item.desc);
-        const existing = existingByUrl.get(item.link);
-        const existingNeedsImageRefresh =
-          Boolean(existing) &&
-          (existing?.image_license === "Feed preview" ||
-            (/(Pexels|Unsplash)/i.test(existing?.image_license || "") && existing?.image_source_url === item.link));
-        const safe = existing?.image && !existingNeedsImageRefresh
-          ? {
-              image: existing.image,
-              image_credit: existing.image_credit,
-              image_license: existing.image_license,
-              image_source_url: existing.image_source_url,
-            }
-          : await resolveSafeImage(item.image || "", item.title, section);
-        return {
-          id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
-          original_url: item.link,
-          image: safe.image,
-          timestamp:
-            item.date && !Number.isNaN(new Date(item.date).getTime())
-              ? new Date(item.date).toISOString()
-              : new Date().toISOString(),
-          source: item.source,
-          original_title: item.title,
-          original_description: stripJunk(item.desc),
-          ai_hook_title: brief.ai_hook_title,
-          ai_summary: sanitizeSummary(brief.ai_summary),
-          tags: brief.tags,
-          read_time: "1 min read",
-          category: section,
-          region: item.region || "Global",
-          trend_score: item.trendScore,
-          trend_label: item.trendLabel,
-          image_credit: safe.image_credit,
-          image_license: safe.image_license,
-          image_source_url: safe.image_source_url || item.link,
-          discovered_via: item.sources,
-        } satisfies NewsArticle;
-      }),
-    )
-  ).filter((item): item is NewsArticle => Boolean(item));
+  const maxNewAi = Math.max(0, Math.min(48, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 12)));
+  let aiCalls = 0;
+  const results: NewsArticle[] = [];
+
+  for (const item of qualityItems) {
+    const section = category(item.title + " " + item.desc, item.category, item.region);
+    const existing = existingByUrl.get(item.link);
+    const sourceDescription = stripJunk(item.desc);
+    const existingSummary = Array.isArray(existing?.ai_summary) ? existing.ai_summary : [];
+    const existingComplete = Boolean(existing?.ai_hook_title) && existingSummary.length >= 4 &&
+      Array.isArray(existing?.tags) && existing.tags.length > 0;
+    const sourceChanged = Boolean(existing) &&
+      stripJunk(existing?.original_description || "") !== sourceDescription;
+
+    let brief: { ai_hook_title: string; ai_summary: string[]; tags: string[] };
+    if (existingComplete && !sourceChanged) {
+      brief = {
+        ai_hook_title: existing!.ai_hook_title,
+        ai_summary: existingSummary.slice(0, 4),
+        tags: existing!.tags.slice(0, 4),
+      };
+    } else if (aiCalls < maxNewAi) {
+      aiCalls += 1;
+      brief = await aiBrief(item.title, sourceDescription);
+    } else {
+      brief = {
+        ai_hook_title: item.title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
+        ai_summary: expandFallbackSummary(item.title, sourceDescription),
+        tags: ["#" + section.replace(/\s+/g, "")],
+      };
+    }
+
+    const existingNeedsImageRefresh = Boolean(existing) &&
+      (existing?.image_license === "Feed preview" ||
+        (/(Pexels|Unsplash)/i.test(existing?.image_license || "") && existing?.image_source_url === item.link));
+    const safe = existing?.image && !existingNeedsImageRefresh
+      ? {
+          image: existing.image,
+          image_credit: existing.image_credit,
+          image_license: existing.image_license,
+          image_source_url: existing.image_source_url,
+        }
+      : await resolveSafeImage(item.image || "", item.title, section);
+
+    results.push({
+      id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
+      original_url: item.link,
+      image: safe.image,
+      timestamp: item.date && !Number.isNaN(new Date(item.date).getTime())
+        ? new Date(item.date).toISOString() : new Date().toISOString(),
+      source: item.source,
+      original_title: item.title,
+      original_description: sourceDescription,
+      ai_hook_title: brief.ai_hook_title,
+      ai_summary: sanitizeSummary(brief.ai_summary),
+      tags: brief.tags,
+      read_time: "1 min read",
+      category: section,
+      region: item.region || "Global",
+      trend_score: item.trendScore,
+      trend_label: item.trendLabel,
+      image_credit: safe.image_credit,
+      image_license: safe.image_license,
+      image_source_url: safe.image_source_url || item.link,
+      discovered_via: item.sources,
+    } satisfies NewsArticle);
+  }
   return results;
 }
 
