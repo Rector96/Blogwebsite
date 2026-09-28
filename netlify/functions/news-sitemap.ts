@@ -27,7 +27,7 @@ export async function handler(event: any) {
       const db = createClient(url, key);
       const { data } = await db
         .from("articles")
-        .select("original_title,ai_hook_title,timestamp,updated_at")
+        .select("id,original_title,ai_hook_title,timestamp,updated_at")
         .eq("editorial_status", "published")
         .gte("timestamp", new Date(cutoff).toISOString())
         .order("timestamp", { ascending: false })
