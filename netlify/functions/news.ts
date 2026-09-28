@@ -160,24 +160,40 @@ async function resolveSafeImage(rssOrGdeltImage: string, title: string, section:
         const data = await r.json() as any;
         const photo = Array.isArray(data?.photos) ? data.photos.find((p: any) => p?.src?.large || p?.src?.medium) : null;
         const url = photo?.src?.large || photo?.src?.medium || "";
-        if (url) return { image: String(url), image_credit: photo?.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Photos provided by Pexels", image_license: "Pexels License" };
+        if (url) return {
+          image: String(url),
+          image_credit: photo?.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Photos provided by Pexels",
+          image_license: "Pexels License",
+          image_source_url: typeof photo?.url === "string" ? photo.url : "https://www.pexels.com/",
+        };
+      }
       }
     } catch { /* fall through to Unsplash */ }
   }
   const key = process.env.UNSPLASH_ACCESS_KEY || "";
   if (key) {
     try {
-      const u = new URL("https://api.unsplash.com/photos/random");
-      u.searchParams.set("query", query); u.searchParams.set("orientation", "landscape"); u.searchParams.set("content_filter", "high");
+      const u = new URL("https://api.unsplash.com/search/photos");
+      u.searchParams.set("query", query); u.searchParams.set("per_page", "5"); u.searchParams.set("orientation", "landscape"); u.searchParams.set("content_filter", "high");
       const r = await fetch(u, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" }, signal: AbortSignal.timeout(4500) });
       if (r.ok) {
         const data = await r.json() as any;
-        const url = data?.urls?.regular || data?.urls?.small || "";
-        if (url) return { image: String(url), image_credit: data?.user?.name ? "Photo: " + data.user.name + " / Unsplash" : "Unsplash", image_license: "Unsplash License" };
+        const photo = Array.isArray(data?.results) ? data.results.find((p: any) => p?.urls?.regular || p?.urls?.small) : null;
+        const url = photo?.urls?.regular || photo?.urls?.small || "";
+        if (url) {
+          const profile = typeof photo?.user?.links?.html === "string" ? photo.user.links.html : "https://unsplash.com/";
+          const profileUrl = profile + (profile.includes("?") ? "&" : "?") + "utm_source=rockbrief&utm_medium=referral";
+          return {
+            image: String(url),
+            image_credit: photo?.user?.name ? "Photo: " + photo.user.name + " / Unsplash" : "Unsplash",
+            image_license: "Unsplash License",
+            image_source_url: profileUrl,
+          };
+        }
       }
     } catch { /* fall through */ }
   }
-  return { image: PLACEHOLDER_IMAGE, image_credit: "RockBrief", image_license: "Site asset" };
+  return { image: PLACEHOLDER_IMAGE, image_credit: "RockBrief", image_license: "Site asset", image_source_url: "" };
 }
 
 async function getRss() {
@@ -418,7 +434,7 @@ function dedupe(items: any[]) {
   });
 }
 
-async function buildArticles(): Promise<NewsArticle[]> {
+async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
   const items = pickBalanced(collapseNearDuplicates(scored), 48);
@@ -429,7 +445,19 @@ async function buildArticles(): Promise<NewsArticle[]> {
       qualityItems.map(async (item) => {
         const section = category(item.title + " " + item.desc, item.category, item.region);
         const brief = await aiBrief(item.title, item.desc);
-        const safe = await resolveSafeImage(item.image || "", item.title, section);
+        const existing = existingByUrl.get(item.link);
+        const existingNeedsImageRefresh =
+          Boolean(existing) &&
+          (existing?.image_license === "Feed preview" ||
+            (/(Pexels|Unsplash)/i.test(existing?.image_license || "") && existing?.image_source_url === item.link));
+        const safe = existing?.image && !existingNeedsImageRefresh
+          ? {
+              image: existing.image,
+              image_credit: existing.image_credit,
+              image_license: existing.image_license,
+              image_source_url: existing.image_source_url,
+            }
+          : await resolveSafeImage(item.image || "", item.title, section);
         return {
           id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
           original_url: item.link,
@@ -451,7 +479,7 @@ async function buildArticles(): Promise<NewsArticle[]> {
           trend_label: item.trendLabel,
           image_credit: safe.image_credit,
           image_license: safe.image_license,
-          image_source_url: item.link,
+          image_source_url: safe.image_source_url || item.link,
           discovered_via: item.sources,
         } satisfies NewsArticle;
       }),
@@ -509,7 +537,9 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
 }
 
 export async function runIngest() {
-  const articles = await buildArticles();
+  const existing = await getStoredArticles();
+  const existingByUrl = new Map(existing.map((a) => [a.original_url, a]));
+  const articles = await buildArticles(existingByUrl);
   let saved = 0;
   const url = process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"] || "";
   const key = process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";
