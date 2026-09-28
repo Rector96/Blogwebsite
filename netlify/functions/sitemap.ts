@@ -59,6 +59,7 @@ export async function handler(event: any) {
     "/advertise",
     "/privacy",
     "/terms",
+    "/author/rockbrief-editorial",
   ];  const urls = [
     ...staticPaths.map((p) => ({ url: site + p, lastmod: "" })),
     ...storyUrls,
