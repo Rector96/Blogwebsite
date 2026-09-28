@@ -85,17 +85,17 @@ export default function SubmitPage() {
   return (
     <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950">
       <Helmet>
-        <title>Submit a story — RWDNEWS</title>
+        <title>Submit a story — RockBrief</title>
         <meta
           name="description"
-          content="Pitch or submit a story to RWDNEWS. Editors review every submission before publishing."
+          content="Pitch or submit a story to RockBrief. Editors review every submission before publishing."
         />
       </Helmet>
 
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
           <a href="/">
-            <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[160px]" />
+            <img src="/rwdnews-logo.svg" alt="RockBrief" className="h-auto w-[160px]" />
           </a>
           <a href="/" className="text-xs font-bold text-teal-800">
             ← Back to news
