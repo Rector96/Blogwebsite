@@ -343,6 +343,32 @@ export function HomeView({
           )}
         </section>
 
+        <section className="mt-12 border-y border-neutral-200 py-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">Explore RockBrief</p>
+              <h2 className="font-display mt-1 text-xl font-semibold sm:text-2xl">More coverage</h2>
+            </div>
+            <p className="text-xs text-neutral-500">Browse our global desks for more source-backed stories.</p>
+          </div>
+          <nav aria-label="RockBrief coverage" className="mt-4 flex flex-wrap gap-2">
+            {tags
+              .filter((t: string) => t !== selectedTag && t !== "All")
+              .map((t: string) => {
+                const target = t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
+                return (
+                  <a
+                    key={t}
+                    href={target}
+                    className="rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:border-teal-300 hover:text-teal-800"
+                  >
+                    {t} news
+                  </a>
+                );
+              })}
+          </nav>
+        </section>
+
         {recommended?.length ? (
           <section className="mt-12">
             <h2 className="font-display text-xl font-semibold sm:text-2xl">Recommended</h2>
