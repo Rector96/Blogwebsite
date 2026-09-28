@@ -20,7 +20,7 @@ export async function handler(event: any) {
   const detectedSite = host ? forwarded + "://" + host : "";
   const site = (env("PUBLIC_SITE_URL") || detectedSite || "https://rwdnews.netlify.app").replace(/\/$/, "");
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
+  const key = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_ANON_KEY") || env("VITE_SUPABASE_ANON_KEY");
   let storyUrls: Array<{ url: string; lastmod: string }> = [];
 
   if (url && key) {
