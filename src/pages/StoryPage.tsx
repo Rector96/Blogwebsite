@@ -384,7 +384,7 @@ ${canonical}`;
             ))}
           </ul>
 
-          {briefing.isOriginal && article.body ? (
+          {article.body ? (
             <div className="mt-8 text-[17px] leading-[1.75] text-neutral-800 sm:text-[18px] [&_a]:underline [&_[data-align=center]]:text-center [&_[data-align=left]]:text-left [&_[data-align=right]]:text-right [&_blockquote]:my-6 [&_blockquote]:border-l-4 [&_blockquote]:pl-4 [&_blockquote]:italic [&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:font-display [&_h2]:text-2xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-6 [&_h3]:font-display [&_h3]:text-xl [&_h3]:font-semibold [&_img]:my-6 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-4 [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(article.body) }} />
           ) : null}
 
@@ -395,8 +395,7 @@ ${canonical}`;
                 Full story
               </p>
               <p className="mt-1 text-sm text-neutral-700">
-                Read the complete article on <strong>{article.source}</strong>. We only publish a short
-                briefing here.
+                The original reporting is by <strong>{article.source}</strong>. RockBrief's report above is an original synthesis based on the attributed source material.
               </p>
               <a
                 href={sourceUrl}
