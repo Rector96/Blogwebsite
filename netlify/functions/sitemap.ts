@@ -28,7 +28,7 @@ export async function handler(event: any) {
       const db = createClient(url, key);
       const { data } = await db
         .from("articles")
-        .select("id,original_title,ai_hook_title,timestamp")
+        .select("id,original_title,ai_hook_title,timestamp,updated_at")
         .eq("editorial_status", "published")
         .order("timestamp", { ascending: false })
         .limit(5000);
@@ -39,7 +39,7 @@ export async function handler(event: any) {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "")
           .slice(0, 90);
-        const parsed = Date.parse(String(a.timestamp || ""));
+        const parsed = Date.parse(String(a.updated_at || a.timestamp || ""));
         return {
           url: site + "/news/" + title + "--" + encodeURIComponent(String(a.id)),
           lastmod: Number.isFinite(parsed) ? new Date(parsed).toISOString() : "",
