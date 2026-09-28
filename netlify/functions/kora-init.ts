@@ -75,7 +75,7 @@ export default async (req: Request) => {
 
   if (insertError) return json({ error: "Could not create payment record." }, 500);
 
-  const siteUrl = env("PUBLIC_SITE_URL").replace(/\\/$/, "") || new URL(req.url).origin;
+  const siteUrl = env("PUBLIC_SITE_URL").replace(/\/$/, "") || new URL(req.url).origin;
   const notificationUrl = siteUrl + "/api/kora/webhook";
   const redirectUrl = siteUrl + "/advertise?payment=callback";
 
