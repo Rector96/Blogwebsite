@@ -10,9 +10,10 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-[[edge_functions]]
-  function = "news-og"
-  path = "/news/*"
+# Edge OG re-enabled after stable deploy (see netlify/edge-functions/news-og.ts)
+# [[edge_functions]]
+#   function = "news-og"
+#   path = "/news/*"
 
 [[redirects]]
   from = "/api/news"
