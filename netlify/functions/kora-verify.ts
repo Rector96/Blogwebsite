@@ -11,7 +11,7 @@ async function applyKoraPayment(reference: string, payload: any) {
 
   if (!payment) return { ok: false, reason: "payment_not_found" };
 
-  const expectedCurrency = String(payment.currency || "NGN").toUpperCase();
+  const expectedCurrency = String(payment.currency || "USD").toUpperCase();
   const expectedAmount = Number(payment.amount ?? payment.amount_subunit ?? 0);
   const actualCurrency = String(payload?.currency || "").toUpperCase();
   const actualAmount = Number(payload?.amount_accepted ?? payload?.amount ?? payload?.amount_paid ?? 0);
