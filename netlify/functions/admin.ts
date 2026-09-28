@@ -208,7 +208,7 @@ export default async (req: Request) => {
         const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
         const { data: sponsor, error } = await database.from("sponsors").insert({
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
-          why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rockbrief.invalid", 500),
+          why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "", 500) || null,
           rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement || "sidebar",
           creative_url: clean(payment.creative_url || "", 1000) || null,
           logo_url: clean(payment.logo_url || "", 1000) || null,
