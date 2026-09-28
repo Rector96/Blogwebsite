@@ -54,10 +54,10 @@ export default async (req: Request) => {
       const password = env("ADMIN_PASSWORD");
       if (!password || !env("ADMIN_SESSION_SECRET")) return json({ error: "Admin login is not configured in Netlify." }, 503);
       if (String(body.password || "") !== password) return json({ error: "Invalid password." }, 401);
-      return json({ ok: true }, 200, { "set-cookie": sessionCookie() });
+      const token = sessionToken();\n      return json({ ok: true, session_token: token }, 200, { "set-cookie": "rwdnews_admin=" + token + "; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=43200", "cache-control": "no-store" });
     }
 
-    if (!authorized(req)) return json({ error: "Unauthorized" }, 401);
+    if (!authorized(req)) return json({ error: "Unauthorized" }, 401, { "cache-control": "no-store" });
     const database = db();
     if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
     if (body.action === "logout") return json({ ok: true }, 200, { "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
