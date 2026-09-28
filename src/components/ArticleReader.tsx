@@ -1,6 +1,7 @@
 import React from "react";
 import { Bookmark, BookmarkCheck, Share2, X } from "lucide-react";
 import { Helmet } from "react-helmet-async";
+import { sanitizeArticleHtml } from "../lib/rich-content";
 
 export type ReaderArticle = {
   id: string;
@@ -13,6 +14,7 @@ export type ReaderArticle = {
   ai_hook_title: string;
   ai_summary: string[];
   tags: string[];
+  body?: string;
   read_time?: string;
   image_credit?: string;
   image_license?: string;
@@ -170,6 +172,16 @@ export function ArticleReader({
                   </li>
                 ))}
               </ul>
+
+              {article.body && article.body.replace(/<[^>]*>/g, " ").trim().split(/\s+/).filter(Boolean).length >= 400 ? (
+                <section className="border-t border-neutral-200 pt-6">
+                  <h2 className="font-display text-lg font-semibold">RockBrief report</h2>
+                  <div
+                    className="mt-4 text-[17px] leading-8 text-neutral-800 sm:text-[18px] [&_a]:underline [&_blockquote]:my-5 [&_blockquote]:border-l-4 [&_blockquote]:pl-4 [&_h2]:mb-3 [&_h2]:mt-7 [&_h2]:font-display [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:mb-2 [&_h3]:mt-5 [&_h3]:font-display [&_h3]:text-lg [&_h3]:font-semibold [&_li]:my-1 [&_ol]:my-4 [&_ol]:list-decimal [&_ol]:pl-6 [&_p]:my-4 [&_ul]:my-4 [&_ul]:list-disc [&_ul]:pl-6"
+                    dangerouslySetInnerHTML={{ __html: sanitizeArticleHtml(article.body) }}
+                  />
+                </section>
+              ) : null}
 
               <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4 sm:p-5">
                 <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">
