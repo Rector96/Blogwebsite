@@ -323,10 +323,21 @@ export default async (req: Request) => {
   if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
+  const loadPayments = async () => {
+    const extended = await database.from("sponsor_payments")
+      .select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,total_amount_usd,email,name,company,status,payment_provider,provider_status,provider_currency,provider_transaction_id,paystack_status,paystack_currency,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,duration_months,monthly_rate_usd,paid_at,created_at")
+      .order("created_at", { ascending: false }).limit(1000);
+    if (!extended.error) return extended;
+    // Keep admin login/dashboard usable while an older Supabase schema is being repaired.
+    return database.from("sponsor_payments")
+      .select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,total_amount_usd,email,name,company,status,payment_provider,provider_status,provider_currency,provider_transaction_id,paystack_status,paystack_currency,sponsor_id,duration_months,monthly_rate_usd,paid_at,created_at")
+      .order("created_at", { ascending: false }).limit(1000);
+  };
+
   const [sponsors, leads, payments, clicks, articles, newsletter, analytics] = await Promise.all([
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,total_amount_usd,email,name,company,status,payment_provider,provider_status,provider_currency,provider_transaction_id,paystack_status,paystack_currency,sponsor_id,duration_months,monthly_rate_usd,paid_at,created_at").order("created_at", { ascending: false }).limit(1000),
+    loadPayments(),
     database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(2000),
     database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,updated_at,editorial_status,featured,pinned,story_type,category,region").order("timestamp", { ascending: false }).limit(100),
     database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(1000),
