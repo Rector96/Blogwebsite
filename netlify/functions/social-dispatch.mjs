@@ -2,12 +2,12 @@
  * Push story payloads to Make.com (or any webhook URL).
  * Env:
  *   MAKE_WEBHOOK_URL  — Custom webhook from Make.com scenario
- *   APP_URL           — https://rwdnews.netlify.app (for absolute links)
+ *   APP_URL           — your current public RockBrief URL (for absolute links)
  *   SOCIAL_MAX_POSTS  — max stories per run (default 3)
  */
 
 function siteBase() {
-  return (process.env.APP_URL || process.env.URL || "https://rwdnews.netlify.app").replace(/\/$/, "");
+  return (process.env.APP_URL || process.env.URL || "").replace(/\/$/, "");
 }
 
 function storyPath(article) {
@@ -30,7 +30,7 @@ function buildCaption(article) {
     "",
     ...bullets.map((b) => `• ${b}`),
     "",
-    `Read the RWDNEWS briefing → ${storyPath(article)}`,
+    `Read the RockBrief briefing → ${storyPath(article)}`,
     "",
     "Source credited on site. Summary only — full report with the publisher.",
   ];
