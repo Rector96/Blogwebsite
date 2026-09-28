@@ -63,8 +63,8 @@ export default function AdminPage() {
   const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", duration_months: "1", disclosure: "Sponsored · Paid placement" });
   const [storyForm, setStoryForm] = useState({
     headline: "", description: "", body: "", category: "Business", region: "Global",
-    story_type: "RWDNEWS ORIGINAL", subject: "", author_name: "RWDNEWS Editorial",
-    image: "", image_credit: "RWDNEWS", image_license: "Owned or licensed by RWDNEWS",
+    story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
+    image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
     image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
     featured: false, pinned: false,
   });
@@ -154,7 +154,7 @@ export default function AdminPage() {
       report.summary || "",
       ...(Array.isArray(report.sections) ? report.sections.map((s: any) => "## " + s.title + "\n\n" + s.body) : []),
       sourceLine,
-      "RWDNEWS editorial note: This report was prepared from the source records shown in the Research Desk. Review the sources and verify the facts before publishing.",
+      "RockBrief editorial note: This report was prepared from the source records shown in the Research Desk. Review the sources and verify the facts before publishing.",
     ].filter(Boolean).join("\n\n");
     const firstSource = sourceList[0];
     setStoryForm(v => ({
@@ -162,7 +162,7 @@ export default function AdminPage() {
       headline: report.headline,
       description: report.summary || "",
       body,
-      story_type: researchResult.mode === "news" ? "DEVELOPING" : "RWDNEWS ORIGINAL",
+      story_type: researchResult.mode === "news" ? "DEVELOPING" : "RockBrief ORIGINAL",
       original_url: firstSource?.url || "",
       image: "",
       image_credit: "",
@@ -187,8 +187,8 @@ export default function AdminPage() {
     });
     setStoryForm({
       headline: "", description: "", body: "", category: "Business", region: "Global",
-      story_type: "RWDNEWS ORIGINAL", subject: "", author_name: "RWDNEWS Editorial",
-      image: "", image_credit: "RWDNEWS", image_license: "Owned or licensed by RWDNEWS",
+      story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
+      image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
       image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
       featured: false, pinned: false,
     });
@@ -207,10 +207,10 @@ export default function AdminPage() {
 
   if (!authed || !data) {
     return <div className="grid min-h-dvh place-items-center bg-neutral-950 p-4">
-      <Helmet><title>RWDNEWS Admin</title><meta name="robots" content="noindex,nofollow,noarchive" /></Helmet>
+      <Helmet><title>RockBrief Admin</title><meta name="robots" content="noindex,nofollow,noarchive" /></Helmet>
       <form onSubmit={login} className="w-full max-w-sm border border-neutral-800 bg-white p-6 shadow-2xl">
         <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">Private operations</p>
-        <h1 className="font-display mt-2 text-3xl font-semibold">RWDNEWS Admin</h1>
+        <h1 className="font-display mt-2 text-3xl font-semibold">RockBrief Admin</h1>
         <p className="mt-2 text-sm text-neutral-500">News, audience, sponsors, payments and platform operations.</p>
         <div className="relative mt-5"><input type={showPassword ? "text" : "password"} value={password} onChange={e => setPassword(e.target.value)} className="h-11 w-full border px-3 pr-20" placeholder="Admin password" autoComplete="current-password" required /><button type="button" onClick={() => setShowPassword(v => !v)} className="absolute top-1/2 right-2 -translate-y-1/2 px-2 py-1 text-xs font-semibold text-neutral-500">{showPassword ? "Hide" : "Show"}</button></div>
         <button disabled={busy} className="mt-3 h-11 w-full bg-neutral-950 text-sm font-bold text-white disabled:opacity-50">Sign in</button>
@@ -220,10 +220,10 @@ export default function AdminPage() {
   }
 
   return <div className="min-h-dvh bg-neutral-100 text-neutral-950">
-    <Helmet><title>RWDNEWS Admin</title></Helmet>
+    <Helmet><title>RockBrief Admin</title></Helmet>
     <header className="sticky top-0 z-40 border-b bg-neutral-950 text-white">
       <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
-        <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Private operations</p><h1 className="font-display text-xl font-semibold sm:text-2xl">RWDNEWS Admin</h1></div>
+        <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-400 uppercase">Private operations</p><h1 className="font-display text-xl font-semibold sm:text-2xl">RockBrief Admin</h1></div>
         <div className="flex items-center gap-2"><a href="/" className="border border-neutral-700 px-3 py-2 text-xs font-semibold text-amber-400">Open site</a><button onClick={() => void logout()} disabled={busy} className="grid size-9 place-items-center border border-neutral-700"><LogOut className="size-4" /></button></div>
       </div>
       <nav className="mx-auto flex max-w-[1500px] gap-1 overflow-x-auto px-3 pb-3 sm:px-5" aria-label="Admin sections">
@@ -235,7 +235,7 @@ export default function AdminPage() {
       {error ? <div className="border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</div> : null}
 
       {tab === "dashboard" ? <section className="space-y-6">
-        <PageHeading title="Dashboard" subtitle="A live operating view of RWDNEWS." />
+        <PageHeading title="Dashboard" subtitle="A live operating view of RockBrief." />
         <MetricGrid overview={data.overview} />
         {data.engagement ? <EngagementPanel data={data.engagement} /> : null}
         <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
@@ -250,7 +250,7 @@ export default function AdminPage() {
       </section> : null}
 
       {tab === "research" ? <section className="space-y-6">
-        <PageHeading title="Research desk" subtitle="Research live topics before turning them into an RWDNEWS report or documentary. Only the admin can run this desk." />
+        <PageHeading title="Research desk" subtitle="Research live topics before turning them into an RockBrief report or documentary. Only the admin can run this desk." />
         <Panel title="Research a topic" subtitle="The desk collects current source reports, then creates a source-bounded draft. It does not invent facts or treat headlines as proof.">
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
             <input value={researchTopic} onChange={e=>setResearchTopic(e.target.value)} placeholder="Example: Dangote investment / Mossad history" className="h-11 border px-3 text-sm" onKeyDown={e=>{if(e.key==="Enter") void runResearch()}} />
@@ -261,7 +261,7 @@ export default function AdminPage() {
         {researchResult ? <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
           <Panel title={researchResult.report?.headline || researchResult.topic} subtitle={researchResult.report?.confidence || "Research draft"}>
             <div className="mb-4 flex flex-wrap items-center gap-2">
-              <button type="button" onClick={useResearchAsStory} className="bg-neutral-950 px-4 py-2 text-xs font-bold text-white">Use as RWDNEWS Report Draft</button>
+              <button type="button" onClick={useResearchAsStory} className="bg-neutral-950 px-4 py-2 text-xs font-bold text-white">Use as RockBrief Report Draft</button>
               <span className="text-xs text-neutral-500">Review sources and facts before publishing.</span>
             </div>
             <p className="text-sm leading-relaxed text-neutral-700">{researchResult.report?.summary}</p>
@@ -274,7 +274,7 @@ export default function AdminPage() {
       </section> : null}
 
       {tab === "news" ? <section className="space-y-6">
-        <PageHeading title="News operations" subtitle="Publish original RWDNEWS stories and manage the source-backed wire." />
+        <PageHeading title="News operations" subtitle="Publish original RockBrief stories and manage the source-backed wire." />
         <Panel title="Create a story" subtitle="Use this for original reporting, interviews, analysis or verified announcements. Published stories appear in the public feed immediately.">
           <form onSubmit={createStory} className="grid gap-3 md:grid-cols-2">
             <input required placeholder="Headline" value={storyForm.headline} onChange={e=>setStoryForm(v=>({...v,headline:e.target.value}))} className="h-11 border px-3 text-sm md:col-span-2" />
@@ -282,7 +282,7 @@ export default function AdminPage() {
             <div className="md:col-span-2"><label className="mb-2 block text-xs font-bold uppercase tracking-wide text-neutral-500">Article editor</label><RichArticleEditor value={storyForm.body} onChange={body=>setStoryForm(v=>({...v,body}))} onImageUpload={uploadStoryImage} placeholder="Write or paste the full article here…" /></div>
             <select value={storyForm.category} onChange={e=>setStoryForm(v=>({...v,category:e.target.value}))} className="h-11 border px-3 text-sm"><option>Business</option><option>World</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Sports</option><option>Tech</option><option>Crypto</option><option>Entertainment</option></select>
             <select value={storyForm.region} onChange={e=>setStoryForm(v=>({...v,region:e.target.value}))} className="h-11 border px-3 text-sm"><option>Global</option><option>Africa</option><option>Nigeria</option><option>Ghana</option><option>Europe</option><option>Middle East</option><option>Asia</option><option>North America</option><option>South America</option></select>
-            <select value={storyForm.story_type} onChange={e=>setStoryForm(v=>({...v,story_type:e.target.value}))} className="h-11 border px-3 text-sm"><option>RWDNEWS ORIGINAL</option><option>DEVELOPING</option><option>WIRE</option></select>
+            <select value={storyForm.story_type} onChange={e=>setStoryForm(v=>({...v,story_type:e.target.value}))} className="h-11 border px-3 text-sm"><option>RockBrief ORIGINAL</option><option>DEVELOPING</option><option>WIRE</option></select>
             <input placeholder="Person / company / event" value={storyForm.subject} onChange={e=>setStoryForm(v=>({...v,subject:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input placeholder="Author" value={storyForm.author_name} onChange={e=>setStoryForm(v=>({...v,author_name:e.target.value}))} className="h-11 border px-3 text-sm" />
             <div className="space-y-2 md:col-span-2">
@@ -320,7 +320,7 @@ export default function AdminPage() {
       </section> : null}
 
       {tab === "audience" ? <section className="space-y-6">
-        <PageHeading title="Audience" subtitle="Understand who is reading RWDNEWS and how they reach it." />
+        <PageHeading title="Audience" subtitle="Understand who is reading RockBrief and how they reach it." />
         <div className="grid gap-6 lg:grid-cols-2"><Panel title="Countries"><Bars data={data.countries} /></Panel><Panel title="Cities"><Bars data={data.cities} /></Panel><Panel title="Devices"><Bars data={data.devices} /></Panel><Panel title="Browsers"><Bars data={data.browsers} /></Panel></div>
       </section> : null}
 
@@ -342,7 +342,7 @@ export default function AdminPage() {
   </div>;
 }
 
-function PageHeading({ title, subtitle }: { title: string; subtitle: string }) { return <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">RWDNEWS</p><h2 className="font-display mt-1 text-3xl font-semibold">{title}</h2><p className="mt-1 text-sm text-neutral-500">{subtitle}</p></div>; }
+function PageHeading({ title, subtitle }: { title: string; subtitle: string }) { return <div><p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">RockBrief</p><h2 className="font-display mt-1 text-3xl font-semibold">{title}</h2><p className="mt-1 text-sm text-neutral-500">{subtitle}</p></div>; }
 function Panel({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) { return <section className="border border-neutral-200 bg-white p-4 shadow-sm sm:p-5"><div className="mb-4 border-b border-neutral-100 pb-3"><h3 className="font-display text-xl font-semibold">{title}</h3>{subtitle?<p className="mt-1 text-xs text-neutral-500">{subtitle}</p>:null}</div>{children}</section>; }
 function MetricGrid({ overview, moneyMetric }: { overview: Record<string,number>; moneyMetric?: string }) {
   const labels: Array<[string,string]> = [["page_views","Page views"],["unique_sessions","Unique sessions"],["article_opens","Article opens"],["shares","Shares"],["sponsor_clicks","Sponsor clicks"],["advertiser_leads","Advertiser leads"],["newsletter_subscribers","Newsletter subscribers"],["paid_revenue_usd","Paid revenue (USD)"]];
@@ -371,8 +371,8 @@ function Bars({data}:{data:Array<{label:string;value:number}>}) {
 }
 function DailyChart({data}:{data:Array<{day:string;value:number}>}) { const max=Math.max(...data.map(x=>x.value),1); return <div className="flex h-44 items-end gap-1 overflow-x-auto">{data.map(x=><div key={x.day} className="flex min-w-4 flex-1 flex-col items-center justify-end gap-1"><div title={x.day+" · "+number(x.value)} className="w-full min-w-2 bg-neutral-900" style={{height:Math.max(3,(x.value/max)*130)+"px"}} /><span className="hidden text-[8px] text-neutral-400 sm:block">{x.day.slice(5)}</span></div>)}</div>; }
 
-function titleOf(a:any){ return a?.ai_hook_title || a?.original_title || "RWDNEWS story"; }
-function briefOf(a:any){ return Array.isArray(a?.ai_summary) ? a.ai_summary.slice(0,2).join(" ") : String(a?.original_description || "Read the latest RWDNEWS briefing."); }
+function titleOf(a:any){ return a?.ai_hook_title || a?.original_title || "RockBrief story"; }
+function briefOf(a:any){ return Array.isArray(a?.ai_summary) ? a.ai_summary.slice(0,2).join(" ") : String(a?.original_description || "Read the latest RockBrief briefing."); }
 function SocialPanel({articles,copied,onCopy}:{articles:any[];copied:string;onCopy:(label:string,text:string)=>void}){
  const items=articles.slice(0,8);
  const storyUrl=(a:any,platform:string)=>{
@@ -380,9 +380,9 @@ function SocialPanel({articles,copied,onCopy}:{articles:any[];copied:string;onCo
    const id=encodeURIComponent(a.id || "");
    return window.location.origin+"/news/"+title+"--"+id+"?utm_source="+encodeURIComponent(platform)+"&utm_medium=social&utm_campaign=rwdnews";
  };
- return <section className="space-y-6"><PageHeading title="Social publishing" subtitle="Turn the latest source-backed RWDNEWS stories into ready-to-post social copy." /><Panel title="Today's social desk" subtitle="Every share points back to the RWDNEWS briefing and is tagged for traffic analytics."><div className="space-y-5">{items.map(a=>{const title=titleOf(a); const brief=briefOf(a); const urls={x:storyUrl(a,"x"),whatsapp:storyUrl(a,"whatsapp"),telegram:storyUrl(a,"telegram"),facebook:storyUrl(a,"facebook"),linkedin:storyUrl(a,"linkedin")}; const text=`RWDNEWS — ${title}\n\n${brief}\n\nRead the RWDNEWS briefing: ${urls.x}`; return <div key={a.id} className="border border-neutral-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source || "RWDNEWS"} · {a.category || "News"}</p><h3 className="mt-1 font-display text-lg font-semibold">{title}</h3></div><Share2 className="size-4 shrink-0 text-neutral-400" /></div><textarea readOnly value={text} className="mt-3 min-h-28 w-full resize-y border bg-neutral-50 p-3 text-xs leading-relaxed" /><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>onCopy("X:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy X</button><button onClick={()=>window.open("https://x.com/intent/post?text="+encodeURIComponent(text),"rwdnews-x","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open X</button><button onClick={()=>onCopy("WhatsApp:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy WhatsApp</button><button onClick={()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"rwdnews-whatsapp","width=700,height=700")} className="border px-3 py-2 text-xs font-bold">Open WhatsApp</button><button onClick={()=>onCopy("Telegram:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy Telegram</button><button onClick={()=>window.open("https://t.me/share/url?url="+encodeURIComponent(urls.telegram)+"&text="+encodeURIComponent("RWDNEWS — "+title),"rwdnews-telegram","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Telegram</button><button onClick={()=>window.open("https://www.facebook.com/sharer/sharer.php?u="+encodeURIComponent(urls.facebook),"rwdnews-facebook","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Facebook</button><button onClick={()=>window.open("https://www.linkedin.com/sharing/share-offsite/?url="+encodeURIComponent(urls.linkedin),"rwdnews-linkedin","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open LinkedIn</button>{copied.includes(a.id)?<span className="px-2 py-2 text-xs font-semibold text-teal-800">Copied</span>:null}</div></div>})}</div></Panel></section>;
+ return <section className="space-y-6"><PageHeading title="Social publishing" subtitle="Turn the latest source-backed RockBrief stories into ready-to-post social copy." /><Panel title="Today's social desk" subtitle="Every share points back to the RockBrief briefing and is tagged for traffic analytics."><div className="space-y-5">{items.map(a=>{const title=titleOf(a); const brief=briefOf(a); const urls={x:storyUrl(a,"x"),whatsapp:storyUrl(a,"whatsapp"),telegram:storyUrl(a,"telegram"),facebook:storyUrl(a,"facebook"),linkedin:storyUrl(a,"linkedin")}; const text=`RockBrief — ${title}\n\n${brief}\n\nRead the RockBrief briefing: ${urls.x}`; return <div key={a.id} className="border border-neutral-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source || "RockBrief"} · {a.category || "News"}</p><h3 className="mt-1 font-display text-lg font-semibold">{title}</h3></div><Share2 className="size-4 shrink-0 text-neutral-400" /></div><textarea readOnly value={text} className="mt-3 min-h-28 w-full resize-y border bg-neutral-50 p-3 text-xs leading-relaxed" /><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>onCopy("X:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy X</button><button onClick={()=>window.open("https://x.com/intent/post?text="+encodeURIComponent(text),"rwdnews-x","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open X</button><button onClick={()=>onCopy("WhatsApp:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy WhatsApp</button><button onClick={()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"rwdnews-whatsapp","width=700,height=700")} className="border px-3 py-2 text-xs font-bold">Open WhatsApp</button><button onClick={()=>onCopy("Telegram:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy Telegram</button><button onClick={()=>window.open("https://t.me/share/url?url="+encodeURIComponent(urls.telegram)+"&text="+encodeURIComponent("RockBrief — "+title),"rwdnews-telegram","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Telegram</button><button onClick={()=>window.open("https://www.facebook.com/sharer/sharer.php?u="+encodeURIComponent(urls.facebook),"rwdnews-facebook","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Facebook</button><button onClick={()=>window.open("https://www.linkedin.com/sharing/share-offsite/?url="+encodeURIComponent(urls.linkedin),"rwdnews-linkedin","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open LinkedIn</button>{copied.includes(a.id)?<span className="px-2 py-2 text-xs font-semibold text-teal-800">Copied</span>:null}</div></div>})}</div></Panel></section>;
 }
 function NewsletterPanel({articles,subscribers,copied,onCopy}:{articles:any[];subscribers:number;copied:string;onCopy:(label:string,text:string)=>void}){
- const top=articles.slice(0,5); const subject=`RWDNEWS Brief — ${new Date().toLocaleDateString()}`; const body=[`RWDNEWS BRIEF`, `\\nThe latest source-backed global stories from RWDNEWS.`, ...top.map((a,i)=>`\\n${i+1}. ${titleOf(a)}\\n${briefOf(a)}\\n${a.original_url || ""}`), `\\nRWDNEWS — Source-backed first.`].join("\n");
- return <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Build a newsletter draft from the latest RWDNEWS stories. Subscriber emails stay private." /><MetricGrid overview={{newsletter_subscribers:subscribers}} /><Panel title="RWDNEWS Brief draft" subtitle="This creates copy for your email provider; it does not pretend to send email."><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Subject</p><p className="font-semibold">{subject}</p></div><button onClick={()=>onCopy("newsletter",`Subject: ${subject}\n\n${body}`)} className="inline-flex items-center justify-center gap-2 bg-neutral-950 px-4 py-2 text-xs font-bold text-white"><Copy className="size-3.5"/>{copied==="newsletter"?"Copied":"Copy newsletter"}</button></div><textarea readOnly value={body} className="mt-4 min-h-80 w-full border bg-neutral-50 p-4 text-sm leading-relaxed" /><p className="mt-3 text-xs text-neutral-500">Next delivery step is connecting an email sending provider. Until that is connected, RWDNEWS should only collect subscribers and prepare drafts.</p></Panel></section>;
+ const top=articles.slice(0,5); const subject=`RockBrief Brief — ${new Date().toLocaleDateString()}`; const body=[`RockBrief BRIEF`, `\\nThe latest source-backed global stories from RockBrief.`, ...top.map((a,i)=>`\\n${i+1}. ${titleOf(a)}\\n${briefOf(a)}\\n${a.original_url || ""}`), `\\nRockBrief — Source-backed first.`].join("\n");
+ return <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Build a newsletter draft from the latest RockBrief stories. Subscriber emails stay private." /><MetricGrid overview={{newsletter_subscribers:subscribers}} /><Panel title="RockBrief Brief draft" subtitle="This creates copy for your email provider; it does not pretend to send email."><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Subject</p><p className="font-semibold">{subject}</p></div><button onClick={()=>onCopy("newsletter",`Subject: ${subject}\n\n${body}`)} className="inline-flex items-center justify-center gap-2 bg-neutral-950 px-4 py-2 text-xs font-bold text-white"><Copy className="size-3.5"/>{copied==="newsletter"?"Copied":"Copy newsletter"}</button></div><textarea readOnly value={body} className="mt-4 min-h-80 w-full border bg-neutral-50 p-4 text-sm leading-relaxed" /><p className="mt-3 text-xs text-neutral-500">Next delivery step is connecting an email sending provider. Until that is connected, RockBrief should only collect subscribers and prepare drafts.</p></Panel></section>;
 }
