@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/api/news", "destination": "https://rwdnews.netlify.app/.netlify/functions/news" },
+    { "source": "/api/sports", "destination": "https://rwdnews.netlify.app/.netlify/functions/sports" },
+    { "source": "/api/sports-prediction", "destination": "https://rwdnews.netlify.app/.netlify/functions/sports-prediction" },
+    { "source": "/api/cron/ingest", "destination": "https://rwdnews.netlify.app/.netlify/functions/cron-ingest" },
+    { "source": "/api/social-dispatch", "destination": "https://rwdnews.netlify.app/.netlify/functions/social-dispatch" },
+    { "source": "/api/advertiser/creative-upload", "destination": "https://rwdnews.netlify.app/.netlify/functions/advertiser-creative-upload" },
+    { "source": "/api/kora/init", "destination": "https://rwdnews.netlify.app/.netlify/functions/kora-init" },
+    { "source": "/api/paystack/init", "destination": "https://rwdnews.netlify.app/.netlify/functions/paystack-init" },
+    { "source": "/api/kora/verify", "destination": "https://rwdnews.netlify.app/.netlify/functions/kora-verify" },
+    { "source": "/api/paystack/verify", "destination": "https://rwdnews.netlify.app/.netlify/functions/paystack-verify" },
+    { "source": "/api/kora/webhook", "destination": "https://rwdnews.netlify.app/.netlify/functions/kora-webhook" },
+    { "source": "/api/paystack/webhook", "destination": "https://rwdnews.netlify.app/.netlify/functions/paystack-webhook" },
+    { "source": "/api/track", "destination": "https://rwdnews.netlify.app/.netlify/functions/track" },
+    { "source": "/api/admin", "destination": "https://rwdnews.netlify.app/.netlify/functions/admin" },
+    { "source": "/robots.txt", "destination": "https://rwdnews.netlify.app/.netlify/functions/robots" },
+    { "source": "/sitemap.xml", "destination": "https://rwdnews.netlify.app/.netlify/functions/sitemap" },
+    { "source": "/news-sitemap.xml", "destination": "https://rwdnews.netlify.app/.netlify/functions/news-sitemap" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
