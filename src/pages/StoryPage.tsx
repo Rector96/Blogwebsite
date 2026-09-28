@@ -48,7 +48,8 @@ function buildBriefing(article: EnrichedArticle) {
 
   let points = raw.filter(Boolean).filter((x) => !isMetaLine(x)).filter((x) => x.length > 15);
   // Cap wire briefings — do not present a full rewrite of the source
-  if (!isOriginal) points = points.slice(0, 4);\n  else points = points.slice(0, 4);
+  if (!isOriginal) points = points.slice(0, 4);
+  else points = points.slice(0, 4);
   const lead = points[0] || cleanText(article.original_description || article.original_title || "");
   return { points: points.length ? points : lead ? [lead] : [], isOriginal };
 }
@@ -174,7 +175,19 @@ export default function StoryPage() {
   }, [article]);
 
   const title = article?.ai_hook_title || article?.original_title || "RockBrief story";
-  const canonical = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";\n  const absoluteLogo = typeof window !== "undefined" ? window.location.origin + "/rwdnews-logo.svg" : "/rwdnews-logo.svg";\n  const breadcrumb = article\n    ? {\n        "@context": "https://schema.org",\n        "@type": "BreadcrumbList",\n        itemListElement: [\n          { "@type": "ListItem", position: 1, name: "RockBrief", item: typeof window !== "undefined" ? window.location.origin + "/" : "/" },\n          { "@type": "ListItem", position: 2, name: article.category || "News", item: typeof window !== "undefined" ? window.location.origin + "/" + String(article.category || "news").toLowerCase().replace(/[^a-z0-9]+/g, "-") : "/" },\n          { "@type": "ListItem", position: 3, name: title, item: canonical },\n        ],\n      }\n    : null;
+  const canonical = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
+  const absoluteLogo = typeof window !== "undefined" ? window.location.origin + "/rwdnews-logo.svg" : "/rwdnews-logo.svg";
+  const breadcrumb = article
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "RockBrief", item: typeof window !== "undefined" ? window.location.origin + "/" : "/" },
+          { "@type": "ListItem", position: 2, name: article.category || "News", item: typeof window !== "undefined" ? window.location.origin + "/" + String(article.category || "news").toLowerCase().replace(/[^a-z0-9]+/g, "-") : "/" },
+          { "@type": "ListItem", position: 3, name: title, item: canonical },
+        ],
+      }
+    : null;
   const briefing = article ? buildBriefing(article) : { points: [] as string[], isOriginal: false };
   const description = briefing.points[0] || cleanText(article?.original_description || "");
 
@@ -221,7 +234,11 @@ export default function StoryPage() {
   }
 
   const share = (network: string) => {
-    const shareMessage = `RockBrief — ${title}\n\n${description}\n\n${canonical}`;
+    const shareMessage = `RockBrief — ${title}
+
+${description}
+
+${canonical}`;
     const text = encodeURIComponent(shareMessage);
     const encoded = encodeURIComponent(canonical);
     const urls: Record<string, string> = {
@@ -256,7 +273,9 @@ export default function StoryPage() {
         <meta property="og:description" content={description} />
         <meta property="og:url" content={canonical} />
         <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />
-        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />\n        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>\n        <script type="application/ld+json">{JSON.stringify(breadcrumb)}</script>
+        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+        <script type="application/ld+json">{JSON.stringify(breadcrumb)}</script>
       </Helmet>
 
       <div className="border-b border-neutral-900 bg-[#071a2d] text-white">
