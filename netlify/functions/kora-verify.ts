@@ -61,7 +61,7 @@ export default async (req: Request) => {
     const result = await applyKoraPayment(reference, payload.data);
     return json({ ...result, reference, payment_provider: "kora" });
   } catch (error) {
-    console.error("[RWDNEWS] Kora verify failed", error);
+    console.error("[RockBrief] Kora verify failed", error);
     return json({ error: "Payment verification is temporarily unavailable." }, 500);
   }
 };
