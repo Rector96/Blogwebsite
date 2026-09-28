@@ -501,7 +501,7 @@ async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Pr
       trend_label: item.trendLabel,
       image_credit: safe.image_credit,
       image_license: safe.image_license,
-      image_source_url: safe.image_source_url || item.link,
+      image_source_url: safe.image_source_url || "",
       discovered_via: item.sources,
     } satisfies NewsArticle);
   }
