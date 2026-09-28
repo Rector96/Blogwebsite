@@ -36,10 +36,15 @@ const tabs = [
 ] as const;
 
 async function api(options?: RequestInit) {
+  const token = typeof window !== "undefined" ? window.sessionStorage.getItem("rwdnews_admin_token") : null;
   const response = await fetch("/api/admin", {
     credentials: "same-origin",
     ...options,
-    headers: { "content-type": "application/json", ...(options?.headers || {}) },
+    headers: {
+      "content-type": "application/json",
+      ...(token ? { Authorization: "Bearer " + token } : {}),
+      ...(options?.headers || {}),
+    },
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(data.error || "Request failed");
@@ -103,7 +108,8 @@ export default function AdminPage() {
   const login = async (e: FormEvent) => {
     e.preventDefault(); setBusy(true); setError("");
     try {
-      await api({ method: "POST", body: JSON.stringify({ action: "login", password }) });
+      const result = await api({ method: "POST", body: JSON.stringify({ action: "login", password }) });
+      if (result.session_token) window.sessionStorage.setItem("rwdnews_admin_token", String(result.session_token));
       setPassword("");
       const loaded = await load(true);
       if (!loaded) setError((current) => current || "Sign-in succeeded, but the admin dashboard session could not be loaded. Please refresh and try again.");
@@ -269,6 +275,7 @@ export default function AdminPage() {
 
   const logout = async () => {
     await post({ action: "logout" });
+    window.sessionStorage.removeItem("rwdnews_admin_token");
     setAuthed(false); setData(null);
   };
 
