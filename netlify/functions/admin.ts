@@ -33,6 +33,7 @@ function authorized(req: Request) {
   } catch { return false; }
 }
 function clean(value: unknown, max = 500) { return String(value ?? "").trim().slice(0, max); }
+function addMonthsIso(startIso: string, months: number) { const d = new Date(startIso); d.setMonth(d.getMonth() + Math.max(1, Math.floor(Number(months) || 1))); return d.toISOString(); }
 async function audit(database: any, action: string, entityType?: string, entityId?: string, details: Record<string, unknown> = {}) {
   await database.from("admin_audit_logs").insert({ action, entity_type: entityType || null, entity_id: entityId || null, details });
 }
@@ -90,7 +91,7 @@ export default async (req: Request) => {
         cta_url: ctaUrl, rate_highlight: "", disclosure: clean(body.disclosure || "Sponsored · Paid placement", 160),
         placement, priority: Number(body.priority || 100),
         currency, monthly_fee_usd: amount || null, monthly_fee_naira: null, duration_months: durationMonths,
-        active: false, starts_at: body.starts_at || new Date().toISOString(), ends_at: body.ends_at || new Date(Date.now() + durationMonths * 30 * 86400000).toISOString(),
+        active: false, starts_at: body.starts_at || new Date().toISOString(), ends_at: body.ends_at || addMonthsIso(new Date().toISOString(), durationMonths),
       }).select("id").single();
       if (error) return json({ error: error.message }, 400);
       await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, monthly_rate_usd: amount, duration_months: durationMonths, currency });
@@ -122,7 +123,7 @@ export default async (req: Request) => {
       const now = new Date();
       const durationMonths = Math.max(1, Math.min(12, Number(sponsorRow?.duration_months || 1)));
       const patch = active
-        ? { active: true, starts_at: now.toISOString(), ends_at: new Date(now.getTime() + durationMonths * 30 * 86400000).toISOString(), updated_at: now.toISOString() }
+        ? { active: true, starts_at: now.toISOString(), ends_at: addMonthsIso(now.toISOString(), durationMonths), updated_at: now.toISOString() }
         : { active: false, updated_at: now.toISOString() };
       const { error } = await database.from("sponsors").update(patch).eq("id", id);
       if (error) return json({ error: error.message }, 400);
@@ -148,18 +149,18 @@ export default async (req: Request) => {
       const originalUrl = clean(body.original_url, 1000);
       const category = clean(body.category || "Business", 50);
       const region = clean(body.region || "Global", 50);
-      const storyType = clean(body.story_type || "RWDNEWS ORIGINAL", 30);
+      const storyType = clean(body.story_type || "RockBrief ORIGINAL", 30);
       const subject = clean(body.subject, 180);
-      const authorName = clean(body.author_name || "RWDNEWS Editorial", 120);
-      const imageCredit = clean(body.image_credit || "RWDNEWS", 180);
-      const imageLicense = clean(body.image_license || "Owned or licensed by RWDNEWS", 240);
+      const authorName = clean(body.author_name || "RockBrief Editorial", 120);
+      const imageCredit = clean(body.image_credit || "RockBrief", 180);
+      const imageLicense = clean(body.image_license || "Owned or licensed by RockBrief", 240);
       const imageSourceUrl = clean(body.image_source_url || originalUrl, 1000);
       const status = ["published","hidden","archived"].includes(String(body.editorial_status)) ? String(body.editorial_status) : "draft";
       if (!headline || !description || !bodyText || !image || !/^https?:\/\//i.test(image)) return json({ error: "Headline, description, article body and a valid image URL are required." }, 400);
       if (originalUrl && !/^https?:\/\//i.test(originalUrl)) return json({ error: "Original/source URL must be a valid URL." }, 400);
       if (!["Business","World","Europe","Middle East","Asia","Africa","Nigeria","Ghana","Sports","Tech","Crypto","Entertainment"].includes(category)) return json({ error: "Invalid category." }, 400);
       if (!["Global","Africa","Nigeria","Ghana","Europe","Middle East","Asia","North America","South America"].includes(region)) return json({ error: "Invalid region." }, 400);
-      if (!["WIRE","RWDNEWS ORIGINAL","DEVELOPING"].includes(storyType)) return json({ error: "Invalid story type." }, 400);
+      if (!["WIRE","RockBrief ORIGINAL","DEVELOPING"].includes(storyType)) return json({ error: "Invalid story type." }, 400);
       const timestamp = body.publish_at && !Number.isNaN(Date.parse(String(body.publish_at))) ? new Date(String(body.publish_at)).toISOString() : new Date().toISOString();
       const id = "original-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
       const slugSource = headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
@@ -167,7 +168,7 @@ export default async (req: Request) => {
         id, original_url: originalUrl || ("https://rwdnews.local/original/" + id), original_title: headline,
         original_description: description, ai_hook_title: headline, ai_summary: [description],
         tags: Array.isArray(body.tags) ? body.tags.map((x: unknown) => "#" + clean(x, 40).replace(/^#/,"")).filter(Boolean).slice(0, 8) : [],
-        source: storyType === "RWDNEWS ORIGINAL" ? "RWDNEWS" : clean(body.source || "RWDNEWS", 120),
+        source: storyType === "RockBrief ORIGINAL" ? "RockBrief" : clean(body.source || "RockBrief", 120),
         image, read_time: clean(body.read_time || "3 min read", 30), timestamp,
         editorial_status: status === "draft" ? "hidden" : status, featured: Boolean(body.featured), pinned: Boolean(body.pinned),
         story_type: storyType, body: bodyText, category, region, subject, author_name: authorName,
@@ -196,17 +197,18 @@ export default async (req: Request) => {
       if (!payment || payment.status !== "paid") return json({ error: "Only verified paid transactions can be activated." }, 400);
 
       const pkg = SPONSOR_PACKAGES[payment.package_code as keyof typeof SPONSOR_PACKAGES];
-      if (payment.design_requested && !payment.creative_url) return json({ error: "This campaign requested RWDNEWS design. Upload the finished creative before activating it." }, 400);
+      if (payment.design_requested && !payment.creative_url) return json({ error: "This campaign requested RockBrief design. Upload the finished creative before activating it." }, 400);
       const starts = payment.starts_at || new Date().toISOString();
-      const ends = payment.ends_at || new Date(Date.parse(starts) + Number(payment.duration_days || pkg?.days || 30) * 86400000).toISOString();
+      const durationMonths = Math.max(1, Math.min(12, Math.floor(Number(payment.duration_months || 1))));
+      const ends = payment.ends_at || addMonthsIso(starts, durationMonths);
       let sponsorId = payment.sponsor_id as string | null;
 
       if (!sponsorId) {
-        const sponsorName = clean(payment.company || payment.name || "RWDNEWS Advertiser", 120);
+        const sponsorName = clean(payment.company || payment.name || "RockBrief Advertiser", 120);
         const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
         const { data: sponsor, error } = await database.from("sponsors").insert({
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
-          why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rwdnews.netlify.app", 500),
+          why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rockbrief.invalid", 500),
           rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement || "sidebar",
           creative_url: clean(payment.creative_url || "", 1000) || null,
           logo_url: clean(payment.logo_url || "", 1000) || null,
