@@ -133,7 +133,7 @@ function rssImage(item: any) {
 
 /** Build a stock-photo search phrase from the actual story, with a category fallback. */
 function stockImageQuery(title: string, cat: string) {
-  const titleWords = clean(title).toLowerCase().replace(/[^a-z0-9\\s]/g, " ").split(/\\s+/)
+  const titleWords = clean(title).toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
     .filter((w) => w.length >= 4 && !stop.has(w)).slice(0, 6);
   if (titleWords.length >= 2) return titleWords.join(" ");
   const map: Record<string, string> = {
