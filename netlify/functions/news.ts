@@ -167,7 +167,6 @@ async function resolveSafeImage(rssOrGdeltImage: string, title: string, section:
           image_source_url: typeof photo?.url === "string" ? photo.url : "https://www.pexels.com/",
         };
       }
-      }
     } catch { /* fall through to Unsplash */ }
   }
   const key = process.env.UNSPLASH_ACCESS_KEY || "";
