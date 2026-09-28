@@ -62,7 +62,9 @@ export default function AdminPage() {
   const [researchMode, setResearchMode] = useState<"news" | "documentary">("news");
   const [researchResult, setResearchResult] = useState<any>(null);
   const [sponsorForm, setSponsorForm] = useState({ sponsor_name: "", headline: "", cta_url: "", cta_text: "Learn more", placement: "sidebar", currency: "USD", amount: "75", duration_months: "1", disclosure: "Sponsored · Paid placement" });
-  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);\n  const [editingArticleBusy, setEditingArticleBusy] = useState(false);\n  const [storyForm, setStoryForm] = useState({
+  const [editingArticleId, setEditingArticleId] = useState<string | null>(null);
+  const [editingArticleBusy, setEditingArticleBusy] = useState(false);
+  const [storyForm, setStoryForm] = useState({
     headline: "", description: "", body: "", category: "Business", region: "Global",
     story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
     image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
@@ -154,14 +156,19 @@ export default function AdminPage() {
     }
     const sourceList = Array.isArray(researchResult.sources) ? researchResult.sources : [];
     const sourceLine = sourceList.length
-      ? "Sources researched: " + sourceList.slice(0, 8).map((s: any, i: number) => (i + 1) + ". " + s.source + " — " + s.url).join("\n")
+      ? "Sources researched: " + sourceList.slice(0, 8).map((s: any, i: number) => (i + 1) + ". " + s.source + " — " + s.url).join("
+")
       : "";
     const body = [
       report.summary || "",
-      ...(Array.isArray(report.sections) ? report.sections.map((s: any) => "## " + s.title + "\n\n" + s.body) : []),
+      ...(Array.isArray(report.sections) ? report.sections.map((s: any) => "## " + s.title + "
+
+" + s.body) : []),
       sourceLine,
       "RockBrief editorial note: This report was prepared from the source records shown in the Research Desk. Review the sources and verify the facts before publishing.",
-    ].filter(Boolean).join("\n\n");
+    ].filter(Boolean).join("
+
+");
     const firstSource = sourceList[0];
     setStoryForm(v => ({
       ...v,
@@ -438,9 +445,21 @@ function SocialPanel({articles,copied,onCopy}:{articles:any[];copied:string;onCo
    const id=encodeURIComponent(a.id || "");
    return window.location.origin+"/news/"+title+"--"+id+"?utm_source="+encodeURIComponent(platform)+"&utm_medium=social&utm_campaign=rwdnews";
  };
- return <section className="space-y-6"><PageHeading title="Social publishing" subtitle="Turn the latest source-backed RockBrief stories into ready-to-post social copy." /><Panel title="Today's social desk" subtitle="Every share points back to the RockBrief briefing and is tagged for traffic analytics."><div className="space-y-5">{items.map(a=>{const title=titleOf(a); const brief=briefOf(a); const urls={x:storyUrl(a,"x"),whatsapp:storyUrl(a,"whatsapp"),telegram:storyUrl(a,"telegram"),facebook:storyUrl(a,"facebook"),linkedin:storyUrl(a,"linkedin")}; const text=`RockBrief — ${title}\n\n${brief}\n\nRead the RockBrief briefing: ${urls.x}`; return <div key={a.id} className="border border-neutral-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source || "RockBrief"} · {a.category || "News"}</p><h3 className="mt-1 font-display text-lg font-semibold">{title}</h3></div><Share2 className="size-4 shrink-0 text-neutral-400" /></div><textarea readOnly value={text} className="mt-3 min-h-28 w-full resize-y border bg-neutral-50 p-3 text-xs leading-relaxed" /><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>onCopy("X:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy X</button><button onClick={()=>window.open("https://x.com/intent/post?text="+encodeURIComponent(text),"rwdnews-x","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open X</button><button onClick={()=>onCopy("WhatsApp:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy WhatsApp</button><button onClick={()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"rwdnews-whatsapp","width=700,height=700")} className="border px-3 py-2 text-xs font-bold">Open WhatsApp</button><button onClick={()=>onCopy("Telegram:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy Telegram</button><button onClick={()=>window.open("https://t.me/share/url?url="+encodeURIComponent(urls.telegram)+"&text="+encodeURIComponent("RockBrief — "+title),"rwdnews-telegram","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Telegram</button><button onClick={()=>window.open("https://www.facebook.com/sharer/sharer.php?u="+encodeURIComponent(urls.facebook),"rwdnews-facebook","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Facebook</button><button onClick={()=>window.open("https://www.linkedin.com/sharing/share-offsite/?url="+encodeURIComponent(urls.linkedin),"rwdnews-linkedin","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open LinkedIn</button>{copied.includes(a.id)?<span className="px-2 py-2 text-xs font-semibold text-teal-800">Copied</span>:null}</div></div>})}</div></Panel></section>;
+ return <section className="space-y-6"><PageHeading title="Social publishing" subtitle="Turn the latest source-backed RockBrief stories into ready-to-post social copy." /><Panel title="Today's social desk" subtitle="Every share points back to the RockBrief briefing and is tagged for traffic analytics."><div className="space-y-5">{items.map(a=>{const title=titleOf(a); const brief=briefOf(a); const urls={x:storyUrl(a,"x"),whatsapp:storyUrl(a,"whatsapp"),telegram:storyUrl(a,"telegram"),facebook:storyUrl(a,"facebook"),linkedin:storyUrl(a,"linkedin")}; const text=`RockBrief — ${title}
+
+${brief}
+
+Read the RockBrief briefing: ${urls.x}`; return <div key={a.id} className="border border-neutral-200 p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-wider text-amber-800">{a.source || "RockBrief"} · {a.category || "News"}</p><h3 className="mt-1 font-display text-lg font-semibold">{title}</h3></div><Share2 className="size-4 shrink-0 text-neutral-400" /></div><textarea readOnly value={text} className="mt-3 min-h-28 w-full resize-y border bg-neutral-50 p-3 text-xs leading-relaxed" /><div className="mt-3 flex flex-wrap gap-2"><button onClick={()=>onCopy("X:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy X</button><button onClick={()=>window.open("https://x.com/intent/post?text="+encodeURIComponent(text),"rwdnews-x","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open X</button><button onClick={()=>onCopy("WhatsApp:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy WhatsApp</button><button onClick={()=>window.open("https://wa.me/?text="+encodeURIComponent(text),"rwdnews-whatsapp","width=700,height=700")} className="border px-3 py-2 text-xs font-bold">Open WhatsApp</button><button onClick={()=>onCopy("Telegram:"+a.id,text)} className="border px-3 py-2 text-xs font-bold">Copy Telegram</button><button onClick={()=>window.open("https://t.me/share/url?url="+encodeURIComponent(urls.telegram)+"&text="+encodeURIComponent("RockBrief — "+title),"rwdnews-telegram","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Telegram</button><button onClick={()=>window.open("https://www.facebook.com/sharer/sharer.php?u="+encodeURIComponent(urls.facebook),"rwdnews-facebook","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open Facebook</button><button onClick={()=>window.open("https://www.linkedin.com/sharing/share-offsite/?url="+encodeURIComponent(urls.linkedin),"rwdnews-linkedin","width=700,height=600")} className="border px-3 py-2 text-xs font-bold">Open LinkedIn</button>{copied.includes(a.id)?<span className="px-2 py-2 text-xs font-semibold text-teal-800">Copied</span>:null}</div></div>})}</div></Panel></section>;
 }
 function NewsletterPanel({articles,subscribers,copied,onCopy}:{articles:any[];subscribers:number;copied:string;onCopy:(label:string,text:string)=>void}){
- const top=articles.slice(0,5); const subject=`RockBrief Brief — ${new Date().toLocaleDateString()}`; const body=[`RockBrief BRIEF`, `\\nThe latest source-backed global stories from RockBrief.`, ...top.map((a,i)=>`\\n${i+1}. ${titleOf(a)}\\n${briefOf(a)}\\n${a.original_url || ""}`), `\\nRockBrief — Source-backed first.`].join("\n");
- return <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Build a newsletter draft from the latest RockBrief stories. Subscriber emails stay private." /><MetricGrid overview={{newsletter_subscribers:subscribers}} /><Panel title="RockBrief Brief draft" subtitle="This creates copy for your email provider; it does not pretend to send email."><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Subject</p><p className="font-semibold">{subject}</p></div><button onClick={()=>onCopy("newsletter",`Subject: ${subject}\n\n${body}`)} className="inline-flex items-center justify-center gap-2 bg-neutral-950 px-4 py-2 text-xs font-bold text-white"><Copy className="size-3.5"/>{copied==="newsletter"?"Copied":"Copy newsletter"}</button></div><textarea readOnly value={body} className="mt-4 min-h-80 w-full border bg-neutral-50 p-4 text-sm leading-relaxed" /><p className="mt-3 text-xs text-neutral-500">Next delivery step is connecting an email sending provider. Until that is connected, RockBrief should only collect subscribers and prepare drafts.</p></Panel></section>;
+ const top=articles.slice(0,5); const subject=`RockBrief Brief — ${new Date().toLocaleDateString()}`; const body=[`RockBrief BRIEF`, `\
+The latest source-backed global stories from RockBrief.`, ...top.map((a,i)=>`\
+${i+1}. ${titleOf(a)}\
+${briefOf(a)}\
+${a.original_url || ""}`), `\
+RockBrief — Source-backed first.`].join("
+");
+ return <section className="space-y-6"><PageHeading title="Newsletter" subtitle="Build a newsletter draft from the latest RockBrief stories. Subscriber emails stay private." /><MetricGrid overview={{newsletter_subscribers:subscribers}} /><Panel title="RockBrief Brief draft" subtitle="This creates copy for your email provider; it does not pretend to send email."><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-xs font-bold uppercase tracking-wider text-neutral-500">Subject</p><p className="font-semibold">{subject}</p></div><button onClick={()=>onCopy("newsletter",`Subject: ${subject}
+
+${body}`)} className="inline-flex items-center justify-center gap-2 bg-neutral-950 px-4 py-2 text-xs font-bold text-white"><Copy className="size-3.5"/>{copied==="newsletter"?"Copied":"Copy newsletter"}</button></div><textarea readOnly value={body} className="mt-4 min-h-80 w-full border bg-neutral-50 p-4 text-sm leading-relaxed" /><p className="mt-3 text-xs text-neutral-500">Next delivery step is connecting an email sending provider. Until that is connected, RockBrief should only collect subscribers and prepare drafts.</p></Panel></section>;
 }
