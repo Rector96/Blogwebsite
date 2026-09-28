@@ -472,7 +472,7 @@ async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Pr
       .filter(Boolean)
       .join("\n");
     const existingSummary = Array.isArray(existing?.ai_summary) ? existing.ai_summary : [];
-    const existingBody = clean(existing?.body || "");
+    const existingBody = stripJunk(existing?.body || "");
     const existingComplete = Boolean(existing?.ai_hook_title) && existingSummary.length >= 4 &&
       existingBody.split(/\s+/).filter(Boolean).length >= 400 &&
       Array.isArray(existing?.tags) && existing.tags.length > 0;
@@ -613,6 +613,8 @@ export async function runIngest() {
         ai_summary: a.ai_summary,
         tags: a.tags,
         read_time: a.read_time,
+        body: a.body || "",
+
         category: a.category,
         region: a.region,
         editorial_status: "published",
