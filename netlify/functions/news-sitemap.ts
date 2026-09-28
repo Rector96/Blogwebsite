@@ -51,8 +51,8 @@ export async function handler(event: any) {
     return "<url><loc>" + escapeXml(loc) + "</loc><news:news><news:publication><news:name>RockBrief</news:name><news:language>en</news:language></news:publication><news:publication_date>" + escapeXml(published) + "</news:publication_date><news:title>" + escapeXml(String(article.ai_hook_title || article.original_title || "")) + "</news:title></news:news></url>";
   }).join("");
 
-  const body = "<?xml version="1.0" encoding="UTF-8"?>" +
-    "<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">" +
+  const body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" +
+    "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\" xmlns:news=\"http://www.google.com/schemas/sitemap-news/0.9\">" +
     urls +
     "</urlset>";
 
