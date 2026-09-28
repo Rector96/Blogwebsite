@@ -70,7 +70,7 @@ export default async (req: Request) => {
     payment_provider: "kora",
     provider_status: "initialized",
     provider_currency: currency,
-    metadata: { source: "rwdnews_advertise", currency, payment_provider: "kora", duration_months: months, monthly_rate_usd: pkg.usd },
+    metadata: { source: "rockbrief_advertise", currency, payment_provider: "kora", duration_months: months, monthly_rate_usd: pkg.usd },
   });
 
   if (insertError) return json({ error: "Could not create payment record." }, 500);
@@ -88,9 +88,9 @@ export default async (req: Request) => {
         reference,
         redirect_url: redirectUrl,
         notification_url: notificationUrl,
-        narration: "RWDNEWS " + pkg.name,
+        narration: "RockBrief " + pkg.name,
         merchant_bears_cost: true,
-        customer: { name: name || company || "RWDNEWS Advertiser", email },
+        customer: { name: name || company || "RockBrief Advertiser", email },
         metadata: { payment_reference: reference, package_code: packageCode, source: "rwdnews" },
       }),
     });
