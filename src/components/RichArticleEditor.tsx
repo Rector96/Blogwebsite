@@ -22,7 +22,9 @@ export default function RichArticleEditor({ value, onChange, placeholder, onImag
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { if (ref.current && ref.current.innerHTML !== value) ref.current.innerHTML = value; }, [value]);
 
-  const wordCount = (ref.current?.innerText || "").trim().split(/\s+/).filter(Boolean).length;\n\n  const run = (command: string, arg?: string) => {
+  const wordCount = (ref.current?.innerText || "").trim().split(/\s+/).filter(Boolean).length;
+
+  const run = (command: string, arg?: string) => {
     ref.current?.focus();
     document.execCommand(command, false, arg);
     onChange(ref.current?.innerHTML || "");
@@ -52,6 +54,9 @@ export default function RichArticleEditor({ value, onChange, placeholder, onImag
       <button type="button" onMouseDown={e=>e.preventDefault()} onClick={()=>run("removeFormat")} className="grid h-8 place-items-center rounded border bg-white px-2 text-xs font-bold">Clear</button>
     </div>
     <div ref={ref} contentEditable suppressContentEditableWarning onInput={()=>onChange(ref.current?.innerHTML || "")} onPaste={onPaste} data-placeholder={placeholder || "Write the article here…"} className="min-h-[360px] p-4 text-[16px] leading-7 outline-none empty:before:content-[attr(data-placeholder)] empty:before:text-neutral-400" />
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[11px]">\n      <span className={wordCount >= minWords ? "font-semibold text-teal-700" : "font-semibold text-amber-700"}>{wordCount.toLocaleString()} words · {Math.max(1, Math.ceil(wordCount / 180))} min read</span>\n      <span className="text-neutral-500">{minWords.toLocaleString()} words minimum for published stories. Paste from Word is cleaned and preserved where supported.</span>\n    </div>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t px-3 py-2 text-[11px]">
+      <span className={wordCount >= minWords ? "font-semibold text-teal-700" : "font-semibold text-amber-700"}>{wordCount.toLocaleString()} words · {Math.max(1, Math.ceil(wordCount / 180))} min read</span>
+      <span className="text-neutral-500">{minWords.toLocaleString()} words minimum for published stories. Paste from Word is cleaned and preserved where supported.</span>
+    </div>
   </div>;
 }
