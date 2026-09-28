@@ -414,7 +414,7 @@ async function aiBrief(title: string, desc: string, sourceMaterial = "") {
     if (!text) return fallback;
     const parsed = JSON.parse(text);
     const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 4);
-    const body = clean(parsed.body || "");
+    const body = stripJunk(String(parsed.body || "")).slice(0, 12000);
     const bodyWordCount = body.split(/\s+/).filter(Boolean).length;
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
