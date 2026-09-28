@@ -3,7 +3,7 @@ import { useEffect, useRef, type ClipboardEvent } from "react";
 type Props = { value: string; onChange: (value: string) => void; placeholder?: string; onImageUpload?: (file: File) => Promise<string | null> };
 
 const commands = [
-  ["bold","B"],["italic","I"],["underline","U"],["formatBlock","H2"],["insertUnorderedList","•"],["insertOrderedList","1."],["justifyLeft","L"],["justifyCenter","C"],["justifyRight","R"],
+  ["bold","B"],["italic","I"],["underline","U"],["formatBlock","H2"],["formatBlock","H3"],["insertUnorderedList","•"],["insertOrderedList","1."],["justifyLeft","L"],["justifyCenter","C"],["justifyRight","R"],
 ] as const;
 
 function cleanWordHtml(html: string) {
@@ -28,11 +28,18 @@ export default function RichArticleEditor({ value, onChange, placeholder, onImag
     onChange(ref.current?.innerHTML || "");
   };
 
-  const onPaste = (e: ClipboardEvent<HTMLDivElement>) => {
+  const onPaste = async (e: ClipboardEvent<HTMLDivElement>) => {
     const html = e.clipboardData.getData("text/html");
-    if (!html) return;
+    const imageFiles = Array.from(e.clipboardData.files || []).filter((file) => file.type.startsWith("image/"));
+    if (!html && !imageFiles.length) return;
     e.preventDefault();
-    document.execCommand("insertHTML", false, cleanWordHtml(html));
+    if (html) document.execCommand("insertHTML", false, cleanWordHtml(html));
+    if (onImageUpload && imageFiles.length) {
+      for (const file of imageFiles.slice(0, 5)) {
+        const url = await onImageUpload(file);
+        if (url) document.execCommand("insertImage", false, url);
+      }
+    }
     onChange(ref.current?.innerHTML || "");
   };
 
