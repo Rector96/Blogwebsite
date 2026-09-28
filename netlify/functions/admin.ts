@@ -289,108 +289,69 @@ export default async (req: Request) => {
   if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-  const [sponsors, leads, events, payments, clicks, articles, newsletter,
-    pageViewCount, sessionRows, articleOpenCount, shareCount, sponsorClickCount] = await Promise.all([
+  const [sponsors, leads, payments, clicks, articles, newsletter, analytics] = await Promise.all([
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
-    database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").gte("created_at", thirtyDaysAgo).order("created_at", { ascending: false }).range(0, 49999),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,total_amount_usd,email,name,company,status,payment_provider,provider_status,provider_currency,provider_transaction_id,paystack_status,paystack_currency,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,duration_months,monthly_rate_usd,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned,story_type,category,region,undefined").order("timestamp", { ascending: false }).limit(100),
-    database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "page_view").gte("created_at", thirtyDaysAgo),
-    database.from("rwdnews_events").select("session_id").eq("event_name", "page_view").gte("created_at", thirtyDaysAgo).not("session_id", "is", null).order("created_at", { ascending: false }).range(0, 49999),
-    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "article_open").gte("created_at", thirtyDaysAgo),
-    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "article_share").gte("created_at", thirtyDaysAgo),
-    database.from("sponsor_clicks").select("id", { count: "exact", head: true }),
+    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,total_amount_usd,email,name,company,status,payment_provider,provider_status,provider_currency,provider_transaction_id,paystack_status,paystack_currency,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,duration_months,monthly_rate_usd,paid_at,created_at").order("created_at", { ascending: false }).limit(1000),
+    database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(2000),
+    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,updated_at,editorial_status,featured,pinned,story_type,category,region").order("timestamp", { ascending: false }).limit(100),
+    database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(1000),
+    database.rpc("get_rockbrief_admin_analytics", { p_since: thirtyDaysAgo }),
   ]);
 
-  const firstError = [sponsors, leads, events, payments, clicks, articles, newsletter, pageViewCount, sessionRows, articleOpenCount, shareCount, sponsorClickCount].find((x) => x.error);
+  const firstError = [sponsors, leads, payments, clicks, articles, newsletter, analytics].find((x) => x.error);
   if (firstError?.error) return json({ error: firstError.error.message }, 400);
 
-  const rows = events.data || [];
-  const pageViews = rows.filter((r: any) => r.event_name === "page_view");
-  const sessions = new Set((sessionRows.data || []).map((r: any) => String(r.session_id)).filter(Boolean));
-  const aggregate = (key: string) => {
-    const map = new Map<string, number>();
-    for (const row of pageViews) {
-      const value = String((row as Record<string, unknown>)[key] || "Unknown");
-      map.set(value, (map.get(value) || 0) + 1);
-    }
-    return Array.from(map.entries()).map(([label, value]) => ({ label, value })).sort((a,b) => b.value-a.value).slice(0, 15);
-  };
-  const dailyMap = new Map<string, number>();
-  for (const row of pageViews) {
-    const day = String(row.created_at).slice(0, 10);
-    dailyMap.set(day, (dailyMap.get(day) || 0) + 1);
-  }
-  const articleMap = new Map<string, number>();
-  for (const row of rows.filter((r: any) => r.article_id && (r.event_name === "article_open" || r.event_name === "page_view"))) {
-    const id = String(row.article_id);
-    articleMap.set(id, (articleMap.get(id) || 0) + 1);
-  }
+  const metrics = (analytics.data || {}) as Record<string, any>;
   const clickMap = new Map<string, number>();
   for (const row of clicks.data || []) {
     const key = String(row.sponsor_id || row.sponsor_slug || "unknown");
     clickMap.set(key, (clickMap.get(key) || 0) + 1);
   }
   const paid = (payments.data || []).filter((p: any) => p.status === "paid");
-  const revenueNaira = paid
-    .filter((p: any) => String(p.currency || "NGN").toUpperCase() === "NGN")
+  const revenueNaira = paid.filter((p: any) => String(p.currency || "").toUpperCase() === "NGN")
     .reduce((sum: number, p: any) => sum + Number(p.amount_naira ?? p.amount ?? 0), 0);
-  const revenueUsd = paid
-    .filter((p: any) => String(p.currency || "").toUpperCase() === "USD")
+  const revenueUsd = paid.filter((p: any) => String(p.currency || "").toUpperCase() === "USD")
     .reduce((sum: number, p: any) => sum + Number(p.amount_usd ?? p.amount ?? 0), 0);
-  const recommendationImpressions = rows.filter((r: any) => r.event_name === "recommendation_impression").length;
-  const recommendationClicks = rows.filter((r: any) => r.event_name === "recommendation_click").length;
-  const engagedReads = rows.filter((r: any) => r.event_name === "reading_engaged").length;
-  const returnVisits = rows.filter((r: any) => r.event_name === "return_visit").length;
-  const searchEvents = rows.filter((r: any) => r.event_name === "search").length;
-  const externalSourceClicks = rows.filter((r: any) => r.event_name === "external_source_click").length;
-  const sessionPageViews = new Map<string, number>();
-  for (const row of pageViews) {
-    const session = String(row.session_id || "");
-    if (session) sessionPageViews.set(session, (sessionPageViews.get(session) || 0) + 1);
-  }
-  const returningSessions = Array.from(sessionPageViews.values()).filter((count) => count > 1).length;
-
+  const recommendationImpressions = Number(metrics.engagement?.recommendation_impressions || 0);
+  const recommendationClicks = Number(metrics.engagement?.recommendation_clicks || 0);
   return json({
     generated_at: new Date().toISOString(),
     engagement: {
       recommendation_impressions: recommendationImpressions,
       recommendation_clicks: recommendationClicks,
       recommendation_ctr: recommendationImpressions ? (recommendationClicks / recommendationImpressions) * 100 : 0,
-      engaged_reads: engagedReads,
-      return_visits: returnVisits,
-      returning_sessions: returningSessions,
-      search_events: searchEvents,
-      external_source_clicks: externalSourceClicks,
+      engaged_reads: Number(metrics.engagement?.engaged_reads || 0),
+      return_visits: Number(metrics.engagement?.return_visits || 0),
+      returning_sessions: Number(metrics.engagement?.returning_sessions || 0),
+      search_events: Number(metrics.engagement?.search_events || 0),
+      external_source_clicks: Number(metrics.engagement?.external_source_clicks || 0),
     },
     overview: {
-      page_views: Number(pageViewCount.count || 0),
-      unique_sessions: sessions.size,
-      article_opens: Number(articleOpenCount.count || 0),
-      shares: Number(shareCount.count || 0),
-      saves: rows.filter((r:any)=>r.event_name==="article_save").length,
-      sponsor_clicks: Number(sponsorClickCount.count || 0),
-      advertiser_leads: (leads.data || []).filter((l:any) => new Date(l.created_at).getTime() >= Date.parse(thirtyDaysAgo)).length,
-      newsletter_subscribers: (newsletter.data || []).filter((n:any)=>n.status==="active").length,
+      page_views: Number(metrics.page_views || 0),
+      unique_sessions: Number(metrics.unique_sessions || 0),
+      article_opens: Number(metrics.article_opens || 0),
+      shares: Number(metrics.shares || 0),
+      saves: Number(metrics.saves || 0),
+      sponsor_clicks: Number(metrics.sponsor_clicks || 0),
+      advertiser_leads: Number(metrics.advertiser_leads || 0),
+      newsletter_subscribers: Number(metrics.newsletter_subscribers || 0),
       paid_revenue_naira: revenueNaira,
       paid_revenue_usd: revenueUsd,
-      pending_payments: (payments.data || []).filter((p:any)=>p.status==="pending").length,
+      pending_payments: Number(metrics.pending_payments || 0),
     },
-    daily: Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).slice(-30).map(([day,value])=>({day,value})),
-    sources: aggregate("source"),
-    countries: aggregate("country"),
-    cities: aggregate("city"),
-    devices: aggregate("device"),
-    browsers: aggregate("browser"),
-    top_paths: aggregate("page_path"),
+    daily: metrics.daily || [],
+    sources: metrics.sources || [],
+    countries: metrics.countries || [],
+    cities: metrics.cities || [],
+    devices: metrics.devices || [],
+    browsers: metrics.browsers || [],
+    top_paths: metrics.top_paths || [],
     sponsors: (sponsors.data || []).map((s:any)=>({ ...s, clicks: clickMap.get(String(s.id)) || 0 })),
     leads: leads.data || [],
     payments: payments.data || [],
     articles: articles.data || [],
-    top_articles: Array.from(articleMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([id,views])=>({ id, views, article: (articles.data || []).find((a:any)=>String(a.id)===id) || null })),
+    top_articles: (metrics.top_articles || []).map((item:any) => ({ ...item, article: (articles.data || []).find((a:any)=>String(a.id)===String(item.id)) || null })),
     audit_logs: (await database.from("admin_audit_logs").select("id,action,entity_type,entity_id,details,created_at").order("created_at",{ascending:false}).limit(100)).data || [],
   });
 };
