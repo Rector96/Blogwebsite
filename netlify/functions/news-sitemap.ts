@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { Config, Context } from "@netlify/functions";
+import { runIngest } from "./news";
 
 function env(name: string) {
   return Netlify.env.get(name) || "";
@@ -26,9 +27,7 @@ function slugify(value: string) {
 function getSite(request: Request) {
   const configured = env("PUBLIC_SITE_URL").replace(/\/$/, "");
   if (configured) return configured;
-
-  const url = new URL(request.url);
-  return url.origin;
+  return new URL(request.url).origin;
 }
 
 function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
@@ -38,7 +37,6 @@ function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
       const slug = slugify(title);
       const id = String(article.id || "");
       const publishedTime = Date.parse(String(article.timestamp || ""));
-
       if (!slug || !id || !Number.isFinite(publishedTime)) return "";
 
       const loc = site + "/news/" + slug + "--" + encodeURIComponent(id);
@@ -69,33 +67,47 @@ function xmlFor(stories: Array<Record<string, unknown>>, site: string) {
   ].join("");
 }
 
-export default async function handler(_request: Request, _context: Context) {
-  const site = getSite(_request);
+async function getRecentStories(cutoff: string) {
   const supabaseUrl = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
   const supabaseKey =
     env("SUPABASE_SERVICE_ROLE_KEY") ||
     env("SUPABASE_ANON_KEY") ||
     env("VITE_SUPABASE_ANON_KEY");
 
+  if (!supabaseUrl || !supabaseKey) return [];
+
+  try {
+    const db = createClient(supabaseUrl, supabaseKey);
+    const { data, error } = await db
+      .from("articles")
+      .select("id,original_title,ai_hook_title,timestamp")
+      .eq("editorial_status", "published")
+      .gte("timestamp", cutoff)
+      .order("timestamp", { ascending: false })
+      .limit(1000);
+
+    if (error || !Array.isArray(data)) return [];
+    return data as Array<Record<string, unknown>>;
+  } catch {
+    return [];
+  }
+}
+
+export default async function handler(request: Request, _context: Context) {
+  const site = getSite(request);
   const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
-  let stories: Array<Record<string, unknown>> = [];
 
-  if (supabaseUrl && supabaseKey) {
+  let stories = await getRecentStories(cutoff);
+
+  // Google News requires <url> entries. If the wire has gone quiet for 48 hours,
+  // refresh the news feed once so a legitimate newly published story can populate
+  // the sitemap. We never add an older story just to satisfy the XML validator.
+  if (!stories.length) {
     try {
-      const db = createClient(supabaseUrl, supabaseKey);
-      const { data, error } = await db
-        .from("articles")
-        .select("id,original_title,ai_hook_title,timestamp")
-        .eq("editorial_status", "published")
-        .gte("timestamp", cutoff)
-        .order("timestamp", { ascending: false })
-        .limit(1000);
-
-      if (!error && Array.isArray(data)) {
-        stories = data;
-      }
-    } catch {
-      stories = [];
+      await runIngest();
+      stories = await getRecentStories(cutoff);
+    } catch (error) {
+      console.error("[RockBrief] News Sitemap refresh failed", error);
     }
   }
 
