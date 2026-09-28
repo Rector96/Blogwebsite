@@ -33,10 +33,10 @@ export default async (req: Request) => {
   const creativeNotes = cleanText(body.creative_notes, 1000);
   const baseAmount = sponsorTotalUsd(packageCode, months);
 
-  if (!pkg || !baseAmount || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+  if (!pkg || !baseAmount || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return json({ error: "Choose a valid sponsorship package and enter a valid email." }, 400);
   }
-  if (ctaUrl && !/^https?:\\/\\//i.test(ctaUrl)) {
+  if (ctaUrl && !/^https?:\/\//i.test(ctaUrl)) {
     return json({ error: "Website URL must start with http:// or https://." }, 400);
   }
   if (creativeMode === "upload" && !creativeUrl) {
