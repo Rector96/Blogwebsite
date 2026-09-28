@@ -293,7 +293,7 @@ function scoreItems(items: any[]) {
           : cluster.length >= 2 || score >= 48
             ? "Developing"
             : "Fresh",
-      sources: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 4),
+      sources: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 5),
     };
   });
 }
