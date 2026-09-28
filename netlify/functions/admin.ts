@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env, json, SPONSOR_PACKAGES, paystackRequest } from "../../src/lib/paystack-server";
 import { koraRequest } from "../../src/lib/kora-server";
+import { sanitizeArticleHtmlServer } from "../../src/lib/server-content";
 
 function db() {
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
@@ -144,7 +145,7 @@ export default async (req: Request) => {
     if (body.action === "article_create") {
       const headline = clean(body.headline, 220);
       const description = clean(body.description, 1000);
-      const bodyText = String(body.body ?? "").trim().slice(0, 30000);
+      const bodyText = sanitizeArticleHtmlServer(String(body.body ?? "").trim().slice(0, 30000));
       const image = clean(body.image, 2000);
       const originalUrl = clean(body.original_url, 1000);
       const category = clean(body.category || "Business", 50);
@@ -188,7 +189,7 @@ export default async (req: Request) => {
       const textFields = ["headline","description","body","image","category","region","story_type","subject","author_name","image_credit","image_license","image_source_url","original_url"] as const;
       for (const field of textFields) {
         if (typeof body[field] === "string") {
-          const value = clean(body[field], field === "body" ? 100000 : 2000);
+          const value = field === "body" ? sanitizeArticleHtmlServer(String(body[field]).slice(0, 100000)) : clean(body[field], 2000);
           if (field === "headline") patch.original_title = value;
           else if (field === "description") patch.original_description = value;
           else patch[field] = value;
