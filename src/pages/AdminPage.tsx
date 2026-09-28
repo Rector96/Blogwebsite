@@ -188,15 +188,21 @@ export default function AdminPage() {
   const createStory = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    const plainWords = storyForm.body.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim().split(/\s+/).filter(Boolean);
+    if (storyForm.editorial_status !== "draft" && plainWords.length < 400) {
+      setError(`Published stories must contain at least 400 words. Current count: ${plainWords.length}.`);
+      return;
+    }
     await post({
       action: "article_create",
       ...storyForm,
       tags: storyForm.tags.split(",").map(x => x.trim()).filter(Boolean),
+      read_time: `${Math.max(1, Math.ceil(plainWords.length / 180))} min read`,
     });
     setStoryForm({
       headline: "", description: "", body: "", category: "Business", region: "Global",
       story_type: "RockBrief ORIGINAL", subject: "", author_name: "RockBrief Editorial",
-      image: "", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
+      image: "", read_time: "3 min read", image_credit: "RockBrief", image_license: "Owned or licensed by RockBrief",
       image_source_url: "", original_url: "", tags: "", publish_at: "", editorial_status: "published",
       featured: false, pinned: false,
     });
@@ -218,6 +224,7 @@ export default function AdminPage() {
         subject: String(a.subject || ""),
         author_name: String(a.author_name || "RockBrief Editorial"),
         image: String(a.image || ""),
+        read_time: String(a.read_time || "3 min read"),
         image_credit: String(a.image_credit || ""),
         image_license: String(a.image_license || ""),
         image_source_url: String(a.image_source_url || ""),
@@ -237,11 +244,17 @@ export default function AdminPage() {
     e.preventDefault();
     if (!editingArticleId) return;
     setError("");
+    const plainWords = storyForm.body.replace(/<[^>]*>/g, " ").replace(/&nbsp;/gi, " ").trim().split(/\s+/).filter(Boolean);
+    if (storyForm.editorial_status !== "draft" && plainWords.length < 400) {
+      setError(`Published stories must contain at least 400 words. Current count: ${plainWords.length}.`);
+      return;
+    }
     await post({
       action: "article_update",
       id: editingArticleId,
       ...storyForm,
       tags: storyForm.tags.split(",").map(x => x.trim()).filter(Boolean),
+      read_time: `${Math.max(1, Math.ceil(plainWords.length / 180))} min read`,
       editorial_status: storyForm.editorial_status === "draft" ? "hidden" : storyForm.editorial_status,
     });
     setEditingArticleId(null);
@@ -357,7 +370,8 @@ export default function AdminPage() {
             <input type="url" placeholder="Image source URL (optional)" value={storyForm.image_source_url} onChange={e=>setStoryForm(v=>({...v,image_source_url:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input type="url" placeholder="Original/source article URL (optional)" value={storyForm.original_url} onChange={e=>setStoryForm(v=>({...v,original_url:e.target.value}))} className="h-11 border px-3 text-sm" />
             <input aria-label="Article tags" placeholder="Tags (comma separated)" value={storyForm.tags} onChange={e=>setStoryForm(v=>({...v,tags:e.target.value}))} className="h-11 border px-3 text-sm" />
-            <input aria-label="Reading time" placeholder="Reading time" value={storyForm.read_time} readOnly className="h-11 border bg-neutral-50 px-3 text-sm" />\n            <input type="datetime-local" value={storyForm.publish_at} onChange={e=>setStoryForm(v=>({...v,publish_at:e.target.value}))} className="h-11 border px-3 text-sm" />
+            <input aria-label="Reading time" placeholder="Reading time" value={storyForm.read_time} readOnly className="h-11 border bg-neutral-50 px-3 text-sm" />\n            <input aria-label="Reading time" placeholder="Reading time" value={storyForm.read_time} readOnly className="h-11 border bg-neutral-50 px-3 text-sm" />
+            <input type="datetime-local" value={storyForm.publish_at} onChange={e=>setStoryForm(v=>({...v,publish_at:e.target.value}))} className="h-11 border px-3 text-sm" />
             <div className="flex flex-wrap items-center gap-4 border p-3 text-xs md:col-span-2">
               <label className="flex items-center gap-2"><input type="checkbox" checked={storyForm.featured} onChange={e=>setStoryForm(v=>({...v,featured:e.target.checked}))} /> Feature on homepage</label>
               <label className="flex items-center gap-2"><input type="checkbox" checked={storyForm.pinned} onChange={e=>setStoryForm(v=>({...v,pinned:e.target.checked}))} /> Pin story</label>
