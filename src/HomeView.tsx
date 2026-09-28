@@ -72,10 +72,10 @@ export function HomeView({
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>RWDNEWS — The world’s wire, briefed clearly</title>
+        <title>RockBrief — Global News, Briefed Clearly</title>
         <meta
           name="description"
-          content="RWDNEWS is a global news briefing platform — clear summaries from the world wire, sources always credited. Sports, tech, business and world news."
+          content="RockBrief delivers source-backed global news briefings across world affairs, business, technology, sports, Africa and more, with original sources credited."
         />
       </Helmet>
 
@@ -98,10 +98,10 @@ export function HomeView({
 
       <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
-          <a href="/" className="block min-w-0 shrink" aria-label="RWDNEWS home">
+          <a href="/" className="block min-w-0 shrink" aria-label="RockBrief home">
             <img
               src="/rwdnews-logo.svg"
-              alt="RWDNEWS"
+              alt="RockBrief"
               className="h-auto w-[150px] sm:w-[220px] md:w-[275px]"
             />
           </a>
@@ -128,7 +128,7 @@ export function HomeView({
         </div>
 
         <p className="border-t border-neutral-100 bg-neutral-50/80 px-3 py-1.5 text-center text-[10px] font-semibold tracking-wide text-neutral-500 sm:text-[11px]">
-          The world’s wire, briefed clearly · Sources always credited
+          Global news, briefed clearly · Sources always credited
         </p>
 
         <div className="border-t border-neutral-100 bg-neutral-50/70">
@@ -196,7 +196,7 @@ export function HomeView({
                   {hero.image ? (
                     <img
                       src={hero.image}
-                      alt=""
+                      alt={hero.ai_hook_title || hero.original_title || "RockBrief news"}
                       className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
                       loading="eager"
                     />
@@ -226,7 +226,7 @@ export function HomeView({
                     className="group flex gap-3 border-b border-neutral-100 pb-4"
                   >
                     {a.image ? (
-                      <img src={a.image} alt="" className="size-16 shrink-0 object-cover sm:size-20" loading="lazy" />
+                      <img src={a.image} alt={a.ai_hook_title || a.original_title || "RockBrief news"} className="size-16 shrink-0 object-cover sm:size-20" loading="lazy" />
                     ) : null}
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
@@ -292,7 +292,7 @@ export function HomeView({
                 {cell.item.image ? (
                   <img
                     src={cell.item.image}
-                    alt=""
+                    alt={cell.item.ai_hook_title || cell.item.original_title || "RockBrief news"}
                     className="aspect-[16/9] w-full object-cover"
                     loading="lazy"
                   />
@@ -345,13 +345,13 @@ export function HomeView({
         ) : null}
 
         <form onSubmit={submitNewsletter} className="mt-12 border border-neutral-200 bg-neutral-50 p-5 sm:p-6">
-          <h2 className="font-display text-lg font-semibold sm:text-xl">Get the RWDNEWS briefing</h2>
+          <h2 className="font-display text-lg font-semibold sm:text-xl">Get the RockBrief briefing</h2>
           <p className="mt-1 text-xs text-neutral-500">Global headlines, short and clear — in your inbox.</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
+              placeholder="Email address"
               className="h-11 flex-1 border border-neutral-200 px-3 text-sm"
             />
             <button type="submit" className="h-11 bg-neutral-950 px-5 text-xs font-bold text-white">
