@@ -5,17 +5,17 @@ import { SiteFooter } from "../components/SiteFooter";
 
 const content: Record<string, { title: string; intro: string; sections: Array<[string, string]> }> = {
   "/about": {
-    title: "About RWDNEWS",
+    title: "About RockBrief",
     intro:
-      "RWDNEWS is a global news briefing platform. We bring the world’s wire into one place — short, clear summaries so you understand the story fast, with original sources always credited. We are building a brand people trust on every continent, not a copy of any single publisher.",
+      "RockBrief is a global news briefing platform. We bring the world’s wire into one place — short, clear summaries so you understand the story fast, with original sources always credited. We are building a brand people trust on every continent, not a copy of any single publisher.",
     sections: [
       [
         "Our promise",
-        "Come to RWDNEWS when you want the essentials without the noise. Every briefing is meant to be honest, readable on mobile, and linked back to the publishers who did the primary reporting.",
+        "Come to RockBrief when you want the essentials without the noise. Every briefing is meant to be honest, readable on mobile, and linked back to the publishers who did the primary reporting.",
       ],
       [
         "What we do",
-        "We discover current reports from publishers and open news sources worldwide, then present concise briefings with source attribution. RWDNEWS does not replace the original publisher. If you need quotes, full context or legal detail, open the source link we provide.",
+        "We discover current reports from publishers and open news sources worldwide, then present concise briefings with source attribution. RockBrief does not replace the original publisher. If you need quotes, full context or legal detail, open the source link we provide.",
       ],
       [
         "Global by design",
@@ -27,14 +27,14 @@ const content: Record<string, { title: string; intro: string; sections: Array<[s
       ],
       [
         "Trust & corrections",
-        "If you spot a wrong attribution, image issue or factual problem in a briefing, contact the RWDNEWS team. We review and correct. Trust is earned by fixing mistakes in public, not by hiding them.",
+        "If you spot a wrong attribution, image issue or factual problem in a briefing, contact the RockBrief team. We review and correct. Trust is earned by fixing mistakes in public, not by hiding them.",
       ],
     ],
   },
   "/editorial": {
     title: "Editorial standards",
     intro:
-      "RWDNEWS follows one rule: source first, context second, automation third. Readers should feel safe relying on our briefings as a starting point — never as a substitute for the original report when stakes are high.",
+      "RockBrief follows one rule: source first, context second, automation third. Readers should feel safe relying on our briefings as a starting point — never as a substitute for the original report when stakes are high.",
     sections: [
       [
         "Source-backed coverage",
@@ -65,7 +65,7 @@ const content: Record<string, { title: string; intro: string; sections: Array<[s
   "/privacy": {
     title: "Privacy",
     intro:
-      "RWDNEWS collects only what is needed to run the service, understand aggregate engagement, handle newsletters and respond to advertising inquiries.",
+      "RockBrief collects only what is needed to run the service, understand aggregate engagement, handle newsletters and respond to advertising inquiries.",
     sections: [
       [
         "Analytics",
@@ -81,18 +81,18 @@ const content: Record<string, { title: string; intro: string; sections: Array<[s
       ],
       [
         "Your choices",
-        "You may unsubscribe and use browser privacy controls. For privacy questions or deletion requests, contact the RWDNEWS operator.",
+        "You may unsubscribe and use browser privacy controls. For privacy questions or deletion requests, contact the RockBrief operator.",
       ],
     ],
   },
   "/terms": {
     title: "Terms of use",
     intro:
-      "By using RWDNEWS you agree to use the service lawfully and understand that briefings are general information, not professional advice.",
+      "By using RockBrief you agree to use the service lawfully and understand that briefings are general information, not professional advice.",
     sections: [
       [
         "Content",
-        "RWDNEWS aggregates and summarizes third-party reports. Original publishers retain rights in their material.",
+        "RockBrief aggregates and summarizes third-party reports. Original publishers retain rights in their material.",
       ],
       [
         "No guarantee",
@@ -158,10 +158,10 @@ function AdvertisePage() {
         setMessage(
           result.ok
             ? "Payment received. Your campaign is now awaiting review."
-            : "We could not confirm this payment yet. Please contact RWDNEWS with your payment reference.",
+            : "We could not confirm this payment yet. Please contact RockBrief with your payment reference.",
         ),
       )
-      .catch(() => setMessage("We could not confirm the payment yet. Please contact RWDNEWS with your payment reference."))
+      .catch(() => setMessage("We could not confirm the payment yet. Please contact RockBrief with your payment reference."))
       .finally(() => setBusy(false));
   }, []);
 
@@ -207,12 +207,12 @@ function AdvertisePage() {
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>Advertise with RWDNEWS</title>
-        <meta name="description" content="Global advertising opportunities on RWDNEWS with flexible monthly campaigns and secure USD checkout." />
+        <title>Advertise with RockBrief</title>
+        <meta name="description" content="Global advertising opportunities on RockBrief with flexible monthly campaigns and secure USD checkout." />
       </Helmet>
       <header className="sticky top-0 z-30 border-b border-neutral-200/80 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <a href="/" className="font-display text-2xl font-bold tracking-tight">RWDNEWS</a>
+          <a href="/" className="font-display text-2xl font-bold tracking-tight">RockBrief</a>
           <a href="/" className="rounded-full px-3 py-2 text-sm font-semibold text-teal-800 hover:bg-teal-50">Back to news</a>
         </div>
       </header>
@@ -300,7 +300,7 @@ function AdvertisePage() {
                 <p className="mt-1 text-xs leading-relaxed text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 4 MB.</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"upload"}))} className={form.creative_mode==="upload"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>I have my advert</button>
-                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>Have RWDNEWS design it</button>
+                  <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>Have RockBrief design it</button>
                 </div>
                 {form.creative_mode==="upload" ? (
                   <div className="mt-3">
@@ -311,7 +311,7 @@ function AdvertisePage() {
                     {form.creative_url ? <img src={form.creative_url} alt="Advert creative preview" className="mt-3 max-h-56 w-full rounded-xl object-contain" /> : null}
                   </div>
                 ) : (
-                  <textarea required placeholder="Tell the RWDNEWS design team about your product, offer, CTA and preferred style…" value={form.creative_notes} onChange={e=>setForm(v=>({...v,creative_notes:e.target.value}))} className="mt-3 min-h-28 w-full rounded-xl border border-neutral-200 bg-white p-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
+                  <textarea required placeholder="Tell the RockBrief design team about your product, offer, CTA and preferred style…" value={form.creative_notes} onChange={e=>setForm(v=>({...v,creative_notes:e.target.value}))} className="mt-3 min-h-28 w-full rounded-xl border border-neutral-200 bg-white p-3 text-sm outline-none focus:border-neutral-950 focus:ring-2 focus:ring-neutral-950/10" />
                 )}
               </div>
 
@@ -358,13 +358,13 @@ export function InfoPage({ path }: { path: string }) {
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>{page.title} — RWDNEWS</title>
+        <title>{page.title} — RockBrief</title>
         <meta name="description" content={page.intro} />
       </Helmet>
       <header className="sticky top-0 z-20 border-b border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-6">
           <a href="/" className="font-display text-xl font-bold sm:text-2xl">
-            RWDNEWS
+            RockBrief
           </a>
           <a href="/" className="text-sm font-semibold text-teal-800">
             Back to news
@@ -372,7 +372,7 @@ export function InfoPage({ path }: { path: string }) {
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-10 sm:px-6 sm:py-12">
-        <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">RWDNEWS</p>
+        <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">RockBrief</p>
         <h1 className="font-display mt-2 text-3xl font-semibold sm:text-4xl">{page.title}</h1>
         <p className="mt-4 text-base leading-relaxed text-neutral-600 sm:text-lg">{page.intro}</p>
         <div className="mt-10 space-y-8">
