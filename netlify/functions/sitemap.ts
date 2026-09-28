@@ -14,8 +14,11 @@ function escapeXml(value: string) {
     .split("'").join("&" + "apos;");
 }
 
-export async function handler() {
-  const site = (env("PUBLIC_SITE_URL") || "https://rwdnews.netlify.app").replace(/\/$/, "");
+export async function handler(event: any) {
+  const host = String(event?.headers?.host || "").split(":")[0];
+  const forwarded = String(event?.headers?.["x-forwarded-proto"] || "https").split(",")[0];
+  const detectedSite = host ? forwarded + "://" + host : "";
+  const site = (env("PUBLIC_SITE_URL") || detectedSite || "https://rwdnews.netlify.app").replace(/\/$/, "");
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
   const key = env("SUPABASE_SERVICE_ROLE_KEY");
   let storyUrls: Array<{ url: string; lastmod: string }> = [];
