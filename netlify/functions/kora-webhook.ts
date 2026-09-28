@@ -52,7 +52,7 @@ export default async (req: Request) => {
     }
     return json({ ok: true });
   } catch (error) {
-    console.error("[RWDNEWS] Kora webhook failed", error);
+    console.error("[RockBrief] Kora webhook failed", error);
     return json({ error: "Webhook processing failed." }, 500);
   }
 };
