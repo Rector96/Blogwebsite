@@ -185,6 +185,17 @@ export default async (req: Request) => {
       if (typeof body.featured === "boolean") patch.featured = body.featured;
       if (typeof body.pinned === "boolean") patch.pinned = body.pinned;
       if (["published","hidden","archived"].includes(String(body.editorial_status))) patch.editorial_status = body.editorial_status;
+      const textFields = ["headline","description","body","image","category","region","story_type","subject","author_name","image_credit","image_license","image_source_url","original_url"] as const;
+      for (const field of textFields) {
+        if (typeof body[field] === "string") {
+          const value = clean(body[field], field === "body" ? 100000 : 2000);
+          if (field === "headline") patch.original_title = value;
+          else if (field === "description") patch.original_description = value;
+          else patch[field] = value;
+        }
+      }
+      if (Array.isArray(body.tags)) patch.tags = body.tags.map((x: unknown) => clean(x, 80)).filter(Boolean).slice(0, 20);
+      if (typeof body.publish_at === "string" && !Number.isNaN(Date.parse(body.publish_at))) patch.timestamp = new Date(body.publish_at).toISOString();
       const { error } = await database.from("articles").update(patch).eq("id", id);
       if (error) return json({ error: error.message }, 400);
       await audit(database, "article_updated", "article", id, patch);
