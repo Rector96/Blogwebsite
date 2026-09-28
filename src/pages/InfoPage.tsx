@@ -352,6 +352,62 @@ function AdvertisePage() {
   );
 }
 
+export function EditorialProfilePage() {
+  const origin = typeof window !== "undefined" ? window.location.origin : "https://rwdnews.netlify.app";
+  const profileUrl = origin + "/author/rockbrief-editorial";
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "mainEntity": {
+      "@type": "Organization",
+      "@id": profileUrl + "#organization",
+      "name": "RockBrief Editorial Team",
+      "url": profileUrl,
+      "description": "The editorial team responsible for RockBrief source-backed global news briefings and original reporting.",
+    },
+  };
+  return (
+    <div className="min-h-dvh bg-white text-neutral-950">
+      <Helmet>
+        <title>RockBrief Editorial Team — RockBrief</title>
+        <meta
+          name="description"
+          content="Meet the RockBrief Editorial Team responsible for source-backed global news briefings and original reporting."
+        />
+        <link rel="canonical" href={profileUrl} />
+        <meta name="robots" content="index,follow" />
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      </Helmet>
+      <header className="border-b border-neutral-200 bg-white">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4 sm:px-6">
+          <a href="/" className="font-display text-xl font-bold sm:text-2xl">RockBrief</a>
+          <a href="/editorial" className="text-sm font-semibold text-teal-800">Editorial standards</a>
+        </div>
+      </header>
+      <main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <p className="text-[10px] font-bold tracking-[0.18em] text-amber-800 uppercase">Author profile</p>
+        <h1 className="font-display mt-2 text-3xl font-semibold sm:text-4xl">RockBrief Editorial Team</h1>
+        <p className="mt-5 text-lg leading-relaxed text-neutral-700">
+          The RockBrief Editorial Team oversees source-backed global briefings, original stories, editorial review,
+          corrections and publishing standards. Wire briefings link readers to the original publisher, while
+          RockBrief originals are reviewed before publication.
+        </p>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <a href="/editorial" className="rounded-2xl border border-neutral-200 p-5 hover:border-teal-300">
+            <h2 className="font-display text-lg font-semibold">Editorial standards</h2>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">How RockBrief handles sourcing, attribution, corrections, images and advertising.</p>
+          </a>
+          <a href="/" className="rounded-2xl border border-neutral-200 p-5 hover:border-teal-300">
+            <h2 className="font-display text-lg font-semibold">Latest news</h2>
+            <p className="mt-2 text-sm leading-relaxed text-neutral-600">Browse the latest source-backed global briefings from RockBrief.</p>
+          </a>
+        </div>
+      </main>
+      <SiteFooter />
+    </div>
+  );
+}
+
 export function InfoPage({ path }: { path: string }) {
   if (path === "/advertise") return <AdvertisePage />;
   const page = content[path] || content["/about"];
