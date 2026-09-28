@@ -318,7 +318,17 @@ ${canonical}`;
         </p>
 
         {article.image ? (
-          <img src={article.image} alt="" className="mt-8 aspect-[16/9] w-full bg-neutral-100 object-cover" />
+          <figure className="mt-8">
+            <img src={article.image} alt={title} className="aspect-[16/9] w-full bg-neutral-100 object-cover" />
+            {article.image_credit ? (
+              <figcaption className="mt-2 text-xs leading-5 text-neutral-500">
+                {article.image_credit}
+                {article.image_source_url && /^https?:\\/\\//i.test(article.image_source_url) ? (
+                  <>{" · "}<a href={article.image_source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Image source</a></>
+                ) : null}
+              </figcaption>
+            ) : null}
+          </figure>
         ) : null}
 
         <div className="mt-6">

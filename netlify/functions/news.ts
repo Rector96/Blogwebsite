@@ -146,7 +146,7 @@ function stockImageQuery(title: string, cat: string) {
 }
 
 async function resolveSafeImage(rssOrGdeltImage: string, title: string, section: string) {
-  if (rssOrGdeltImage && /^https?:\\/\\//i.test(rssOrGdeltImage)) {
+  if (process.env.ALLOW_PUBLISHER_FEED_IMAGES === "true" && rssOrGdeltImage && /^https?:\\/\\//i.test(rssOrGdeltImage)) {
     return { image: rssOrGdeltImage, image_credit: "Publisher feed", image_license: "Feed preview" };
   }
   const query = stockImageQuery(title, section);
