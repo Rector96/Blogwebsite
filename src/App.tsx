@@ -8,6 +8,7 @@ import StoryPage from "./pages/StoryPage";
 import SportsPage from "./pages/SportsPage";
 import PredictionsPage from "./pages/PredictionsPage";
 import SubmitPage from "./pages/SubmitPage";
+import SectionHubPage from "./pages/SectionHubPage";
 import RwdNewsApp from "./AppHome";
 
 export type { EnrichedArticle } from "./AppHome";
@@ -44,6 +45,8 @@ export default function App() {
     page = <AdminSubmissionsPage />;
   else if (path.startsWith("/admin")) page = <AdminPage />;
   else if (path.startsWith("/news/")) page = <StoryPage />;
+  else if (path === "/explainers") page = <SectionHubPage mode="explainers" />;
+  else if (path === "/profiles") page = <SectionHubPage mode="profiles" />;
   else if (path === "/submit") page = <SubmitPage />;
   else if (path === "/author/rockbrief-editorial") page = <EditorialProfilePage />;
   else if (path === "/sport/predictions" || path.startsWith("/sport/predictions/"))
@@ -51,5 +54,10 @@ export default function App() {
   else if (path === "/sport" || path.startsWith("/sport/")) page = <SportsPage />;
   else if (["/about", "/editorial", "/privacy", "/terms", "/advertise"].includes(path))
     page = <InfoPage path={path} />;
-  return <HelmetProvider>{page}<ScrollToTopButton /></HelmetProvider>;
+  return (
+    <HelmetProvider>
+      {page}
+      <ScrollToTopButton />
+    </HelmetProvider>
+  );
 }
