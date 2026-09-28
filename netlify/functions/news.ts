@@ -32,7 +32,7 @@ export type NewsArticle = {
   pinned?: boolean;
 };
 
-const PLACEHOLDER_IMAGE = "https://rwdnews.netlify.app/rwdnews-logo.svg";
+const PLACEHOLDER_IMAGE = "/rwdnews-logo.svg";
 
 const rss = new Parser({
   headers: {
@@ -131,69 +131,68 @@ function rssImage(item: any) {
   return match?.[1] || "";
 }
 
-/** Category keyword for Unsplash — generic stock, not publisher photos */
-function unsplashQuery(cat: string) {
+/** Build a stock-photo search phrase from the actual story, with a category fallback. */
+function stockImageQuery(title: string, cat: string) {
+  const titleWords = clean(title).toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+    .filter((w) => w.length >= 4 && !stop.has(w)).slice(0, 6);
+  if (titleWords.length >= 2) return titleWords.join(" ");
   const map: Record<string, string> = {
-    Sports: "football stadium match",
-    Tech: "technology computer abstract",
-    Business: "business finance office",
-    Crypto: "cryptocurrency digital finance",
-    Entertainment: "entertainment stage lights",
-    Nigeria: "lagos nigeria city",
-    Ghana: "accra ghana africa",
-    Africa: "africa landscape city",
-    World: "world news city skyline",
-    Europe: "europe city architecture",
-    Asia: "asia city skyline",
-    "Middle East": "middle east city",
+    Sports: "football stadium sports match", Tech: "technology computer innovation", Business: "business finance markets",
+    Crypto: "cryptocurrency digital finance", Entertainment: "entertainment music film stage", Nigeria: "Nigeria Lagos city",
+    Ghana: "Ghana Accra city", Africa: "Africa city economy", World: "world news city", Europe: "Europe city",
+    Asia: "Asia city technology", "Middle East": "Middle East city",
   };
-  return map[cat] || "news journalism desk";
+  return map[cat] || "global news journalism";
 }
 
-/**
- * Safe image policy:
- * 1) RSS / GDELT thumbnail URL only (hotlink, not re-hosted)
- * 2) Unsplash royalty-free category image if key set
- * 3) RWDNEWS logo placeholder
- * We do NOT scrape publisher og:image HTML (copyright risk).
- */
-async function resolveSafeImage(rssOrGdeltImage: string, section: string) {
-  if (rssOrGdeltImage && /^https?:\/\//i.test(rssOrGdeltImage)) {
-    return {
-      image: rssOrGdeltImage,
-      image_credit: "Publisher feed",
-      image_license: "Feed preview",
-    };
+async function resolveSafeImage(rssOrGdeltImage: string, title: string, section: string) {
+  if (process.env.ALLOW_PUBLISHER_FEED_IMAGES === "true" && rssOrGdeltImage && /^https?:\/\//i.test(rssOrGdeltImage)) {
+    return { image: rssOrGdeltImage, image_credit: "Publisher feed", image_license: "Feed preview" };
   }
-  const key = process.env["UNSPLASH_ACCESS_KEY"] || "";
+  const query = stockImageQuery(title, section);
+  const pexelsKey = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
+  if (pexelsKey) {
+    try {
+      const u = new URL("https://api.pexels.com/v1/search");
+      u.searchParams.set("query", query); u.searchParams.set("per_page", "5"); u.searchParams.set("orientation", "landscape");
+      const r = await fetch(u, { headers: { Authorization: pexelsKey, Accept: "application/json" }, signal: AbortSignal.timeout(4500) });
+      if (r.ok) {
+        const data = await r.json() as any;
+        const photo = Array.isArray(data?.photos) ? data.photos.find((p: any) => p?.src?.large || p?.src?.medium) : null;
+        const url = photo?.src?.large || photo?.src?.medium || "";
+        if (url) return {
+          image: String(url),
+          image_credit: photo?.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Photos provided by Pexels",
+          image_license: "Pexels License",
+          image_source_url: typeof photo?.url === "string" ? photo.url : "https://www.pexels.com/",
+        };
+      }
+    } catch { /* fall through to Unsplash */ }
+  }
+  const key = process.env.UNSPLASH_ACCESS_KEY || "";
   if (key) {
     try {
-      const q = encodeURIComponent(unsplashQuery(section));
-      const u = `https://api.unsplash.com/photos/random?query=${q}&orientation=landscape&content_filter=high`;
-      const r = await fetch(u, {
-        headers: { Authorization: `Client-ID ${key}`, "Accept-Version": "v1" },
-        signal: AbortSignal.timeout(4000),
-      });
+      const u = new URL("https://api.unsplash.com/search/photos");
+      u.searchParams.set("query", query); u.searchParams.set("per_page", "5"); u.searchParams.set("orientation", "landscape"); u.searchParams.set("content_filter", "high");
+      const r = await fetch(u, { headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" }, signal: AbortSignal.timeout(4500) });
       if (r.ok) {
-        const data = (await r.json()) as any;
-        const url = data?.urls?.regular || data?.urls?.small || "";
+        const data = await r.json() as any;
+        const photo = Array.isArray(data?.results) ? data.results.find((p: any) => p?.urls?.regular || p?.urls?.small) : null;
+        const url = photo?.urls?.regular || photo?.urls?.small || "";
         if (url) {
+          const profile = typeof photo?.user?.links?.html === "string" ? photo.user.links.html : "https://unsplash.com/";
+          const profileUrl = profile + (profile.includes("?") ? "&" : "?") + "utm_source=rockbrief&utm_medium=referral";
           return {
             image: String(url),
-            image_credit: data?.user?.name ? `Photo: ${data.user.name} / Unsplash` : "Unsplash",
+            image_credit: photo?.user?.name ? "Photo: " + photo.user.name + " / Unsplash" : "Unsplash",
             image_license: "Unsplash License",
+            image_source_url: profileUrl,
           };
         }
       }
-    } catch {
-      /* fall through */
-    }
+    } catch { /* fall through */ }
   }
-  return {
-    image: PLACEHOLDER_IMAGE,
-    image_credit: "RWDNEWS",
-    image_license: "Site asset",
-  };
+  return { image: PLACEHOLDER_IMAGE, image_credit: "RockBrief", image_license: "Site asset", image_source_url: "" };
 }
 
 async function getRss() {
@@ -261,6 +260,7 @@ function similarity(a: string, b: string) {
 }
 
 function scoreItems(items: any[]) {
+  const now = Date.now();
   return items.map((item) => {
     const cluster = items.filter((other) => similarity(item.title, other.title) >= 0.42);
     const domains = new Set(
@@ -272,20 +272,32 @@ function scoreItems(items: any[]) {
         }
       }),
     );
-    const published = new Date(item.date || Date.now()).getTime();
-    const age = Number.isNaN(published) ? 0 : Math.max(0, (Date.now() - published) / 3600000);
-    const freshness = Math.max(0, 38 - age * 4);
-    const catBoost =
+    const published = new Date(item.date || 0).getTime();
+    const ageHours = Number.isNaN(published) || published <= 0 ? 72 : Math.max(0, (now - published) / 3600000);
+    const freshness = Math.max(0, 42 - ageHours * 3.5);
+    const descriptionQuality = Math.min(10, Math.max(0, stripJunk(item.desc || "").length / 100));
+    const sourceBreadth = Math.min(20, domains.size * 6);
+    const corroboration = Math.min(18, Math.max(0, cluster.length - 1) * 6);
+    const categoryBoost =
       item.category === "Tech"
-        ? 12
-        : item.category === "Nigeria" || item.category === "Africa" || item.category === "Ghana"
-          ? 14
-          : item.category === "Sports"
-            ? 8
-            : 0;
-    const score = Math.round(Math.min(100, freshness + domains.size * 8 + cluster.length * 7 + catBoost));
+        ? 8
+        : item.category === "Business"
+          ? 7
+          : item.category === "Nigeria" || item.category === "Africa" || item.category === "Ghana"
+            ? 6
+            : item.category === "Sports"
+              ? 5
+              : 0;
+    const score = Math.round(Math.min(100, freshness + descriptionQuality + sourceBreadth + corroboration + categoryBoost));
     return {
       ...item,
+      desc:
+        stripJunk(item.desc || "") ||
+        cluster
+          .map((x) => stripJunk(x.desc || ""))
+          .filter((x) => x.length >= 80)
+          .sort((a, b) => b.length - a.length)[0] ||
+        "",
       trendScore: score,
       trendLabel:
         cluster.length >= 3 || score >= 70
@@ -296,6 +308,15 @@ function scoreItems(items: any[]) {
       sources: Array.from(new Set(cluster.map((x) => x.source))).slice(0, 5),
     };
   });
+}
+
+function collapseNearDuplicates(items: any[]) {
+  const kept: any[] = [];
+  for (const item of [...items].sort((a, b) => b.trendScore - a.trendScore)) {
+    if (kept.some((existing) => similarity(item.title, existing.title) >= 0.86)) continue;
+    kept.push(item);
+  }
+  return kept;
 }
 
 function pickBalanced(items: any[], limit = 48) {
@@ -331,7 +352,7 @@ function expandFallbackSummary(title: string, desc: string): string[] {
   const t = stripJunk(title);
   if (d.length > 40) {
     const sentences = d.split(/(?<=[.!?])\s+/).filter((s) => s.trim().length > 15);
-    if (sentences.length >= 2) return sanitizeSummary(sentences.slice(0, 5));
+    if (sentences.length >= 2) return sanitizeSummary(sentences.slice(0, 4));
     const chunks: string[] = [];
     let rest = d;
     while (rest.length > 100 && chunks.length < 4) {
@@ -341,9 +362,9 @@ function expandFallbackSummary(title: string, desc: string): string[] {
       rest = rest.slice(cut).trim();
     }
     if (rest) chunks.push(rest);
-    return sanitizeSummary(chunks.length ? chunks : [d]).slice(0, 5);
+    return sanitizeSummary(chunks.length ? chunks : [d]).slice(0, 4);
   }
-  return sanitizeSummary([d || t]).slice(0, 5);
+  return sanitizeSummary([d || t]).slice(0, 4);
 }
 
 async function aiBrief(title: string, desc: string) {
@@ -362,8 +383,8 @@ async function aiBrief(title: string, desc: string) {
         contents:
           "Write a short news briefing for an aggregator. Return JSON only. " +
           "(1) ai_hook_title: clear headline. " +
-          "(2) ai_summary: exactly 3 to 5 short bullet points. One sentence each. " +
-          "Total 60–100 words max. Facts only from the title and description. " +
+          "(2) ai_summary: exactly 4 substantial bullet points, each 30–55 words. " +
+          "Aim for about 140–220 words total. Facts only from the title and description. " +
           "Do not invent, do not copy long passages, no disclaimers, no URLs, no Read More, no why it matters. " +
           "(3) tags: 2–4 hashtags. " +
           "TITLE: " +
@@ -388,7 +409,7 @@ async function aiBrief(title: string, desc: string) {
     const text = (response as any)?.text;
     if (!text) return fallback;
     const parsed = JSON.parse(text);
-    const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 5);
+    const summary = sanitizeSummary(Array.isArray(parsed.ai_summary) ? parsed.ai_summary : []).slice(0, 4);
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
       ai_summary: summary.length ? summary : fallback.ai_summary,
@@ -418,43 +439,78 @@ function dedupe(items: any[]) {
   });
 }
 
-async function buildArticles(): Promise<NewsArticle[]> {
+async function buildArticles(existingByUrl = new Map<string, NewsArticle>()): Promise<NewsArticle[]> {
   const [rssItems, gdeltItems] = await Promise.all([getRss(), getGdelt()]);
   const scored = scoreItems(dedupe([...rssItems, ...gdeltItems]));
-  const items = pickBalanced(scored, 48);
-  const results = (
-    await Promise.all(
-      items.map(async (item) => {
-        const section = category(item.title + " " + item.desc, item.category, item.region);
-        const brief = await aiBrief(item.title, item.desc);
-        const safe = await resolveSafeImage(item.image || "", section);
-        return {
-          id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
-          original_url: item.link,
-          image: safe.image,
-          timestamp:
-            item.date && !Number.isNaN(new Date(item.date).getTime())
-              ? new Date(item.date).toISOString()
-              : new Date().toISOString(),
-          source: item.source,
-          original_title: item.title,
-          original_description: stripJunk(item.desc),
-          ai_hook_title: brief.ai_hook_title,
-          ai_summary: sanitizeSummary(brief.ai_summary),
-          tags: brief.tags,
-          read_time: "1 min read",
-          category: section,
-          region: item.region || "Global",
-          trend_score: item.trendScore,
-          trend_label: item.trendLabel,
-          image_credit: safe.image_credit,
-          image_license: safe.image_license,
-          image_source_url: item.link,
-          discovered_via: item.sources,
-        } satisfies NewsArticle;
-      }),
-    )
-  ).filter((item): item is NewsArticle => Boolean(item));
+  const items = pickBalanced(collapseNearDuplicates(scored), 48);
+  const qualityItems = items.filter((item) => stripJunk(item.desc || "").length >= 80);
+  const maxNewAi = Math.max(0, Math.min(48, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 12)));
+  let aiCalls = 0;
+  const results: NewsArticle[] = [];
+
+  for (const item of qualityItems) {
+    const section = category(item.title + " " + item.desc, item.category, item.region);
+    const existing = existingByUrl.get(item.link);
+    const sourceDescription = stripJunk(item.desc);
+    const existingSummary = Array.isArray(existing?.ai_summary) ? existing.ai_summary : [];
+    const existingComplete = Boolean(existing?.ai_hook_title) && existingSummary.length >= 4 &&
+      Array.isArray(existing?.tags) && existing.tags.length > 0;
+    const sourceChanged = Boolean(existing) &&
+      stripJunk(existing?.original_description || "") !== sourceDescription;
+
+    let brief: { ai_hook_title: string; ai_summary: string[]; tags: string[] };
+    if (existingComplete && !sourceChanged) {
+      brief = {
+        ai_hook_title: existing!.ai_hook_title,
+        ai_summary: existingSummary.slice(0, 4),
+        tags: existing!.tags.slice(0, 4),
+      };
+    } else if (aiCalls < maxNewAi) {
+      aiCalls += 1;
+      brief = await aiBrief(item.title, sourceDescription);
+    } else {
+      brief = {
+        ai_hook_title: item.title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim(),
+        ai_summary: expandFallbackSummary(item.title, sourceDescription),
+        tags: ["#" + section.replace(/\s+/g, "")],
+      };
+    }
+
+    const existingNeedsImageRefresh = Boolean(existing) &&
+      (existing?.image_license === "Feed preview" ||
+        (/(Pexels|Unsplash)/i.test(existing?.image_license || "") && existing?.image_source_url === item.link));
+    const safe = existing?.image && !existingNeedsImageRefresh
+      ? {
+          image: existing.image,
+          image_credit: existing.image_credit,
+          image_license: existing.image_license,
+          image_source_url: existing.image_source_url,
+        }
+      : await resolveSafeImage(item.image || "", item.title, section);
+
+    results.push({
+      id: "news-" + Buffer.from(item.link).toString("base64url").slice(0, 28),
+      original_url: item.link,
+      image: safe.image,
+      timestamp: item.date && !Number.isNaN(new Date(item.date).getTime())
+        ? new Date(item.date).toISOString() : new Date().toISOString(),
+      source: item.source,
+      original_title: item.title,
+      original_description: sourceDescription,
+      ai_hook_title: brief.ai_hook_title,
+      ai_summary: sanitizeSummary(brief.ai_summary),
+      tags: brief.tags,
+      read_time: "1 min read",
+      category: section,
+      region: item.region || "Global",
+      trend_score: item.trendScore,
+      trend_label: item.trendLabel,
+      image_credit: safe.image_credit,
+      image_license: safe.image_license,
+      image_source_url: safe.image_source_url || "",
+      discovered_via: item.sources,
+    } satisfies NewsArticle);
+  }
   return results;
 }
 
@@ -482,7 +538,7 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
         original_title: String(a.original_title || a.ai_hook_title || ""),
         original_description: stripJunk(String(a.original_description || "")),
         ai_hook_title: String(a.ai_hook_title || a.original_title || ""),
-        ai_summary: sanitizeSummary(Array.isArray(a.ai_summary) ? a.ai_summary : []).slice(0, 5),
+        ai_summary: sanitizeSummary(Array.isArray(a.ai_summary) ? a.ai_summary : []).slice(0, 4),
         tags: Array.isArray(a.tags) ? a.tags : ["#World"],
         read_time: String(a.read_time || "1 min read"),
         category: String(a.category || category(String(a.original_title || ""), undefined, String(a.region || ""))),
@@ -507,7 +563,9 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
 }
 
 export async function runIngest() {
-  const articles = await buildArticles();
+  const existing = await getStoredArticles();
+  const existingByUrl = new Map(existing.map((a) => [a.original_url, a]));
+  const articles = await buildArticles(existingByUrl);
   let saved = 0;
   const url = process.env["SUPABASE_URL"] || process.env["VITE_SUPABASE_URL"] || "";
   const key = process.env["SUPABASE_SERVICE_ROLE_KEY"] || "";

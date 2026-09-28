@@ -33,14 +33,14 @@ function cleanText(value: string) {
 }
 
 function isMetaLine(x: string) {
-  return /limited to facts|supplied source material|source report remains|not add facts|meant to be read on RWDNEWS|without leaving the site|tracking this (developing )?story|source wire:|why this matters|rwdnews perspective|editorial context|full briefing on RWDNEWS|no need to leave/i.test(
+  return /limited to facts|supplied source material|source report remains|not add facts|meant to be read on RockBrief|without leaving the site|tracking this (developing )?story|source wire:|why this matters|rwdnews perspective|editorial context|full briefing on RockBrief|no need to leave/i.test(
     x,
   );
 }
 
 /** Wire stories: short fact bullets only (legal aggregation). Originals can use body. */
 function buildBriefing(article: EnrichedArticle) {
-  const isOriginal = article.story_type === "RWDNEWS ORIGINAL";
+  const isOriginal = article.story_type === "RockBrief ORIGINAL";
   const raw = (article.ai_summary?.length
     ? article.ai_summary
     : [article.original_description].filter(Boolean)
@@ -48,7 +48,8 @@ function buildBriefing(article: EnrichedArticle) {
 
   let points = raw.filter(Boolean).filter((x) => !isMetaLine(x)).filter((x) => x.length > 15);
   // Cap wire briefings — do not present a full rewrite of the source
-  if (!isOriginal) points = points.slice(0, 5);
+  if (!isOriginal) points = points.slice(0, 4);
+  else points = points.slice(0, 4);
   const lead = points[0] || cleanText(article.original_description || article.original_title || "");
   return { points: points.length ? points : lead ? [lead] : [], isOriginal };
 }
@@ -64,7 +65,7 @@ function PageLoader() {
       <div className="text-center px-6">
         <img
           src="/rwdnews-logo.svg"
-          alt="RWDNEWS"
+          alt="RockBrief"
           className="mx-auto h-auto w-[min(78vw,240px)] brightness-0 invert"
         />
         <p className="mt-5 text-[11px] font-extrabold tracking-[0.2em] text-amber-300 uppercase">
@@ -135,11 +136,26 @@ export default function StoryPage() {
             const response = await fetch("/api/news");
             const payload = await response.json();
             const pool = Array.isArray(payload.articles) ? (payload.articles as EnrichedArticle[]) : [];
-            const candidates = pool
+            const currentWords = new Set(
+              cleanText([foundArticle!.ai_hook_title, foundArticle!.original_title, foundArticle!.original_description].filter(Boolean).join(" "))
+                .toLowerCase()
+                .split(/\s+/)
+                .filter((w) => w.length >= 4),
+            );
+            const currentTags = new Set((foundArticle!.tags || []).map((t) => String(t).toLowerCase().replace(/^#/, "")));
+            const ranked = pool
               .filter((x) => x.id !== foundArticle!.id)
-              .filter((x) => !foundArticle!.category || x.category === foundArticle!.category)
-              .slice(0, 6);
-            if (!cancelled) setRelated(candidates);
+              .map((x) => {
+                const text = cleanText([x.ai_hook_title, x.original_title, x.original_description].filter(Boolean).join(" ")).toLowerCase();
+                const overlap = [...currentWords].filter((w) => text.includes(w)).length;
+                const tagOverlap = (x.tags || []).filter((t) => currentTags.has(String(t).toLowerCase().replace(/^#/, ""))).length;
+                const categoryBoost = foundArticle!.category && x.category === foundArticle!.category ? 8 : 0;
+                return { x, relevance: overlap + tagOverlap * 4 + categoryBoost };
+              })
+              .sort((a, b) => b.relevance - a.relevance);
+            const sameCategory = ranked.filter(({ x }) => foundArticle!.category && x.category === foundArticle!.category);
+            const fallback = sameCategory.length ? sameCategory : ranked;
+            if (!cancelled) setRelated(fallback.slice(0, 6).map(({ x }) => x));
           } catch {
             /* ignore */
           }
@@ -173,13 +189,25 @@ export default function StoryPage() {
     });
   }, [article]);
 
-  const title = article?.ai_hook_title || article?.original_title || "RWDNEWS story";
-  const canonical =
-    typeof window !== "undefined"
-      ? window.location.origin + window.location.pathname
-      : "https://rwdnews.netlify.app/";
+  const title = article?.ai_hook_title || article?.original_title || "RockBrief story";
+  const canonical = typeof window !== "undefined" ? window.location.origin + window.location.pathname : "";
+  const absoluteLogo = typeof window !== "undefined" ? window.location.origin + "/rwdnews-logo.svg" : "/rwdnews-logo.svg";
+  const breadcrumb = article
+    ? {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "RockBrief", item: typeof window !== "undefined" ? window.location.origin + "/" : "/" },
+          { "@type": "ListItem", position: 2, name: article.category || "News" },
+          { "@type": "ListItem", position: 3, name: title, item: canonical },
+        ],
+      }
+    : null;
   const briefing = article ? buildBriefing(article) : { points: [] as string[], isOriginal: false };
   const description = briefing.points[0] || cleanText(article?.original_description || "");
+  const seoDescription = cleanText(article?.original_description || "").slice(0, 160) || description.slice(0, 160);
+  const articleImage = article?.image && !/\/rwdnews-logo\.svg(?:[?#]|$)/i.test(article.image) ? article.image : "";
+  const articleKeywords = Array.isArray(article?.tags) ? article.tags.filter(Boolean).join(", ") : "";
 
   const jsonLd = useMemo(
     () =>
@@ -188,23 +216,32 @@ export default function StoryPage() {
             "@context": "https://schema.org",
             "@type": "NewsArticle",
             headline: title,
-            description,
+            description: seoDescription,
             datePublished: article.timestamp,
+            articleSection: article.category || "News",
+            keywords: articleKeywords || undefined,
+            dateModified: article.updated_at || article.timestamp,
             mainEntityOfPage: canonical,
             url: canonical,
-            image: article.image ? [article.image] : undefined,
-            author: { "@type": "Organization", name: "RWDNEWS" },
+            image: articleImage ? [articleImage] : undefined,
+            author: article.author_name
+              ? { "@type": "Person", name: article.author_name }
+              : {
+                  "@type": "Organization",
+                  name: "RockBrief Editorial Team",
+                  url: (typeof window !== "undefined" ? window.location.origin : "") + "/author/rockbrief-editorial",
+                },
             publisher: {
               "@type": "Organization",
-              name: "RWDNEWS",
+              name: "RockBrief",
               logo: {
                 "@type": "ImageObject",
-                url: "https://rwdnews.netlify.app/rwdnews-logo.svg",
+                url: absoluteLogo,
               },
             },
           }
         : null,
-    [article, title, description, canonical],
+    [article, title, description, canonical, absoluteLogo, articleImage],
   );
 
   if (loading) return <PageLoader />;
@@ -215,7 +252,7 @@ export default function StoryPage() {
         <div>
           <h1 className="font-display text-3xl font-semibold">Story not found</h1>
           <a href="/" className="mt-5 inline-block font-semibold text-teal-800">
-            Return to RWDNEWS →
+            Return to RockBrief →
           </a>
         </div>
       </div>
@@ -223,7 +260,11 @@ export default function StoryPage() {
   }
 
   const share = (network: string) => {
-    const shareMessage = `RWDNEWS — ${title}\n\n${description}\n\n${canonical}`;
+    const shareMessage = `RockBrief — ${title}
+
+${description}
+
+${canonical}`;
     const text = encodeURIComponent(shareMessage);
     const encoded = encodeURIComponent(canonical);
     const urls: Record<string, string> = {
@@ -251,20 +292,25 @@ export default function StoryPage() {
   return (
     <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950">
       <Helmet>
-        <title>{title} — RWDNEWS</title>
-        <meta name="description" content={description} />
+        <title>{title} — RockBrief</title>
+        <meta name="description" content={seoDescription} />
+        {articleKeywords ? <meta name="keywords" content={articleKeywords} /> : null}
         <link rel="canonical" href={canonical} />
-        <meta property="og:title" content={`RWDNEWS — ${title}`} />
-        <meta property="og:description" content={description} />
+        <meta property="og:title" content={`RockBrief — ${title}`} />
+        <meta property="og:description" content={seoDescription} />
         <meta property="og:url" content={canonical} />
-        <meta property="og:image" content={article.image || "https://rwdnews.netlify.app/rwdnews-logo.svg"} />
+        <meta property="og:image" content={article.image || "/rwdnews-logo.svg"} />
+        <meta property="og:type" content="article" />
+        <meta property="og:site_name" content="RockBrief" />
+        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+        <script type="application/ld+json">{JSON.stringify(breadcrumb)}</script>
       </Helmet>
 
       <div className="border-b border-neutral-900 bg-[#071a2d] text-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
           <a href="/" className="text-[10px] font-extrabold tracking-[0.18em] text-amber-300 uppercase">
-            RWDNEWS
+            RockBrief
           </a>
           <a href="/sport" className="text-[10px] font-bold text-white/80 hover:text-white">
             Sports desk →
@@ -274,8 +320,8 @@ export default function StoryPage() {
 
       <header className="border-b border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6">
-          <a href="/" aria-label="RWDNEWS home">
-            <img src="/rwdnews-logo.svg" alt="RWDNEWS" className="h-auto w-[170px] sm:w-[210px]" />
+          <a href="/" aria-label="RockBrief home">
+            <img src="/rwdnews-logo.svg" alt="RockBrief" className="h-auto w-[170px] sm:w-[210px]" />
           </a>
           <a
             href="/"
@@ -296,7 +342,17 @@ export default function StoryPage() {
         </p>
 
         {article.image ? (
-          <img src={article.image} alt="" className="mt-8 aspect-[16/9] w-full bg-neutral-100 object-cover" />
+          <figure className="mt-8">
+            <img src={article.image} alt={title} className="aspect-[16/9] w-full bg-neutral-100 object-cover" />
+            {article.image_credit ? (
+              <figcaption className="mt-2 text-xs leading-5 text-neutral-500">
+                {article.image_credit}
+                {article.image_source_url && /^https?:\/\//i.test(article.image_source_url) ? (
+                  <>{" · "}<a href={article.image_source_url} target="_blank" rel="noopener noreferrer" className="underline underline-offset-2">Image source</a></>
+                ) : null}
+              </figcaption>
+            ) : null}
+          </figure>
         ) : null}
 
         <div className="mt-6">
@@ -355,7 +411,8 @@ export default function StoryPage() {
         {sponsor ? (
           <section className="mt-6 border border-amber-200 bg-amber-50/60 p-5 sm:p-6">
             <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Sponsored</p>
-            {sponsor.creativeUrl ? <img src={sponsor.creativeUrl} alt="" className="mb-4 max-h-56 w-full rounded object-contain" loading="lazy" /> : null}\n            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
+            {sponsor.creativeUrl ? <img src={sponsor.creativeUrl} alt="" className="mb-4 max-h-56 w-full rounded object-contain" loading="lazy" /> : null}
+            <h2 className="mt-1 font-display text-xl font-semibold">{sponsor.headline}</h2>
             <a
               href={sponsor.ctaUrl}
               target="_blank"
@@ -394,7 +451,17 @@ export default function StoryPage() {
         </div>
 
         <section className="mt-10">
-          <h2 className="font-display text-2xl font-semibold">More on RWDNEWS</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-2xl font-semibold">More on RockBrief</h2>
+            {article.category ? (
+              <a
+                href={article.category === "Sports" ? "/sport" : `/${String(article.category).toLowerCase()}`}
+                className="text-xs font-bold text-teal-800 underline underline-offset-4"
+              >
+                More {article.category} news →
+              </a>
+            ) : null}
+          </div>
           {related.length ? (
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               {related.slice(0, 4).map((item) => (

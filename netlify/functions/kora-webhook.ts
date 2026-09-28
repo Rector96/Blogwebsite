@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { applyKoraPayment } from "./kora-verify";
-import { database, env, json } from "../../src/lib/kora-server";
+import { database, env, json, koraRequest } from "../../src/lib/kora-server";
 
 export default async (req: Request) => {
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
@@ -36,7 +36,13 @@ export default async (req: Request) => {
   if (!reference) return json({ ok: true, ignored: true });
 
   try {
-    const result = await applyKoraPayment(reference, event.data);
+    // Re-query Kora so activation is based on the authoritative transaction record, not only the webhook payload.
+    const verificationResponse = await koraRequest("/api/v1/charges/" + encodeURIComponent(reference));
+    const verificationPayload = await verificationResponse.json().catch(() => ({}));
+    if (!verificationResponse.ok || !verificationPayload?.status || !verificationPayload?.data) {
+      return json({ error: "Transaction verification failed." }, 502);
+    }
+    const result = await applyKoraPayment(reference, verificationPayload.data);
     const db = database();
     if (db && result.ok) {
       await db.from("admin_audit_logs").insert({
@@ -52,7 +58,7 @@ export default async (req: Request) => {
     }
     return json({ ok: true });
   } catch (error) {
-    console.error("[RWDNEWS] Kora webhook failed", error);
+    console.error("[RockBrief] Kora webhook failed", error);
     return json({ error: "Webhook processing failed." }, 500);
   }
 };

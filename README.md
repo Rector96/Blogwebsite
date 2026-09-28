@@ -1,23 +1,22 @@
-# RWDNEWS
+# RockBrief
 
-Global source-backed news platform covering World, Europe, Middle East, Asia, Africa, Nigeria, Ghana, Sports, Business, Tech, Crypto and Entertainment.
+RockBrief is a global, source-backed news platform covering World, Europe, Middle East, Asia, Africa, Nigeria, Ghana, Sports, Business, Tech, Crypto and Entertainment.
 
-## Current production
+## Current codebase
 
-- Site: https://rwdnews.netlify.app
-- Main branch: `main`
-- Netlify production deploys from GitHub `main`
+- Primary branch: `main`
+- Hosting/deployment is intentionally unchanged during the cleanup phase.
 - News ingestion: RSS + GDELT with scheduled refresh
 - Sports desk: live scores/fixtures, sports news and AI-assisted statistical commentary
 - Research Desk: admin-only source-backed research and draft generation
-- Editorial publishing: WIRE, DEVELOPING and RWDNEWS ORIGINAL
+- Editorial publishing: WIRE, DEVELOPING and RockBrief ORIGINAL
 - Admin: private password/session protected operations, editorial, analytics, monetization, audience, newsletter and security areas
 - Article pages: source attribution, original-source CTA, sharing, engagement tracking, related stories and NewsArticle structured data
 - SEO: robots.txt and sitemap include the main sports routes
 
 ## Important environment variables
 
-Configure these in Netlify for the appropriate production/runtime scopes:
+Configure runtime secrets in the current hosting environment:
 
 ```text
 VITE_SUPABASE_URL
@@ -40,7 +39,7 @@ AI is used for source-bounded summaries, research drafts and sports statistical 
 
 - Keep publisher/source attribution visible.
 - Send readers to the original publisher for the complete report.
-- Use RWDNEWS-owned, licensed or otherwise rights-cleared images for original/editorial material.
+- Use RockBrief-owned, licensed or otherwise rights-cleared images for original/editorial material.
 - Do not present generated images as real event photographs.
 - Sponsored material must be clearly labeled.
 
@@ -56,4 +55,4 @@ The production build should pass before merging or deploying.
 
 ## Operations
 
-Scheduled functions keep the news wire refreshed. Admin credentials and server-side API keys must remain in Netlify environment variables, never in client code or committed files.
+Scheduled functions keep the news wire refreshed. Admin credentials and server-side API keys must remain in environment variables, never in client code or committed files.

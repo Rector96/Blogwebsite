@@ -14,20 +14,24 @@ function escapeXml(value: string) {
     .split("'").join("&" + "apos;");
 }
 
-export async function handler() {
-  const site = (env("PUBLIC_SITE_URL") || "https://rwdnews.netlify.app").replace(/\/$/, "");
+export async function handler(event: any) {
+  const host = String(event?.headers?.host || "").split(":")[0];
+  const forwarded = String(event?.headers?.["x-forwarded-proto"] || "https").split(",")[0];
+  const detectedSite = host ? forwarded + "://" + host : "";
+  const site = (env("PUBLIC_SITE_URL") || detectedSite || "https://rwdnews.netlify.app").replace(/\/$/, "");
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
-  const key = env("SUPABASE_SERVICE_ROLE_KEY");
-  let storyUrls: string[] = [];
+  const key = env("SUPABASE_SERVICE_ROLE_KEY") || env("SUPABASE_ANON_KEY") || env("VITE_SUPABASE_ANON_KEY");
+  let storyUrls: Array<{ url: string; lastmod: string }> = [];
 
   if (url && key) {
     try {
       const db = createClient(url, key);
       const { data } = await db
         .from("articles")
-        .select("id,original_title,ai_hook_title,timestamp")
+        .select("id,original_title,ai_hook_title,timestamp,updated_at")
+        .eq("editorial_status", "published")
         .order("timestamp", { ascending: false })
-        .limit(500);
+        .limit(5000);
       storyUrls = (data || []).map((a: any) => {
         const title = String(a.ai_hook_title || a.original_title || "")
           .toLowerCase()
@@ -35,7 +39,11 @@ export async function handler() {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "")
           .slice(0, 90);
-        return site + "/news/" + title + "--" + encodeURIComponent(String(a.id));
+        const parsed = Date.parse(String(a.updated_at || a.timestamp || ""));
+        return {
+          url: site + "/news/" + title + "--" + encodeURIComponent(String(a.id)),
+          lastmod: Number.isFinite(parsed) ? new Date(parsed).toISOString() : "",
+        };
       });
     } catch {
       storyUrls = [];
@@ -44,29 +52,29 @@ export async function handler() {
 
   const staticPaths = [
     "/",
-    "/sport",
-    "/sport/live",
-    "/sport/fixtures",
-    "/sport/results",
-    "/sport/predictions",
-    "/tech",
-    "/business",
-    "/crypto",
-    "/nigeria",
-    "/africa",
     "/world",
+    "/africa",
+    "/nigeria",
+    "/business",
+    "/tech",
+    "/crypto",
     "/entertainment",
+    "/sport",
+    "/sport/predictions",
     "/about",
     "/editorial",
     "/advertise",
     "/privacy",
     "/terms",
+    "/author/rockbrief-editorial",
+  ];  const urls = [
+    ...staticPaths.map((p) => ({ url: site + p, lastmod: "" })),
+    ...storyUrls,
   ];
-  const urls = [...staticPaths.map((p) => site + p), ...storyUrls];
   const body =
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
     "<urlset xmlns=\"http://www.sitemaps.org/schemas/sitemap/0.9\">" +
-    urls.map((u) => "<url><loc>" + escapeXml(u) + "</loc></url>").join("") +
+    urls.map((u) => "<url><loc>" + escapeXml(u.url) + "</loc>" + (u.lastmod ? "<lastmod>" + escapeXml(u.lastmod) + "</lastmod>" : "") + "</url>").join("") +
     "</urlset>";
 
   return {

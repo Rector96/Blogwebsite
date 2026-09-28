@@ -11,10 +11,10 @@ async function applyKoraPayment(reference: string, payload: any) {
 
   if (!payment) return { ok: false, reason: "payment_not_found" };
 
-  const expectedCurrency = String(payment.currency || "NGN").toUpperCase();
-  const expectedAmount = Number(payment.amount_subunit ?? payment.amount ?? 0);
+  const expectedCurrency = String(payment.currency || "USD").toUpperCase();
+  const expectedAmount = Number(payment.amount ?? payment.amount_subunit ?? 0);
   const actualCurrency = String(payload?.currency || "").toUpperCase();
-  const actualAmount = Number(payload?.amount ?? payload?.amount_paid ?? 0);
+  const actualAmount = Number(payload?.amount_accepted ?? payload?.amount ?? payload?.amount_paid ?? 0);
 
   const successful = String(payload?.status || "").toLowerCase() === "success"
     && actualCurrency === expectedCurrency
@@ -61,7 +61,7 @@ export default async (req: Request) => {
     const result = await applyKoraPayment(reference, payload.data);
     return json({ ...result, reference, payment_provider: "kora" });
   } catch (error) {
-    console.error("[RWDNEWS] Kora verify failed", error);
+    console.error("[RockBrief] Kora verify failed", error);
     return json({ error: "Payment verification is temporarily unavailable." }, 500);
   }
 };

@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { env, json, SPONSOR_PACKAGES, paystackRequest } from "../../src/lib/paystack-server";
 import { koraRequest } from "../../src/lib/kora-server";
+import { sanitizeArticleHtmlServer } from "../../src/lib/server-content";
 
 function db() {
   const url = env("SUPABASE_URL") || env("VITE_SUPABASE_URL");
@@ -33,6 +34,7 @@ function authorized(req: Request) {
   } catch { return false; }
 }
 function clean(value: unknown, max = 500) { return String(value ?? "").trim().slice(0, max); }
+function addMonthsIso(startIso: string, months: number) { const d = new Date(startIso); d.setMonth(d.getMonth() + Math.max(1, Math.floor(Number(months) || 1))); return d.toISOString(); }
 async function audit(database: any, action: string, entityType?: string, entityId?: string, details: Record<string, unknown> = {}) {
   await database.from("admin_audit_logs").insert({ action, entity_type: entityType || null, entity_id: entityId || null, details });
 }
@@ -52,6 +54,15 @@ export default async (req: Request) => {
     const database = db();
     if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
     if (body.action === "logout") return json({ ok: true }, 200, { "set-cookie": "rwdnews_admin=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0" });
+
+    if (body.action === "article_get") {
+      const id = clean(body.id, 200);
+      if (!id) return json({ error: "Article ID is required." }, 400);
+      const { data, error } = await database.from("articles").select("*").eq("id", id).maybeSingle();
+      if (error) return json({ error: error.message }, 400);
+      if (!data) return json({ error: "Article not found." }, 404);
+      return json({ ok: true, article: data });
+    }
 
     if (body.action === "article_image_upload") {
       const filename = clean(body.filename || "image", 120).replace(/[^a-zA-Z0-9._-]/g, "-");
@@ -79,20 +90,21 @@ export default async (req: Request) => {
       const ctaUrl = clean(body.cta_url, 500);
       if (!sponsorName || !headline || !/^https?:\/\//i.test(ctaUrl)) return json({ error: "Sponsor name, headline and a valid website URL are required." }, 400);
       const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
-      const currency = String(body.currency || "USD").toUpperCase() === "NGN" ? "NGN" : "USD";
+      const currency = "USD";
       const amount = Number(body.amount || 0);
+      const durationMonths = Math.max(1, Math.min(12, Math.floor(Number(body.duration_months) || 1)));
       const placement = clean(body.placement || "sidebar", 30);
       if (!["sidebar", "in_feed", "both"].includes(placement)) return json({ error: "Invalid sponsor placement." }, 400);
-      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Sponsor fee must be greater than zero." }, 400);
+      if (!Number.isFinite(amount) || amount <= 0) return json({ error: "Monthly sponsor fee must be greater than zero." }, 400);
       const { data, error } = await database.from("sponsors").insert({
         slug, sponsor_name: sponsorName, headline, why_matters: [], cta_text: clean(body.cta_text || "Learn more", 80),
         cta_url: ctaUrl, rate_highlight: "", disclosure: clean(body.disclosure || "Sponsored · Paid placement", 160),
         placement, priority: Number(body.priority || 100),
-        currency, monthly_fee_usd: currency === "USD" ? amount || null : null, monthly_fee_naira: currency === "NGN" ? amount || null : null,
-        active: false, starts_at: body.starts_at || null, ends_at: body.ends_at || null,
+        currency, monthly_fee_usd: amount || null, monthly_fee_naira: null, duration_months: durationMonths,
+        active: false, starts_at: body.starts_at || new Date().toISOString(), ends_at: body.ends_at || addMonthsIso(new Date().toISOString(), durationMonths),
       }).select("id").single();
       if (error) return json({ error: error.message }, 400);
-      await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, amount, currency });
+      await audit(database, "sponsor_created", "sponsor", String(data?.id), { sponsor_name: sponsorName, monthly_rate_usd: amount, duration_months: durationMonths, currency });
       return json({ ok: true });
     }
 
@@ -117,9 +129,15 @@ export default async (req: Request) => {
     if (body.action === "sponsor_status") {
       const id = clean(body.id, 100);
       const active = Boolean(body.active);
-      const { error } = await database.from("sponsors").update({ active, updated_at: new Date().toISOString() }).eq("id", id);
+      const sponsorRow = (await database.from("sponsors").select("duration_months").eq("id", id).maybeSingle()).data;
+      const now = new Date();
+      const durationMonths = Math.max(1, Math.min(12, Number(sponsorRow?.duration_months || 1)));
+      const patch = active
+        ? { active: true, starts_at: now.toISOString(), ends_at: addMonthsIso(now.toISOString(), durationMonths), updated_at: now.toISOString() }
+        : { active: false, updated_at: now.toISOString() };
+      const { error } = await database.from("sponsors").update(patch).eq("id", id);
       if (error) return json({ error: error.message }, 400);
-      await audit(database, active ? "sponsor_activated" : "sponsor_paused", "sponsor", id);
+      await audit(database, active ? "sponsor_activated" : "sponsor_paused", "sponsor", id, { duration_months: durationMonths });
       return json({ ok: true });
     }
 
@@ -136,23 +154,23 @@ export default async (req: Request) => {
     if (body.action === "article_create") {
       const headline = clean(body.headline, 220);
       const description = clean(body.description, 1000);
-      const bodyText = String(body.body ?? "").trim().slice(0, 30000);
+      const bodyText = sanitizeArticleHtmlServer(String(body.body ?? "").trim().slice(0, 30000));
       const image = clean(body.image, 2000);
       const originalUrl = clean(body.original_url, 1000);
       const category = clean(body.category || "Business", 50);
       const region = clean(body.region || "Global", 50);
-      const storyType = clean(body.story_type || "RWDNEWS ORIGINAL", 30);
+      const storyType = clean(body.story_type || "RockBrief ORIGINAL", 30);
       const subject = clean(body.subject, 180);
-      const authorName = clean(body.author_name || "RWDNEWS Editorial", 120);
-      const imageCredit = clean(body.image_credit || "RWDNEWS", 180);
-      const imageLicense = clean(body.image_license || "Owned or licensed by RWDNEWS", 240);
+      const authorName = clean(body.author_name || "RockBrief Editorial", 120);
+      const imageCredit = clean(body.image_credit || "RockBrief", 180);
+      const imageLicense = clean(body.image_license || "Owned or licensed by RockBrief", 240);
       const imageSourceUrl = clean(body.image_source_url || originalUrl, 1000);
       const status = ["published","hidden","archived"].includes(String(body.editorial_status)) ? String(body.editorial_status) : "draft";
       if (!headline || !description || !bodyText || !image || !/^https?:\/\//i.test(image)) return json({ error: "Headline, description, article body and a valid image URL are required." }, 400);
       if (originalUrl && !/^https?:\/\//i.test(originalUrl)) return json({ error: "Original/source URL must be a valid URL." }, 400);
       if (!["Business","World","Europe","Middle East","Asia","Africa","Nigeria","Ghana","Sports","Tech","Crypto","Entertainment"].includes(category)) return json({ error: "Invalid category." }, 400);
       if (!["Global","Africa","Nigeria","Ghana","Europe","Middle East","Asia","North America","South America"].includes(region)) return json({ error: "Invalid region." }, 400);
-      if (!["WIRE","RWDNEWS ORIGINAL","DEVELOPING"].includes(storyType)) return json({ error: "Invalid story type." }, 400);
+      if (!["WIRE","RockBrief ORIGINAL","DEVELOPING"].includes(storyType)) return json({ error: "Invalid story type." }, 400);
       const timestamp = body.publish_at && !Number.isNaN(Date.parse(String(body.publish_at))) ? new Date(String(body.publish_at)).toISOString() : new Date().toISOString();
       const id = "original-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
       const slugSource = headline.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90);
@@ -160,7 +178,7 @@ export default async (req: Request) => {
         id, original_url: originalUrl || ("https://rwdnews.local/original/" + id), original_title: headline,
         original_description: description, ai_hook_title: headline, ai_summary: [description],
         tags: Array.isArray(body.tags) ? body.tags.map((x: unknown) => "#" + clean(x, 40).replace(/^#/,"")).filter(Boolean).slice(0, 8) : [],
-        source: storyType === "RWDNEWS ORIGINAL" ? "RWDNEWS" : clean(body.source || "RWDNEWS", 120),
+        source: storyType === "RockBrief ORIGINAL" ? "RockBrief" : clean(body.source || "RockBrief", 120),
         image, read_time: clean(body.read_time || "3 min read", 30), timestamp,
         editorial_status: status === "draft" ? "hidden" : status, featured: Boolean(body.featured), pinned: Boolean(body.pinned),
         story_type: storyType, body: bodyText, category, region, subject, author_name: authorName,
@@ -177,6 +195,17 @@ export default async (req: Request) => {
       if (typeof body.featured === "boolean") patch.featured = body.featured;
       if (typeof body.pinned === "boolean") patch.pinned = body.pinned;
       if (["published","hidden","archived"].includes(String(body.editorial_status))) patch.editorial_status = body.editorial_status;
+      const textFields = ["headline","description","body","image","category","region","story_type","subject","author_name","image_credit","image_license","image_source_url","original_url"] as const;
+      for (const field of textFields) {
+        if (typeof body[field] === "string") {
+          const value = field === "body" ? sanitizeArticleHtmlServer(String(body[field]).slice(0, 100000)) : clean(body[field], 2000);
+          if (field === "headline") patch.original_title = value;
+          else if (field === "description") patch.original_description = value;
+          else patch[field] = value;
+        }
+      }
+      if (Array.isArray(body.tags)) patch.tags = body.tags.map((x: unknown) => clean(x, 80)).filter(Boolean).slice(0, 20);
+      if (typeof body.publish_at === "string" && !Number.isNaN(Date.parse(body.publish_at))) patch.timestamp = new Date(body.publish_at).toISOString();
       const { error } = await database.from("articles").update(patch).eq("id", id);
       if (error) return json({ error: error.message }, 400);
       await audit(database, "article_updated", "article", id, patch);
@@ -189,27 +218,28 @@ export default async (req: Request) => {
       if (!payment || payment.status !== "paid") return json({ error: "Only verified paid transactions can be activated." }, 400);
 
       const pkg = SPONSOR_PACKAGES[payment.package_code as keyof typeof SPONSOR_PACKAGES];
-      if (payment.design_requested && !payment.creative_url) return json({ error: "This campaign requested RWDNEWS design. Upload the finished creative before activating it." }, 400);
+      if (payment.design_requested && !payment.creative_url) return json({ error: "This campaign requested RockBrief design. Upload the finished creative before activating it." }, 400);
       const starts = payment.starts_at || new Date().toISOString();
-      const ends = payment.ends_at || new Date(Date.parse(starts) + Number(payment.duration_days || pkg?.days || 30) * 86400000).toISOString();
+      const durationMonths = Math.max(1, Math.min(12, Math.floor(Number(payment.duration_months || 1))));
+      const ends = payment.ends_at || addMonthsIso(starts, durationMonths);
       let sponsorId = payment.sponsor_id as string | null;
 
       if (!sponsorId) {
-        const sponsorName = clean(payment.company || payment.name || "RWDNEWS Advertiser", 120);
+        const sponsorName = clean(payment.company || payment.name || "RockBrief Advertiser", 120);
         const slug = sponsorName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 70) + "-" + Date.now().toString(36);
         const { data: sponsor, error } = await database.from("sponsors").insert({
           slug, sponsor_name: sponsorName, headline: clean(payment.headline || pkg?.name || "Sponsored placement", 180),
-          why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "https://rwdnews.netlify.app", 500),
+          why_matters: [], cta_text: "Learn more", cta_url: clean(payment.cta_url || "", 500) || null,
           rate_highlight: "Paid placement", disclosure: "Sponsored · Paid placement", placement: payment.placement || "sidebar",
           creative_url: clean(payment.creative_url || "", 1000) || null,
           logo_url: clean(payment.logo_url || "", 1000) || null,
           creative_alt: clean(payment.headline || sponsorName, 180),
-          active: true, priority: 50, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, starts_at: starts, ends_at: ends,
+          active: true, priority: 50, currency: "USD", duration_months: Number(payment.duration_months || 1), monthly_rate_usd: payment.amount / Math.max(1, Number(payment.duration_months || 1)), monthly_fee_usd: payment.currency === "USD" ? payment.amount / Math.max(1, Number(payment.duration_months || 1)) : null, monthly_fee_naira: null, starts_at: starts, ends_at: ends,
         }).select("id").single();
         if (error) return json({ error: error.message }, 400);
         sponsorId = sponsor?.id || null;
       } else {
-        await database.from("sponsors").update({ active: true, starts_at: starts, ends_at: ends, currency: payment.currency || "NGN", monthly_fee_usd: payment.currency === "USD" ? payment.amount : null, monthly_fee_naira: payment.currency === "NGN" ? payment.amount : null, updated_at: new Date().toISOString() }).eq("id", sponsorId);
+        await database.from("sponsors").update({ active: true, starts_at: starts, ends_at: ends, currency: "USD", duration_months: Number(payment.duration_months || 1), monthly_rate_usd: payment.amount / Math.max(1, Number(payment.duration_months || 1)), monthly_fee_usd: payment.currency === "USD" ? payment.amount / Math.max(1, Number(payment.duration_months || 1)) : null, monthly_fee_naira: null, updated_at: new Date().toISOString() }).eq("id", sponsorId);
       }
 
       await database.from("sponsor_payments").update({ sponsor_id: sponsorId, starts_at: starts, ends_at: ends, updated_at: new Date().toISOString() }).eq("reference", reference);
@@ -242,8 +272,8 @@ export default async (req: Request) => {
       const payload = await response.json().catch(() => ({}));
       if (!response.ok || !payload?.status) return json({ error: payload?.message || provider.toUpperCase() + " verification failed." }, 502);
 
-      const expectedCurrency = String(paymentRow.currency || "NGN").toUpperCase();
-      const expectedAmount = Number(paymentRow?.amount_subunit ?? paymentRow?.amount_kobo ?? paymentRow?.amount ?? 0);
+      const expectedCurrency = String(paymentRow.currency || "USD").toUpperCase();
+      const expectedAmount = Number(paymentRow?.amount ?? paymentRow?.amount_subunit ?? 0);
       const amountOk = String(payload.data?.currency || "").toUpperCase() === expectedCurrency
         && Number(payload.data?.amount ?? payload.data?.amount_paid ?? 0) === expectedAmount;
       const status = payload.data?.status === "success" && amountOk ? "paid" : (payload.data?.status === "failed" ? "failed" : "pending");
@@ -268,108 +298,64 @@ export default async (req: Request) => {
   if (!database) return json({ error: "Admin database is not configured. Check Supabase URL and service role key." }, 503);
 
   const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString();
-  const [sponsors, leads, events, payments, clicks, articles, newsletter,
-    pageViewCount, sessionRows, articleOpenCount, shareCount, sponsorClickCount] = await Promise.all([
+  const [sponsors, leads, payments, clicks, articles, newsletter, analytics] = await Promise.all([
     database.from("sponsors").select("id,sponsor_name,headline,placement,active,currency,monthly_fee_usd,monthly_fee_naira,starts_at,ends_at,priority").order("priority", { ascending: true }).limit(200),
     database.from("sales_leads").select("id,name,email,company,message,status,created_at").order("created_at", { ascending: false }).limit(100),
-    database.from("rwdnews_events").select("event_name,article_id,page_path,source,country,city,device,browser,referrer,session_id,created_at").gte("created_at", thirtyDaysAgo).order("created_at", { ascending: false }).range(0, 49999),
-    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,email,name,company,status,paystack_status,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,paid_at,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,editorial_status,featured,pinned,story_type,category,region,subject,author_name,image").order("timestamp", { ascending: false }).limit(100),
-    database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(10000),
-    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "page_view").gte("created_at", thirtyDaysAgo),
-    database.from("rwdnews_events").select("session_id").eq("event_name", "page_view").gte("created_at", thirtyDaysAgo).not("session_id", "is", null).order("created_at", { ascending: false }).range(0, 49999),
-    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "article_open").gte("created_at", thirtyDaysAgo),
-    database.from("rwdnews_events").select("id", { count: "exact", head: true }).eq("event_name", "article_share").gte("created_at", thirtyDaysAgo),
-    database.from("sponsor_clicks").select("id", { count: "exact", head: true }),
+    database.from("sponsor_payments").select("id,reference,package_code,package_name,currency,amount,amount_naira,amount_usd,total_amount_usd,email,name,company,status,payment_provider,provider_status,provider_currency,provider_transaction_id,paystack_status,paystack_currency,sponsor_id,creative_mode,creative_url,creative_notes,design_requested,duration_months,monthly_rate_usd,paid_at,created_at").order("created_at", { ascending: false }).limit(1000),
+    database.from("sponsor_clicks").select("sponsor_id,sponsor_slug,placement,created_at").order("created_at", { ascending: false }).limit(2000),
+    database.from("articles").select("id,original_title,ai_hook_title,source,timestamp,updated_at,editorial_status,featured,pinned,story_type,category,region").order("timestamp", { ascending: false }).limit(100),
+    database.from("newsletter_subscribers").select("id,status,created_at").order("created_at", { ascending: false }).limit(1000),
+    database.rpc("get_rockbrief_admin_analytics", { p_since: thirtyDaysAgo }),
   ]);
 
-  const firstError = [sponsors, leads, events, payments, clicks, articles, newsletter, pageViewCount, sessionRows, articleOpenCount, shareCount, sponsorClickCount].find((x) => x.error);
+  const firstError = [sponsors, leads, payments, clicks, articles, newsletter, analytics].find((x) => x.error);
   if (firstError?.error) return json({ error: firstError.error.message }, 400);
 
-  const rows = events.data || [];
-  const pageViews = rows.filter((r: any) => r.event_name === "page_view");
-  const sessions = new Set((sessionRows.data || []).map((r: any) => String(r.session_id)).filter(Boolean));
-  const aggregate = (key: string) => {
-    const map = new Map<string, number>();
-    for (const row of pageViews) {
-      const value = String((row as Record<string, unknown>)[key] || "Unknown");
-      map.set(value, (map.get(value) || 0) + 1);
-    }
-    return Array.from(map.entries()).map(([label, value]) => ({ label, value })).sort((a,b) => b.value-a.value).slice(0, 15);
-  };
-  const dailyMap = new Map<string, number>();
-  for (const row of pageViews) {
-    const day = String(row.created_at).slice(0, 10);
-    dailyMap.set(day, (dailyMap.get(day) || 0) + 1);
-  }
-  const articleMap = new Map<string, number>();
-  for (const row of rows.filter((r: any) => r.article_id && (r.event_name === "article_open" || r.event_name === "page_view"))) {
-    const id = String(row.article_id);
-    articleMap.set(id, (articleMap.get(id) || 0) + 1);
-  }
+  const metrics = (analytics.data || {}) as Record<string, any>;
   const clickMap = new Map<string, number>();
   for (const row of clicks.data || []) {
     const key = String(row.sponsor_id || row.sponsor_slug || "unknown");
     clickMap.set(key, (clickMap.get(key) || 0) + 1);
   }
-  const paid = (payments.data || []).filter((p: any) => p.status === "paid");
-  const revenueNaira = paid
-    .filter((p: any) => String(p.currency || "NGN").toUpperCase() === "NGN")
-    .reduce((sum: number, p: any) => sum + Number(p.amount_naira ?? p.amount ?? 0), 0);
-  const revenueUsd = paid
-    .filter((p: any) => String(p.currency || "").toUpperCase() === "USD")
-    .reduce((sum: number, p: any) => sum + Number(p.amount_usd ?? p.amount ?? 0), 0);
-  const recommendationImpressions = rows.filter((r: any) => r.event_name === "recommendation_impression").length;
-  const recommendationClicks = rows.filter((r: any) => r.event_name === "recommendation_click").length;
-  const engagedReads = rows.filter((r: any) => r.event_name === "reading_engaged").length;
-  const returnVisits = rows.filter((r: any) => r.event_name === "return_visit").length;
-  const searchEvents = rows.filter((r: any) => r.event_name === "search").length;
-  const externalSourceClicks = rows.filter((r: any) => r.event_name === "external_source_click").length;
-  const sessionPageViews = new Map<string, number>();
-  for (const row of pageViews) {
-    const session = String(row.session_id || "");
-    if (session) sessionPageViews.set(session, (sessionPageViews.get(session) || 0) + 1);
-  }
-  const returningSessions = Array.from(sessionPageViews.values()).filter((count) => count > 1).length;
-
+  const recommendationImpressions = Number(metrics.engagement?.recommendation_impressions || 0);
+  const recommendationClicks = Number(metrics.engagement?.recommendation_clicks || 0);
   return json({
     generated_at: new Date().toISOString(),
     engagement: {
       recommendation_impressions: recommendationImpressions,
       recommendation_clicks: recommendationClicks,
       recommendation_ctr: recommendationImpressions ? (recommendationClicks / recommendationImpressions) * 100 : 0,
-      engaged_reads: engagedReads,
-      return_visits: returnVisits,
-      returning_sessions: returningSessions,
-      search_events: searchEvents,
-      external_source_clicks: externalSourceClicks,
+      engaged_reads: Number(metrics.engagement?.engaged_reads || 0),
+      return_visits: Number(metrics.engagement?.return_visits || 0),
+      returning_sessions: Number(metrics.engagement?.returning_sessions || 0),
+      search_events: Number(metrics.engagement?.search_events || 0),
+      external_source_clicks: Number(metrics.engagement?.external_source_clicks || 0),
     },
     overview: {
-      page_views: Number(pageViewCount.count || 0),
-      unique_sessions: sessions.size,
-      article_opens: Number(articleOpenCount.count || 0),
-      shares: Number(shareCount.count || 0),
-      saves: rows.filter((r:any)=>r.event_name==="article_save").length,
-      sponsor_clicks: Number(sponsorClickCount.count || 0),
-      advertiser_leads: (leads.data || []).filter((l:any) => new Date(l.created_at).getTime() >= Date.parse(thirtyDaysAgo)).length,
-      newsletter_subscribers: (newsletter.data || []).filter((n:any)=>n.status==="active").length,
-      paid_revenue_naira: revenueNaira,
-      paid_revenue_usd: revenueUsd,
-      pending_payments: (payments.data || []).filter((p:any)=>p.status==="pending").length,
+      page_views: Number(metrics.page_views || 0),
+      unique_sessions: Number(metrics.unique_sessions || 0),
+      article_opens: Number(metrics.article_opens || 0),
+      shares: Number(metrics.shares || 0),
+      saves: Number(metrics.saves || 0),
+      sponsor_clicks: Number(metrics.sponsor_clicks || 0),
+      advertiser_leads: Number(metrics.advertiser_leads || 0),
+      newsletter_subscribers: Number(metrics.newsletter_subscribers || 0),
+      paid_revenue_naira: Number(metrics.paid_revenue_naira || 0),
+      paid_revenue_usd: Number(metrics.paid_revenue_usd || 0),
+      pending_payments: Number(metrics.pending_payments || 0),
     },
-    daily: Array.from(dailyMap.entries()).sort((a,b)=>a[0].localeCompare(b[0])).slice(-30).map(([day,value])=>({day,value})),
-    sources: aggregate("source"),
-    countries: aggregate("country"),
-    cities: aggregate("city"),
-    devices: aggregate("device"),
-    browsers: aggregate("browser"),
-    top_paths: aggregate("page_path"),
+    daily: metrics.daily || [],
+    sources: metrics.sources || [],
+    countries: metrics.countries || [],
+    cities: metrics.cities || [],
+    devices: metrics.devices || [],
+    browsers: metrics.browsers || [],
+    top_paths: metrics.top_paths || [],
     sponsors: (sponsors.data || []).map((s:any)=>({ ...s, clicks: clickMap.get(String(s.id)) || 0 })),
     leads: leads.data || [],
     payments: payments.data || [],
     articles: articles.data || [],
-    top_articles: Array.from(articleMap.entries()).sort((a,b)=>b[1]-a[1]).slice(0,15).map(([id,views])=>({ id, views, article: (articles.data || []).find((a:any)=>String(a.id)===id) || null })),
+    top_articles: (metrics.top_articles || []).map((item:any) => ({ ...item, article: (articles.data || []).find((a:any)=>String(a.id)===String(item.id)) || null })),
     audit_logs: (await database.from("admin_audit_logs").select("id,action,entity_type,entity_id,details,created_at").order("created_at",{ascending:false}).limit(100)).data || [],
   });
 };

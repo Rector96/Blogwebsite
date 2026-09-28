@@ -15,6 +15,7 @@ export interface EnrichedArticle {
   original_url: string;
   image: string;
   timestamp: string;
+  updated_at?: string;
   source: string;
   original_title: string;
   original_description: string;
@@ -355,7 +356,7 @@ export default function RwdNewsApp() {
           .from("newsletter_subscribers")
           .upsert({ email: v, source: "rwdnews_web" }, { onConflict: "email" });
       }
-      setEmailMsg("You're on the RWDNEWS list.");
+      setEmailMsg("You're on the RockBrief list.");
       setEmail("");
     } catch {
       setEmailMsg("Thanks — we'll confirm shortly.");
@@ -372,7 +373,7 @@ export default function RwdNewsApp() {
       email: leadEmail,
       name: leadName,
       company: leadCompany,
-      message: "RWDNEWS sponsorship",
+      message: "RockBrief sponsorship",
     });
     setLeadMsg(res.ok ? "Received. We'll send rates shortly." : "Thanks — we'll follow up.");
   };

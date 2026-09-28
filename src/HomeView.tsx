@@ -8,6 +8,18 @@ import { LanguageSwitcher } from "./components/LanguageSwitcher";
 import type { EnrichedArticle } from "./AppHome";
 
 /** Insert an ad cell after every N story cards in the grid. */
+const categoryMeta: Record<string, { title: string; description: string }> = {
+  All: { title: "RockBrief — Global News, Briefed Clearly", description: "Source-backed global news briefings across world affairs, business, technology, sports, Africa and more." },
+  World: { title: "World News — RockBrief", description: "Latest source-backed world news, international affairs and major global developments, briefed clearly by RockBrief." },
+  Africa: { title: "Africa News — RockBrief", description: "Source-backed Africa news, regional developments, business, technology, culture and major stories from across the continent." },
+  Nigeria: { title: "Nigeria News — RockBrief", description: "Latest source-backed Nigeria news, business, technology, society and major developments, briefed clearly." },
+  Business: { title: "Business News — RockBrief", description: "Latest source-backed business, markets, companies, finance, trade and economic news from around the world." },
+  Tech: { title: "Technology News — RockBrief", description: "Latest source-backed technology news covering AI, software, cybersecurity, chips, startups and digital innovation." },
+  Crypto: { title: "Crypto News — RockBrief", description: "Latest source-backed cryptocurrency, blockchain, Bitcoin, Ethereum and digital finance news, briefed clearly." },
+  Entertainment: { title: "Entertainment News — RockBrief", description: "Latest source-backed entertainment, film, music, celebrities and culture news from around the world." },
+  Sports: { title: "Sports News — RockBrief", description: "Latest source-backed sports news, football, basketball, tennis, motorsport and major sporting developments." },
+};
+
 function withFeedAds(items: EnrichedArticle[], every = 5) {
   const out: Array<{ type: "story"; item: EnrichedArticle } | { type: "ad"; key: string }> = [];
   items.forEach((item, i) => {
@@ -68,15 +80,22 @@ export function HomeView({
   normalizeTags,
 }: any) {
   const feedCells = withFeedAds(Array.isArray(rest) ? rest : [], 5);
+  const meta = categoryMeta[selectedTag] || categoryMeta.All;
+  const canonicalPath = selectedTag === "All" ? "/" : selectedTag === "Sports" ? "/sport" : `/${String(selectedTag).toLowerCase()}`;
+  const canonicalUrl = typeof window !== "undefined" ? `${window.location.origin}${canonicalPath}` : canonicalPath;
 
   return (
     <div className="min-h-dvh bg-white text-neutral-950">
       <Helmet>
-        <title>RWDNEWS — The world’s wire, briefed clearly</title>
-        <meta
-          name="description"
-          content="RWDNEWS is a global news briefing platform — clear summaries from the world wire, sources always credited. Sports, tech, business and world news."
-        />
+        <title>{meta.title}</title>
+        <meta name="description" content={meta.description} />
+        <meta name="robots" content="index,follow,max-image-preview:large,max-snippet:-1,max-video-preview:-1" />
+        <link rel="canonical" href={canonicalUrl} />
+        <meta property="og:title" content={meta.title} />
+        <meta property="og:description" content={meta.description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="RockBrief" />
+        <meta property="og:url" content={canonicalUrl} />
       </Helmet>
 
       <div className="border-b border-neutral-200 bg-neutral-950 text-white">
@@ -98,10 +117,10 @@ export function HomeView({
 
       <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6 sm:py-4">
-          <a href="/" className="block min-w-0 shrink" aria-label="RWDNEWS home">
+          <a href="/" className="block min-w-0 shrink" aria-label="RockBrief home">
             <img
               src="/rwdnews-logo.svg"
-              alt="RWDNEWS"
+              alt="RockBrief"
               className="h-auto w-[150px] sm:w-[220px] md:w-[275px]"
             />
           </a>
@@ -128,31 +147,33 @@ export function HomeView({
         </div>
 
         <p className="border-t border-neutral-100 bg-neutral-50/80 px-3 py-1.5 text-center text-[10px] font-semibold tracking-wide text-neutral-500 sm:text-[11px]">
-          The world’s wire, briefed clearly · Sources always credited
+          Global news, briefed clearly · Sources always credited
         </p>
 
         <div className="border-t border-neutral-100 bg-neutral-50/70">
           <div className="mx-auto max-w-6xl px-3 py-2 sm:px-6">
             <div className="flex min-w-0 gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {tags.map((t: string) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setSelectedTag(t);
-                    const target =
-                      t === "All" ? "/" : t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
-                    window.history.pushState({ category: t }, "", target);
-                  }}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
-                    selectedTag === t
-                      ? "border-neutral-950 bg-neutral-950 text-white shadow-sm"
-                      : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
+              {tags.map((t: string) => {
+                const target = t === "All" ? "/" : t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
+                return (
+                  <a
+                    key={t}
+                    href={target}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setSelectedTag(t);
+                      window.history.pushState({ category: t }, "", target);
+                    }}
+                    className={`shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-bold transition ${
+                      selectedTag === t
+                        ? "border-neutral-950 bg-neutral-950 text-white shadow-sm"
+                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
+                    }`}
+                  >
+                    {t}
+                  </a>
+                );
+              })}
             </div>
             <p className="mt-1.5 text-[10px] text-neutral-400">
               {selectedTag === "All"
@@ -196,7 +217,7 @@ export function HomeView({
                   {hero.image ? (
                     <img
                       src={hero.image}
-                      alt=""
+                      alt={hero.ai_hook_title || hero.original_title || "RockBrief news"}
                       className="aspect-[16/10] w-full object-cover transition duration-500 group-hover:scale-[1.02]"
                       loading="eager"
                     />
@@ -226,7 +247,7 @@ export function HomeView({
                     className="group flex gap-3 border-b border-neutral-100 pb-4"
                   >
                     {a.image ? (
-                      <img src={a.image} alt="" className="size-16 shrink-0 object-cover sm:size-20" loading="lazy" />
+                      <img src={a.image} alt={a.ai_hook_title || a.original_title || "RockBrief news"} className="size-16 shrink-0 object-cover sm:size-20" loading="lazy" />
                     ) : null}
                     <div className="min-w-0">
                       <p className="text-[10px] font-bold tracking-wider text-amber-800 uppercase">
@@ -292,7 +313,7 @@ export function HomeView({
                 {cell.item.image ? (
                   <img
                     src={cell.item.image}
-                    alt=""
+                    alt={cell.item.ai_hook_title || cell.item.original_title || "RockBrief news"}
                     className="aspect-[16/9] w-full object-cover"
                     loading="lazy"
                   />
@@ -322,6 +343,32 @@ export function HomeView({
           )}
         </section>
 
+        <section className="mt-12 border-y border-neutral-200 py-6">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <p className="text-[10px] font-bold tracking-[0.16em] text-amber-800 uppercase">Explore RockBrief</p>
+              <h2 className="font-display mt-1 text-xl font-semibold sm:text-2xl">More coverage</h2>
+            </div>
+            <p className="text-xs text-neutral-500">Browse our global desks for more source-backed stories.</p>
+          </div>
+          <nav aria-label="RockBrief coverage" className="mt-4 flex flex-wrap gap-2">
+            {tags
+              .filter((t: string) => t !== selectedTag && t !== "All")
+              .map((t: string) => {
+                const target = t === "Sports" ? "/sport" : `/${t.toLowerCase()}`;
+                return (
+                  <a
+                    key={t}
+                    href={target}
+                    className="rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-semibold text-neutral-700 hover:border-teal-300 hover:text-teal-800"
+                  >
+                    {t} news
+                  </a>
+                );
+              })}
+          </nav>
+        </section>
+
         {recommended?.length ? (
           <section className="mt-12">
             <h2 className="font-display text-xl font-semibold sm:text-2xl">Recommended</h2>
@@ -345,13 +392,13 @@ export function HomeView({
         ) : null}
 
         <form onSubmit={submitNewsletter} className="mt-12 border border-neutral-200 bg-neutral-50 p-5 sm:p-6">
-          <h2 className="font-display text-lg font-semibold sm:text-xl">Get the RWDNEWS briefing</h2>
+          <h2 className="font-display text-lg font-semibold sm:text-xl">Get the RockBrief briefing</h2>
           <p className="mt-1 text-xs text-neutral-500">Global headlines, short and clear — in your inbox.</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Email"
+              placeholder="Email address"
               className="h-11 flex-1 border border-neutral-200 px-3 text-sm"
             />
             <button type="submit" className="h-11 bg-neutral-950 px-5 text-xs font-bold text-white">
@@ -380,7 +427,7 @@ export function HomeView({
             onSubmit={onLeadSubmit}
             className="relative z-10 w-full max-w-md space-y-3 border bg-white p-6 shadow-xl"
           >
-            <h3 className="font-display text-xl font-semibold">Advertise on RWDNEWS</h3>
+            <h3 className="font-display text-xl font-semibold">Advertise on RockBrief</h3>
             <input
               className="h-11 w-full border px-3 text-sm"
               placeholder="Name"

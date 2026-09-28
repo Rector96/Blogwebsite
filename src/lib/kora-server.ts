@@ -1,4 +1,4 @@
-import { database, env, json, cleanText, makeReference, type SponsorPackageCode, type SponsorCurrency, SPONSOR_PACKAGES } from "./paystack-server";
+import { database, env, json, cleanText, makeReference, type SponsorPackageCode, type SponsorCurrency, SPONSOR_PACKAGES, SPONSOR_MAX_MONTHS, sponsorTotalUsd } from "./paystack-server";
 
 const KORA_BASE_URL = "https://api.korapay.com/merchant";
 
@@ -22,6 +22,8 @@ export {
   cleanText,
   makeReference,
   SPONSOR_PACKAGES,
+  SPONSOR_MAX_MONTHS,
+  sponsorTotalUsd,
 };
 
 export type { SponsorPackageCode, SponsorCurrency };

@@ -61,7 +61,7 @@ export async function handler(event: {
       }),
     };
   } catch (error) {
-    console.error("[RWDNEWS] cron ingest failed", error);
+    console.error("[RockBrief] cron ingest failed", error);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
