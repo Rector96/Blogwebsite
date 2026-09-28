@@ -7,6 +7,7 @@ export async function handler(event: any) {
     "Allow: /",
     "",
     "Sitemap: " + site + "/sitemap.xml",
+    "Sitemap: " + site + "/news-sitemap.xml",
     "",
   ].join("\n");
   return {
