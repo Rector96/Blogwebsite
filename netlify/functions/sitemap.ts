@@ -35,7 +35,11 @@ export async function handler() {
           .replace(/[^a-z0-9]+/g, "-")
           .replace(/^-|-$/g, "")
           .slice(0, 90);
-        return { url: site + "/news/" + title + "--" + encodeURIComponent(String(a.id)), lastmod: new Date(a.timestamp).toISOString() };
+        const parsed = Date.parse(String(a.timestamp || ""));
+        return {
+          url: site + "/news/" + title + "--" + encodeURIComponent(String(a.id)),
+          lastmod: Number.isFinite(parsed) ? new Date(parsed).toISOString() : "",
+        };
       });
     } catch {
       storyUrls = [];
