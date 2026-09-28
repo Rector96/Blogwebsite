@@ -40,7 +40,7 @@ export default async (req: Request) => {
     return json({ error: "Website URL must start with http:// or https://." }, 400);
   }
   if (creativeMode === "upload" && !creativeUrl) {
-    return json({ error: "Upload your advert creative or choose RWDNEWS design it." }, 400);
+    return json({ error: "Upload your advert creative or choose RockBrief design it." }, 400);
   }
 
   const reference = makeReference();
