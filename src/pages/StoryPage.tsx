@@ -187,6 +187,7 @@ export default function StoryPage() {
             headline: title,
             description,
             datePublished: article.timestamp,
+            dateModified: article.timestamp,
             mainEntityOfPage: canonical,
             url: canonical,
             image: article.image ? [article.image] : undefined,
