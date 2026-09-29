@@ -393,3 +393,14 @@ create index if not exists bot_story_performance_article_idx
 alter table public.bot_story_performance enable row level security;
 
 -- No public read/write policies: service-role bot access only.
+
+
+-- Phase N: scheduled News Bot lease lock
+create table if not exists public.bot_run_locks (
+  lock_name text primary key,
+  owner text not null,
+  locked_until timestamptz not null,
+  acquired_at timestamptz not null default now()
+);
+alter table public.bot_run_locks enable row level security;
+revoke all on table public.bot_run_locks from anon, authenticated;
