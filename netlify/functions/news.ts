@@ -362,7 +362,6 @@ export async function runIngest() {
   );
 
   const maxAi = Math.max(0, Math.min(12, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 8)));
-  const autoPublishTrendThreshold = Math.max(0, Math.min(100, Number(process.env.BOT_AUTO_PUBLISH_TREND_THRESHOLD || 65)));
   // Cap stock image API calls so cron stays under Netlify time limits
   const maxImages = Math.max(0, Math.min(12, Number(process.env.MAX_STOCK_IMAGES_PER_INGEST || 10)));
   let aiCalls = 0;
@@ -408,7 +407,7 @@ export async function runIngest() {
       image_query: item.title,
     };
     if (aiCalls < maxAi) {
-      brief = await aiBrief(item.title, item.desc, trend.related);
+      brief = await aiBrief(item.title, item.desc, trend.related, trend.score >= 65);
       aiCalls++;
     }
 
@@ -462,7 +461,7 @@ export async function runIngest() {
       story_type: "WIRE",
       author_name: "RockBrief Wire",
       subject: "",
-      editorial_status: trend.score >= autoPublishTrendThreshold ? "published" : "published",
+      editorial_status: "published",
       featured: false,
       pinned: false,
     });
