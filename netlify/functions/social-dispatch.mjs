@@ -1,13 +1,21 @@
 /**
- * Push story payloads to Make.com (or any webhook URL).
+ * Native social publishing for RockBrief — no Make.com required.
+ *
+ * Configure any of:
+ *   META_PAGE_ID + META_PAGE_ACCESS_TOKEN  → Facebook Page posts
+ *   X_API_KEY + X_API_SECRET + X_ACCESS_TOKEN + X_ACCESS_SECRET  → X (OAuth 1.0a)
+ *   X_USER_ACCESS_TOKEN  → X Bearer (only if your app supports tweet write)
+ *
+ * Recommended cadence (set on the scheduled bot, not here):
+ *   Peak: every 3–4 hours, max 3–6 posts/day per network
+ *   Never dump every wire — only high-trend, 400+ word stories
+ *
  * Env:
- *   MAKE_WEBHOOK_URL  — Custom webhook from Make.com scenario
- *   APP_URL           — your current public RockBrief URL (for absolute links)
- *   SOCIAL_MAX_POSTS  — max stories per run (default 3)
+ *   APP_URL, SOCIAL_MAX_POSTS (default 3), CRON_SECRET
  */
 
 function siteBase() {
-  return (process.env.APP_URL || process.env.URL || "").replace(/\/$/, "");
+  return (process.env.APP_URL || process.env.URL || "https://rwdnews.netlify.app").replace(/\/$/, "");
 }
 
 function storyPath(article) {
@@ -29,33 +37,49 @@ function isPublishableSocialArticle(article) {
   const sourceUrl = String(article?.original_url || "");
   const image = String(article?.image || "");
   const placeholder = /rwdnews-logo\.svg(?:$|[?#])/i.test(image);
-  const imageReady = placeholder || (
-    /^https?:\/\//i.test(String(article?.image_source_url || "")) &&
-    String(article?.image_credit || "").trim().length > 0
-  );
-  return title.length >= 20 &&
+  const imageReady =
+    placeholder ||
+    (/^https?:\/\//i.test(String(article?.image_source_url || "")) &&
+      String(article?.image_credit || "").trim().length > 0);
+  return (
+    title.length >= 20 &&
     bodyWords >= 400 &&
     bullets.length === 4 &&
     bullets.every((b) => b.length >= 15) &&
     /^https?:\/\//i.test(sourceUrl) &&
-    imageReady;
+    imageReady
+  );
 }
 
-function buildCaption(article) {
+/** Short, shareable caption — drives clicks to the site (SEO + retention). */
+function buildCaption(article, maxLen = 1800) {
   const title = String(article.ai_hook_title || article.original_title || "").trim();
-  const bullets = Array.isArray(article.ai_summary)
-    ? article.ai_summary.map(String).filter(Boolean).slice(0, 3)
-    : [];
+  const hook = Array.isArray(article.ai_summary)
+    ? String(article.ai_summary[0] || "").trim()
+    : "";
+  const tags = Array.isArray(article.tags)
+    ? article.tags.map(String).slice(0, 3).join(" ")
+    : "#News";
+  const url = storyPath(article);
   const lines = [
     title,
     "",
-    ...bullets.map((b) => `• ${b}`),
+    hook ? hook.slice(0, 220) : "Full briefing on RockBrief — sources credited.",
     "",
-    `Read the RockBrief briefing → ${storyPath(article)}`,
+    `Read → ${url}`,
     "",
-    "Source credited on site. Summary only — full report with the publisher.",
+    tags,
   ];
-  return lines.join("\n").slice(0, 1800);
+  return lines.join("\n").slice(0, maxLen);
+}
+
+function buildXText(article) {
+  const title = String(article.ai_hook_title || article.original_title || "").trim();
+  const url = storyPath(article);
+  // Leave room for URL (X counts links ~23 chars)
+  const maxTitle = 240;
+  const t = title.length > maxTitle ? title.slice(0, maxTitle - 1) + "…" : title;
+  return `${t}\n\n${url}`;
 }
 
 export function toSocialPayload(article) {
@@ -72,130 +96,240 @@ export function toSocialPayload(article) {
     category: String(article.category || "World"),
     source: String(article.source || "Wire"),
     caption: buildCaption(article),
-    // Fair-use style: our caption + link to our page (not full republish)
+    x_text: buildXText(article),
     hashtags: Array.isArray(article.tags)
       ? article.tags.map(String).slice(0, 4).join(" ")
       : `#${String(article.category || "News").replace(/\s+/g, "")}`,
   };
 }
 
-
-
-function socialMode() {
-  if (process.env.META_PAGE_ID && process.env.META_PAGE_ACCESS_TOKEN) return "meta";
-  if (process.env.X_USER_ACCESS_TOKEN) return "x";
-  if (process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL) return "make";
-  return "none";
+function hasMeta() {
+  return Boolean(process.env.META_PAGE_ID && process.env.META_PAGE_ACCESS_TOKEN);
 }
 
-async function postToMeta(article, payload) {
+function hasXOauth1() {
+  return Boolean(
+    process.env.X_API_KEY &&
+      process.env.X_API_SECRET &&
+      process.env.X_ACCESS_TOKEN &&
+      process.env.X_ACCESS_SECRET,
+  );
+}
+
+function hasXBearer() {
+  return Boolean(process.env.X_USER_ACCESS_TOKEN);
+}
+
+/** Minimal OAuth 1.0a signature for X API v2 tweets. */
+async function oauth1Header(method, url, consumerKey, consumerSecret, token, tokenSecret) {
+  const crypto = await import("node:crypto");
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const params = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: timestamp,
+    oauth_token: token,
+    oauth_version: "1.0",
+  };
+  const paramString = Object.keys(params)
+    .sort()
+    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+    .join("&");
+  const base = [
+    method.toUpperCase(),
+    encodeURIComponent(url),
+    encodeURIComponent(paramString),
+  ].join("&");
+  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+  const signature = crypto.createHmac("sha1", signingKey).update(base).digest("base64");
+  params.oauth_signature = signature;
+  const header =
+    "OAuth " +
+    Object.keys(params)
+      .sort()
+      .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(params[k])}"`)
+      .join(", ");
+  return header;
+}
+
+async function postToMeta(payload) {
   const pageId = process.env.META_PAGE_ID || "";
   const token = process.env.META_PAGE_ACCESS_TOKEN || "";
-  const endpoint = "https://graph.facebook.com/v23.0/" + encodeURIComponent(pageId) + "/feed";
+  const endpoint =
+    "https://graph.facebook.com/v21.0/" + encodeURIComponent(pageId) + "/feed";
+  const body = {
+    message: payload.caption,
+    link: payload.url,
+    access_token: token,
+  };
   const r = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: payload.caption,
-      link: payload.url,
-      access_token: token,
-    }),
+    body: JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
   });
   const data = await r.json().catch(() => ({}));
-  return { ok: r.ok && Boolean(data.id), platform: "facebook", status: r.status, post_id: data.id || null, error: data.error?.message || null };
+  return {
+    ok: r.ok && Boolean(data.id),
+    platform: "facebook",
+    status: r.status,
+    post_id: data.id || null,
+    post_url: data.id ? `https://facebook.com/${data.id}` : null,
+    error: data.error?.message || null,
+  };
 }
 
-async function postToX(article, payload) {
-  const token = process.env.X_USER_ACCESS_TOKEN || "";
-  const text = (payload.title + "\n\n" + payload.summary + "\n\n" + payload.url).slice(0, 280);
-  const r = await fetch("https://api.x.com/2/tweets", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: "Bearer " + token,
-    },
-    body: JSON.stringify({ text }),
-    signal: AbortSignal.timeout(15000),
-  });
-  const data = await r.json().catch(() => ({}));
-  return { ok: r.ok && Boolean(data.data?.id), platform: "x", status: r.status, post_id: data.data?.id || null, error: data.errors?.[0]?.message || data.detail || null };
+async function postToX(payload) {
+  const text = String(payload.x_text || payload.caption).slice(0, 280);
+  const url = "https://api.x.com/2/tweets";
+
+  if (hasXOauth1()) {
+    const auth = await oauth1Header(
+      "POST",
+      url,
+      process.env.X_API_KEY,
+      process.env.X_API_SECRET,
+      process.env.X_ACCESS_TOKEN,
+      process.env.X_ACCESS_SECRET,
+    );
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: auth,
+      },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && Boolean(data.data?.id),
+      platform: "x",
+      status: r.status,
+      post_id: data.data?.id || null,
+      post_url: data.data?.id ? `https://x.com/i/web/status/${data.data.id}` : null,
+      error: data.errors?.[0]?.message || data.detail || null,
+    };
+  }
+
+  if (hasXBearer()) {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + process.env.X_USER_ACCESS_TOKEN,
+      },
+      body: JSON.stringify({ text }),
+      signal: AbortSignal.timeout(15000),
+    });
+    const data = await r.json().catch(() => ({}));
+    return {
+      ok: r.ok && Boolean(data.data?.id),
+      platform: "x",
+      status: r.status,
+      post_id: data.data?.id || null,
+      post_url: data.data?.id ? `https://x.com/i/web/status/${data.data.id}` : null,
+      error: data.errors?.[0]?.message || data.detail || null,
+    };
+  }
+
+  return { ok: false, platform: "x", error: "X credentials not configured" };
 }
 
 /**
- * POST up to N stories to Make.com webhook.
- * Make scenario should start with "Custom webhook" and map fields:
- *   title, caption, url, image, category
+ * Publish to every configured network (Facebook + X).
+ * Make.com is optional legacy only — not required.
  */
 export async function dispatchToMake(articles, eventKey = "initial") {
-  const mode = socialMode();
+  return dispatchNative(articles, eventKey);
+}
+
+export async function dispatchNative(articles, eventKey = "initial") {
   const max = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
   const list = (Array.isArray(articles) ? articles : [])
     .filter((a) => a && (a.ai_hook_title || a.original_title) && a.id)
     .filter(isPublishableSocialArticle)
     .slice(0, max);
-  if (!list.length) return { ok: true, sent: 0, reason: "no articles" };
 
-  if (mode === "meta" || mode === "x") {
-    const results = [];
-    for (const article of list) {
-      const payload = { ...toSocialPayload(article), event_key: eventKey };
-      try {
-        const result = mode === "meta" ? await postToMeta(article, payload) : await postToX(article, payload);
-        results.push({ id: payload.id, event_key: eventKey, ...result, title: payload.title.slice(0, 80) });
-      } catch (e) {
-        results.push({ id: payload.id, event_key: eventKey, platform: mode === "meta" ? "facebook" : "x", ok: false, error: e instanceof Error ? e.message : "send failed" });
-      }
-      await new Promise((res) => setTimeout(res, 500));
-    }
-    return { ok: results.some((x) => x.ok), sent: results.filter((x) => x.ok).length, platform: mode, results };
+  if (!list.length) return { ok: true, sent: 0, reason: "no publishable articles" };
+
+  const targets = [];
+  if (hasMeta()) targets.push("facebook");
+  if (hasXOauth1() || hasXBearer()) targets.push("x");
+
+  // Legacy Make webhook only if no native credentials
+  const makeUrl = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL || "";
+  if (!targets.length && makeUrl) targets.push("make");
+
+  if (!targets.length) {
+    return {
+      ok: false,
+      skipped: true,
+      reason:
+        "No social credentials. Set META_PAGE_ID + META_PAGE_ACCESS_TOKEN and/or X_API_KEY + X_API_SECRET + X_ACCESS_TOKEN + X_ACCESS_SECRET",
+    };
   }
-
-  const webhook = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL || "";
-  if (!webhook) return { ok: false, skipped: true, reason: "No social publishing credentials configured" };
 
   const results = [];
   for (const article of list) {
     const payload = { ...toSocialPayload(article), event_key: eventKey };
-    try {
-      const r = await fetch(webhook, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(payload),
-        signal: AbortSignal.timeout(12000),
-      });
-      results.push({
-        id: payload.id,
-        event_key: eventKey,
-        status: r.status,
-        ok: r.ok,
-        title: payload.title.slice(0, 80),
-      });
-      // Gentle delay so free Make tiers are not rate-limited
-      await new Promise((res) => setTimeout(res, 400));
-    } catch (e) {
-      results.push({
-        id: payload.id,
-        event_key: eventKey,
-        ok: false,
-        error: e instanceof Error ? e.message : "send failed",
-      });
+    for (const platform of targets) {
+      try {
+        let result;
+        if (platform === "facebook") result = await postToMeta(payload);
+        else if (platform === "x") result = await postToX(payload);
+        else {
+          const r = await fetch(makeUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(12000),
+          });
+          result = {
+            ok: r.ok,
+            platform: "make",
+            status: r.status,
+            post_id: null,
+            error: r.ok ? null : "webhook failed",
+          };
+        }
+        results.push({
+          id: payload.id,
+          event_key: eventKey,
+          title: payload.title.slice(0, 80),
+          ...result,
+        });
+      } catch (e) {
+        results.push({
+          id: payload.id,
+          event_key: eventKey,
+          platform,
+          ok: false,
+          error: e instanceof Error ? e.message : "send failed",
+        });
+      }
+      await new Promise((res) => setTimeout(res, 600));
     }
   }
 
   return {
     ok: results.some((x) => x.ok),
     sent: results.filter((x) => x.ok).length,
+    platforms: targets,
     results,
   };
 }
 
-/** Netlify function: POST /api/social-dispatch  (optional manual/test trigger) */
 export async function handler(event) {
-  const secret = process.env.CRON_SECRET || "";
+  const secret = process.env.CRON_SECRET || process.env.BOT_MANUAL_SECRET || "";
   const auth = event.headers?.authorization || event.headers?.Authorization || "";
   const supplied =
-    auth.replace(/^Bearer\s+/i, "") || event.queryStringParameters?.secret || "";
+    auth.replace(/^Bearer\s+/i, "") ||
+    event.headers?.["x-rockbrief-bot-secret"] ||
+    event.queryStringParameters?.secret ||
+    "";
 
   if (secret && supplied !== secret) {
     return {
@@ -209,10 +343,13 @@ export async function handler(event) {
     let articles = [];
     if (event.body) {
       const body = JSON.parse(event.body);
-      articles = Array.isArray(body.articles) ? body.articles : body.article ? [body.article] : [];
+      articles = Array.isArray(body.articles)
+        ? body.articles
+        : body.article
+          ? [body.article]
+          : [];
     }
 
-    // If no body, pull latest from news API internally
     if (!articles.length) {
       const base = siteBase();
       const r = await fetch(`${base}/api/news`, {
@@ -221,11 +358,11 @@ export async function handler(event) {
       });
       if (r.ok) {
         const d = await r.json();
-        articles = Array.isArray(d.articles) ? d.articles.slice(0, 5) : [];
+        articles = Array.isArray(d.articles) ? d.articles.slice(0, 8) : [];
       }
     }
 
-    const result = await dispatchToMake(articles);
+    const result = await dispatchNative(articles);
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
