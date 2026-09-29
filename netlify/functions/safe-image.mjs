@@ -123,7 +123,7 @@ async function commonsSearch(query) {
 
       return {
         image: String(image),
-        image_credit: \`Photo: \${artist} / Wikimedia Commons\`,
+        image_credit: "Photo: " + artist + " / Wikimedia Commons",
         image_license: license,
         image_source_url: String(source),
         matchHits: match.hits,
@@ -184,7 +184,7 @@ async function pexelsSearch(query) {
       return {
         image: String(image),
         image_credit: photo?.photographer
-          ? \`Photo: \${photo.photographer} / Pexels\`
+          ? "Photo: " + photo.photographer + " / Pexels"
           : "Pexels",
         image_license: "Pexels License",
         image_source_url: String(photo?.url || "https://www.pexels.com/"),
