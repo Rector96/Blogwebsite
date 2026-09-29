@@ -11,6 +11,28 @@ function dbClient() {
   return url && key ? createClient(url, key) : null;
 }
 
+async function acquireBotLock(db: ReturnType<typeof dbClient>, owner: string) {
+  if (!db) return { acquired: true, error: null };
+  const { data, error } = await db.rpc("try_acquire_bot_lock", {
+    p_lock_name: "news-scheduled",
+    p_owner: owner,
+    p_lease_seconds: 900,
+  });
+  return { acquired: Boolean(data), error };
+}
+
+async function releaseBotLock(db: ReturnType<typeof dbClient>, owner: string) {
+  if (!db) return;
+  try {
+    await db.rpc("release_bot_lock", {
+      p_lock_name: "news-scheduled",
+      p_owner: owner,
+    });
+  } catch (error) {
+    console.error("[RockBrief Bot] lock release failed", error);
+  }
+}
+
 async function recordBotRun(status: string, metrics: Record<string, any>, errorMessage = "") {
   const db = dbClient();
   if (!db) return;
@@ -357,7 +379,29 @@ async function recordSocialResults(results: any[]) {
 
 export default async function handler() {
   const startedAt = Date.now();
+  const owner = `news-scheduled:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
+  const db = dbClient();
+  let lockAcquired = false;
   try {
+    const lock = await acquireBotLock(db, owner);
+    if (lock.error) {
+      console.error("[RockBrief Bot] lock acquisition failed", lock.error);
+      return {
+        statusCode: 503,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ok: false, bot: "RockBrief News Bot", error: "Bot lock unavailable" }),
+      };
+    }
+    if (!lock.acquired) {
+      const metrics = { skipped: true, reason: "another bot run is active", durationMs: Date.now() - startedAt };
+      await recordBotRun("skipped", metrics);
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ok: true, bot: "RockBrief News Bot", ...metrics }),
+      };
+    }
+    lockAcquired = true;
     // Phase A: ingest -> score -> persist candidates -> select only fresh, high-trend stories.
     // Existing runIngest remains the publishing engine; this layer adds bot intelligence
     // without replacing the proven ingestion/image/grounding pipeline.
@@ -456,6 +500,8 @@ export default async function handler() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ok: false, bot: "RockBrief News Bot", error: message }),
     };
+  } finally {
+    if (lockAcquired) await releaseBotLock(db, owner);
   }
 }
 
