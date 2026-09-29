@@ -216,7 +216,7 @@ async function fetchFeedItems() {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
-async function aiBrief(title: string, desc: string, related: any[] = [], useGrounding = false) {
+async function aiBrief(title: string, desc: string, related: any[] = []) {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
     body: "",
@@ -228,7 +228,6 @@ async function aiBrief(title: string, desc: string, related: any[] = [], useGrou
   if (!key || !desc || desc.length < 40) return fallback;
   try {
     const ai = new GoogleGenAI({ apiKey: key });
-    if (useGrounding) config.tools = [{ googleSearch: {} }];
     const response = await Promise.race([
       ai.models.generateContent({
         model: "gemini-2.0-flash",
@@ -299,7 +298,7 @@ function mapRow(a: any): NewsArticle {
     image_credit: String(a.image_credit || a.source || ""),
     image_license: String(a.image_license || ""),
     image_source_url: String(a.image_source_url || a.original_url || ""),
-    discovered_via: [String(a.source || "RockBrief")],
+    discovered_via: Array.isArray(a.discovered_via) && a.discovered_via.length ? a.discovered_via.map(String) : [String(a.source || "RockBrief")],
     body: String(a.body || ""),
     story_type: String(a.story_type || "WIRE"),
     author_name: String(a.author_name || ""),
@@ -367,6 +366,7 @@ export async function runIngest() {
   let aiCalls = 0;
   let imageCalls = 0;
   const articles: NewsArticle[] = [];
+  const repairedExisting: NewsArticle[] = [];
 
   for (const item of candidates) {
     const existingArt = existingByUrl.get(item.link);
@@ -480,31 +480,42 @@ export async function runIngest() {
     try {
       const db = createClient(url, key);
       const newOnes = articles.filter((a) => !existingByUrl.has(a.original_url));
-      if (newOnes.length) {
-        const rows = newOnes.map((a) => ({
-          id: a.id,
-          original_url: a.original_url,
-          original_title: a.original_title,
-          original_description: a.original_description,
-          ai_hook_title: a.ai_hook_title,
-          ai_summary: a.ai_summary,
-          tags: a.tags,
-          source: a.source,
-          image: a.image,
-          read_time: a.read_time,
-          timestamp: a.timestamp,
-          editorial_status: "published",
-          story_type: "WIRE",
-          body: a.body || "",
-          category: a.category,
-          region: a.region,
-          image_credit: a.image_credit,
-          image_license: a.image_license,
-          image_source_url: a.image_source_url,
-          author_name: a.author_name,
-        }));
-        const { error } = await db.from("articles").upsert(rows, { onConflict: "original_url" });
-        if (!error) saved = rows.length;
+      const rows = newOnes.map((a) => ({
+        id: a.id,
+        original_url: a.original_url,
+        original_title: a.original_title,
+        original_description: a.original_description,
+        ai_hook_title: a.ai_hook_title,
+        ai_summary: a.ai_summary,
+        tags: a.tags,
+        source: a.source,
+        image: a.image,
+        read_time: a.read_time,
+        timestamp: a.timestamp,
+        editorial_status: "published",
+        story_type: "WIRE",
+        body: a.body || "",
+        category: a.category,
+        region: a.region,
+        trend_score: a.trend_score,
+        trend_label: a.trend_label,
+        discovered_via: a.discovered_via,
+        image_credit: a.image_credit,
+        image_license: a.image_license,
+        image_source_url: a.image_source_url,
+        author_name: a.author_name,
+      }));
+      const repairRows = repairedExisting.map((a) => ({
+        id: a.id,
+        original_url: a.original_url,
+        image: a.image,
+        image_credit: a.image_credit,
+        image_license: a.image_license,
+        image_source_url: a.image_source_url,
+      }));
+      if (rows.length || repairRows.length) {
+        const { error } = await db.from("articles").upsert([...rows, ...repairRows], { onConflict: "original_url" });
+        if (!error) saved = rows.length + repairRows.length;
         else console.error("[RockBrief] upsert error", error.message);
       }
     } catch (e) {
