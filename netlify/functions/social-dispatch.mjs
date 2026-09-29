@@ -8,7 +8,7 @@
  *
  * Recommended cadence (set on the scheduled bot, not here):
  *   Peak: every 3–4 hours, max 3–6 posts/day per network
- *   Never dump every wire — only high-trend, 400+ word stories
+ *   Never dump every wire — only high-trend, 500+ word stories
  *
  * Env:
  *   APP_URL, SOCIAL_MAX_POSTS (default 3), CRON_SECRET
@@ -43,15 +43,14 @@ function isPublishableSocialArticle(article) {
       String(article?.image_credit || "").trim().length > 0);
   return (
     title.length >= 20 &&
-    bodyWords >= 400 &&
+    bodyWords >= 500 &&
     bullets.length === 4 &&
-    bullets.every((b) => b.length >= 15) &&
+    bullets.every((b) => b.split(/\s+/).filter(Boolean).length >= 20) &&
     /^https?:\/\//i.test(sourceUrl) &&
     imageReady
   );
 }
 
-/** Short, shareable caption — drives clicks to the site (SEO + retention). */
 function buildCaption(article, maxLen = 1800) {
   const title = String(article.ai_hook_title || article.original_title || "").trim();
   const hook = Array.isArray(article.ai_summary)
@@ -76,7 +75,6 @@ function buildCaption(article, maxLen = 1800) {
 function buildXText(article) {
   const title = String(article.ai_hook_title || article.original_title || "").trim();
   const url = storyPath(article);
-  // Leave room for URL (X counts links ~23 chars)
   const maxTitle = 240;
   const t = title.length > maxTitle ? title.slice(0, maxTitle - 1) + "…" : title;
   return `${t}\n\n${url}`;
@@ -120,7 +118,6 @@ function hasXBearer() {
   return Boolean(process.env.X_USER_ACCESS_TOKEN);
 }
 
-/** Minimal OAuth 1.0a signature for X API v2 tweets. */
 async function oauth1Header(method, url, consumerKey, consumerSecret, token, tokenSecret) {
   const crypto = await import("node:crypto");
   const nonce = crypto.randomBytes(16).toString("hex");
@@ -137,37 +134,27 @@ async function oauth1Header(method, url, consumerKey, consumerSecret, token, tok
     .sort()
     .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
     .join("&");
-  const base = [
-    method.toUpperCase(),
-    encodeURIComponent(url),
-    encodeURIComponent(paramString),
-  ].join("&");
+  const base = [method.toUpperCase(), encodeURIComponent(url), encodeURIComponent(paramString)].join("&");
   const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
   const signature = crypto.createHmac("sha1", signingKey).update(base).digest("base64");
   params.oauth_signature = signature;
-  const header =
+  return (
     "OAuth " +
     Object.keys(params)
       .sort()
       .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(params[k])}"`)
-      .join(", ");
-  return header;
+      .join(", ")
+  );
 }
 
 async function postToMeta(payload) {
   const pageId = process.env.META_PAGE_ID || "";
   const token = process.env.META_PAGE_ACCESS_TOKEN || "";
-  const endpoint =
-    "https://graph.facebook.com/v21.0/" + encodeURIComponent(pageId) + "/feed";
-  const body = {
-    message: payload.caption,
-    link: payload.url,
-    access_token: token,
-  };
+  const endpoint = "https://graph.facebook.com/v21.0/" + encodeURIComponent(pageId) + "/feed";
   const r = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
+    body: JSON.stringify({ message: payload.caption, link: payload.url, access_token: token }),
     signal: AbortSignal.timeout(15000),
   });
   const data = await r.json().catch(() => ({}));
@@ -184,7 +171,6 @@ async function postToMeta(payload) {
 async function postToX(payload) {
   const text = String(payload.x_text || payload.caption).slice(0, 280);
   const url = "https://api.x.com/2/tweets";
-
   if (hasXOauth1()) {
     const auth = await oauth1Header(
       "POST",
@@ -196,10 +182,7 @@ async function postToX(payload) {
     );
     const r = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: auth,
-      },
+      headers: { "Content-Type": "application/json", Authorization: auth },
       body: JSON.stringify({ text }),
       signal: AbortSignal.timeout(15000),
     });
@@ -213,7 +196,6 @@ async function postToX(payload) {
       error: data.errors?.[0]?.message || data.detail || null,
     };
   }
-
   if (hasXBearer()) {
     const r = await fetch(url, {
       method: "POST",
@@ -234,14 +216,9 @@ async function postToX(payload) {
       error: data.errors?.[0]?.message || data.detail || null,
     };
   }
-
   return { ok: false, platform: "x", error: "X credentials not configured" };
 }
 
-/**
- * Publish to every configured network (Facebook + X).
- * Make.com is optional legacy only — not required.
- */
 export async function dispatchToMake(articles, eventKey = "initial") {
   return dispatchNative(articles, eventKey);
 }
@@ -258,8 +235,6 @@ export async function dispatchNative(articles, eventKey = "initial") {
   const targets = [];
   if (hasMeta()) targets.push("facebook");
   if (hasXOauth1() || hasXBearer()) targets.push("x");
-
-  // Legacy Make webhook only if no native credentials
   const makeUrl = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL || "";
   if (!targets.length && makeUrl) targets.push("make");
 
@@ -287,20 +262,9 @@ export async function dispatchNative(articles, eventKey = "initial") {
             body: JSON.stringify(payload),
             signal: AbortSignal.timeout(12000),
           });
-          result = {
-            ok: r.ok,
-            platform: "make",
-            status: r.status,
-            post_id: null,
-            error: r.ok ? null : "webhook failed",
-          };
+          result = { ok: r.ok, platform: "make", status: r.status, post_id: null, error: r.ok ? null : "webhook failed" };
         }
-        results.push({
-          id: payload.id,
-          event_key: eventKey,
-          title: payload.title.slice(0, 80),
-          ...result,
-        });
+        results.push({ id: payload.id, event_key: eventKey, title: payload.title.slice(0, 80), ...result });
       } catch (e) {
         results.push({
           id: payload.id,
@@ -343,13 +307,8 @@ export async function handler(event) {
     let articles = [];
     if (event.body) {
       const body = JSON.parse(event.body);
-      articles = Array.isArray(body.articles)
-        ? body.articles
-        : body.article
-          ? [body.article]
-          : [];
+      articles = Array.isArray(body.articles) ? body.articles : body.article ? [body.article] : [];
     }
-
     if (!articles.length) {
       const base = siteBase();
       const r = await fetch(`${base}/api/news`, {
@@ -361,7 +320,6 @@ export async function handler(event) {
         articles = Array.isArray(d.articles) ? d.articles.slice(0, 8) : [];
       }
     }
-
     const result = await dispatchNative(articles);
     return {
       statusCode: 200,
