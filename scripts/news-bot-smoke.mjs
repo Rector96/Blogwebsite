@@ -5,6 +5,7 @@ const requiredFiles = [
   "netlify/functions/news-scheduled.ts",
   "netlify/functions/social-dispatch.mjs",
   "netlify/functions/safe-image.mjs",
+  "netlify/functions/bot-health.mjs",
   "supabase_master.sql",
 ];
 
@@ -15,6 +16,7 @@ for (const file of requiredFiles) {
 const scheduler = readFileSync("netlify/functions/news-scheduled.ts", "utf8");
 const news = readFileSync("netlify/functions/news.ts", "utf8");
 const social = readFileSync("netlify/functions/social-dispatch.mjs", "utf8");
+const health = readFileSync("netlify/functions/bot-health.mjs", "utf8");
 const sql = readFileSync("supabase_master.sql", "utf8");
 
 const checks = [
@@ -25,6 +27,9 @@ const checks = [
   [news, "googleSearch", "grounded verification"],
   [social, "dispatchToMake", "social dispatch"],
   [social, "event_key", "social event propagation"],
+  [health, "staleMinutes", "bot stale-run detection"],
+  [health, "recentFailures", "bot failure visibility"],
+  [health, "/api/bot-health", "bot health endpoint"],
   [sql, "bot_story_candidates", "candidate table"],
   [sql, "bot_story_performance", "performance table"],
   [sql, "bot_story_updates", "update table"],
