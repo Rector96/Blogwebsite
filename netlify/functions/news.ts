@@ -389,7 +389,9 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       .order("timestamp", { ascending: false })
       .limit(80);
     if (error || !Array.isArray(data)) return [];
-    return data.filter((a: any) => a?.original_url).map(mapRow);
+    // Never expose legacy/incomplete published rows to the public feed.
+    return data.map(mapRow).filter(validatePublishableArticle);
+
   } catch {
     return [];
   }

@@ -28,6 +28,15 @@ create table if not exists public.articles (
 create index if not exists articles_timestamp_idx on public.articles (timestamp desc);
 create index if not exists articles_tags_idx on public.articles using gin (tags);
 
+-- RockBrief current News Bot fields (safe/idempotent)
+alter table public.articles
+  add column if not exists trend_score integer not null default 0,
+  add column if not exists trend_label text not null default 'Fresh',
+  add column if not exists discovered_via jsonb not null default '[]'::jsonb;
+
+create index if not exists articles_trend_score_idx
+  on public.articles (trend_score desc, timestamp desc);
+
 alter table public.articles enable row level security;
 
 drop policy if exists "Allow public read access to articles" on public.articles;
