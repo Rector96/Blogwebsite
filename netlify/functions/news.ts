@@ -370,6 +370,28 @@ export async function runIngest() {
   for (const item of candidates) {
     const existingArt = existingByUrl.get(item.link);
     if (existingArt) {
+      const needsImageRepair = !existingArt.image || /rwdnews-logo\.svg/i.test(existingArt.image);
+      if (!needsImageRepair) {
+        articles.push(existingArt);
+        continue;
+      }
+      if (imageCalls < maxImages) {
+        try {
+          const repair = await resolveSafeCover({
+            title: existingArt.ai_hook_title || item.title,
+            category: existingArt.category || item.category,
+            preferredQuery: existingArt.ai_hook_title || item.title,
+            preferStock: true,
+          });
+          if (repair.image && !/rwdnews-logo\.svg/i.test(repair.image)) {
+            existingArt.image = repair.image;
+            existingArt.image_credit = repair.image_credit || existingArt.image_credit;
+            existingArt.image_license = repair.image_license || existingArt.image_license;
+            existingArt.image_source_url = repair.image_source_url || existingArt.image_source_url;
+            imageCalls++;
+          }
+        } catch {}
+      }
       articles.push(existingArt);
       continue;
     }
