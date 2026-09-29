@@ -287,3 +287,31 @@ alter table public.bot_story_candidates
 
 create index if not exists bot_story_candidates_cluster_idx
   on public.bot_story_candidates (cluster_key, trend_score desc);
+
+
+-- =============================================================================
+-- 9) ROCKBRIEF NEWS BOT — developing story state
+-- =============================================================================
+create table if not exists public.bot_story_clusters (
+  cluster_key text primary key,
+  canonical_article_id text references public.articles(id) on delete set null,
+  canonical_title text not null,
+  source_count integer not null default 0,
+  sources jsonb not null default '[]'::jsonb,
+  member_count integer not null default 0,
+  trend_score integer not null default 0,
+  trend_label text,
+  first_seen timestamptz not null default now(),
+  last_seen timestamptz not null default now(),
+  last_updated_at timestamptz,
+  update_needed boolean not null default false,
+  metadata jsonb not null default '{}'::jsonb
+);
+
+create index if not exists bot_story_clusters_trend_idx
+  on public.bot_story_clusters (trend_score desc, last_seen desc);
+
+create index if not exists bot_story_clusters_update_idx
+  on public.bot_story_clusters (update_needed, last_seen desc);
+
+alter table public.bot_story_clusters enable row level security;
