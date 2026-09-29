@@ -404,7 +404,7 @@ export async function runIngest() {
       image_query: item.title,
     };
     if (aiCalls < maxAi) {
-      brief = await aiBrief(item.title, item.desc);
+      brief = await aiBrief(item.title, item.desc, trend.related);
       aiCalls++;
     }
 
