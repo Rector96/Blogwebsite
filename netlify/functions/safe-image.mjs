@@ -83,7 +83,7 @@ async function commonsSearch(query) {
     if (!r.ok) return null;
     const data = await r.json();
     const pages = Object.values(data?.query?.pages || {});
-    const allowed = /^(CC0|CC BY|CC BY-SA|Public domain|PD|PDM|GFDL)/i;
+    const allowed = /^(CC0(?:\\s|$)|CC BY-SA(?:\\s|$)|CC BY(?:\\s|$)|Public domain(?:\\s|$)|PD(?:\\s|$)|PDM(?:\\s|$)|GFDL)/i;
     const candidates = pages.map((page) => {
       const info = page?.imageinfo?.[0];
       const meta = info?.extmetadata || {};
