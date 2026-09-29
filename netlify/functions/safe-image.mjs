@@ -18,24 +18,24 @@ const STOP = new Set([
   "were","their","they","them","than","then","what","when","where","while","which","who",
   "how","why","new","latest","news","report","reports","according","amid","more","most",
   "just","only","also","being","very","much","many","some","such","like","event","events",
-  "official","officials","attends","attend","attended","announces","announced","says",
-  "said","gets","got","will","would","could","should","over","after","before","during",
+  "official","officials","attends","attend","attended","announces","announced","gets","got",
+  "during",
 ]);
 
 function normalize(value) {
   return String(value || "")
     .toLowerCase()
     .normalize("NFKD")
-    .replace(/[^a-z0-9\\s-]/g, " ")
+    .replace(/[^a-z0-9\s-]/g, " ")
     .replace(/[-]+/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
 function termsFor(query) {
   return [...new Set(
     normalize(query)
-      .split(/\\s+/)
+      .split(/\s+/)
       .filter((term) => term.length >= 4 && !STOP.has(term)),
   )].slice(0, 8);
 }
@@ -52,12 +52,7 @@ function overlapScore(query, haystack) {
 function isStrongMatch(query, haystack) {
   const { hits, total, ratio } = overlapScore(query, haystack);
   if (!total) return false;
-
-  // One distinctive term can be enough for a short query.
   if (total === 1) return hits === 1;
-
-  // For a named person/event/place/product, require at least two matching
-  // terms and at least half of the distinctive query terms.
   return hits >= 2 && ratio >= 0.5;
 }
 
@@ -65,7 +60,7 @@ function cleanMeta(value) {
   return String(value || "")
     .replace(/<[^>]*>/g, " ")
     .replace(/&[^;]+;/g, " ")
-    .replace(/\\s+/g, " ")
+    .replace(/\s+/g, " ")
     .trim();
 }
 
@@ -105,7 +100,7 @@ async function commonsSearch(query) {
 
     const data = await r.json();
     const pages = Object.values(data?.query?.pages || {});
-    const allowed = /^(CC0(?:\\s|$)|CC BY-SA(?:\\s|$)|CC BY(?:\\s|$)|Public domain(?:\\s|$)|PD(?:\\s|$)|PDM(?:\\s|$)|GFDL)/i;
+    const allowed = /^(CC0(?:\s|$)|CC BY-SA(?:\s|$)|CC BY(?:\s|$)|Public domain(?:\s|$)|PD(?:\s|$)|PDM(?:\s|$)|GFDL)/i;
 
     const candidates = pages.map((page) => {
       const info = page?.imageinfo?.[0];
@@ -118,18 +113,17 @@ async function commonsSearch(query) {
       const source = info?.descriptionurl || "";
 
       if (!image || !/^https?:\/\//i.test(image)) return null;
-      if (!/^image\\//i.test(String(info?.mime || ""))) return null;
+      if (!/^image\//i.test(String(info?.mime || ""))) return null;
       if (Number(info?.width || 0) < 500 || Number(info?.height || 0) < 300) return null;
       if (!license || !allowed.test(license)) return null;
 
-      const title = String(page?.title || "");
-      const searchable = [title, description, categories].join(" ");
+      const searchable = [String(page?.title || ""), description, categories].join(" ");
       const match = overlapScore(query, searchable);
       if (!isStrongMatch(query, searchable)) return null;
 
       return {
         image: String(image),
-        image_credit: `Photo: ${artist} / Wikimedia Commons`,
+        image_credit: \`Photo: \${artist} / Wikimedia Commons\`,
         image_license: license,
         image_source_url: String(source),
         matchHits: match.hits,
@@ -190,7 +184,7 @@ async function pexelsSearch(query) {
       return {
         image: String(image),
         image_credit: photo?.photographer
-          ? `Photo: ${photo.photographer} / Pexels`
+          ? \`Photo: \${photo.photographer} / Pexels\`
           : "Pexels",
         image_license: "Pexels License",
         image_source_url: String(photo?.url || "https://www.pexels.com/"),
@@ -232,10 +226,9 @@ export async function resolveSafeCover({
   preferredQuery = "",
   preferStock = true,
 } = {}) {
-  // The AI query is the primary signal. A title-derived query is allowed for
-  // Commons discovery, but stock images are only accepted when their metadata
-  // strongly matches the query.
+  void category;
   const query = String(preferredQuery || "").trim() || String(title || "").trim();
+
   if (!query) {
     return {
       image: PLACEHOLDER,
@@ -253,8 +246,6 @@ export async function resolveSafeCover({
     if (pexels) return pexels;
   }
 
-  // Deliberately no RSS-thumbnail fallback. A publisher feed image is not
-  // independently verified here and may be stale or unrelated.
   return {
     image: PLACEHOLDER,
     image_credit: "RockBrief",
