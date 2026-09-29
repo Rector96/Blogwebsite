@@ -320,7 +320,7 @@ export async function generateDevelopingUpdate(input: {
     ]);
     const parsed = JSON.parse((response as any)?.text || "{}");
     const body = stripJunk(String(parsed.updated_body || ""));
-    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\\s+/).filter(Boolean).length >= 400;
+    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\s+/).filter(Boolean).length >= 400;
     if (!meaningful) return null;
     return {
       updated_title: clean(parsed.updated_title) || input.title,
