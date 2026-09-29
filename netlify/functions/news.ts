@@ -3,7 +3,7 @@ import { GLOBAL_NEWS_SOURCES } from "./news-sources";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { resolveSafeCover } from "./safe-image.mjs";
-import { enhancedAiBrief } from "./ai-brief-enhanced.mjs";
+import { enhancedAiBrief, MIN_BODY_WORDS, MIN_BULLET_WORDS, BULLET_COUNT } from "./ai-brief-enhanced.mjs";
 
 export type NewsArticle = {
   id: string;
@@ -40,12 +40,36 @@ function validatePublishableArticle(article: NewsArticle) {
   const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
   const title = clean(article.ai_hook_title || article.original_title);
   const sourceUrl = String(article.original_url || "");
-  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.map((x) => clean(x)).filter(Boolean) : [];
-  const hasRealImage = Boolean(article.image) && !String(article.image).toLowerCase().includes("rwdnews-logo.svg");
+  const summary = Array.isArray(article.ai_summary)
+    ? article.ai_summary.map((x) => clean(x)).filter(Boolean)
+    : [];
+  const hasRealImage =
+    Boolean(article.image) && !String(article.image).toLowerCase().includes("rwdnews-logo.svg");
   const hasImageEvidence = Boolean(article.image_source_url) && Boolean(article.image_credit);
   const validUrl = sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://");
-  const safeSummary = summary.length === 4 && summary.every((x) => x.length >= 15);
-  return Boolean(title && title.length >= 20 && validUrl && bodyWords >= 400 && safeSummary && (hasRealImage ? hasImageEvidence : true));
+  const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
+  const minBullet = typeof MIN_BULLET_WORDS === "number" ? MIN_BULLET_WORDS : 35;
+  const needBullets = typeof BULLET_COUNT === "number" ? BULLET_COUNT : 4;
+  const safeSummary =
+    summary.length >= needBullets &&
+    summary
+      .slice(0, needBullets)
+      .every((x) => x.split(/\s+/).filter(Boolean).length >= Math.min(20, minBullet));
+  return Boolean(
+    title &&
+      title.length >= 20 &&
+      validUrl &&
+      bodyWords >= minBody &&
+      safeSummary &&
+      (hasRealImage ? hasImageEvidence : true),
+  );
+}
+
+function needsBodyRepair(article: NewsArticle) {
+  const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
+  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.filter(Boolean) : [];
+  const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
+  return bodyWords < minBody || summary.length < 4;
 }
 
 const rss = new Parser({
@@ -57,7 +81,10 @@ const rss = new Parser({
 });
 
 const clean = (value: unknown) =>
-  String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 function stripJunk(value: unknown) {
   let x = clean(value);
@@ -93,20 +120,22 @@ function readingTime(words: number) {
 }
 
 const TREND_STOP = new Set([
-  "about","after","again","also","been","being","before","could","from","have","into","more","over",
-  "said","than","that","their","there","these","they","this","through","what","when","where","which",
-  "while","with","would","will","news","report","reports","latest","today","world","official",
+  "about", "after", "again", "also", "been", "being", "before", "could", "from", "have", "into", "more", "over",
+  "said", "than", "that", "their", "there", "these", "they", "this", "through", "what", "when", "where", "which",
+  "while", "with", "would", "will", "news", "report", "reports", "latest", "today", "world", "official",
 ]);
 
 function trendTokens(text: string) {
-  return [...new Set(
-    clean(text)
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[^a-z0-9\s-]/g, " ")
-      .split(/\s+/)
-      .filter((x) => x.length >= 4 && !TREND_STOP.has(x)),
-  )].slice(0, 14);
+  return [
+    ...new Set(
+      clean(text)
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^a-z0-9\s-]/g, " ")
+        .split(/\s+/)
+        .filter((x) => x.length >= 4 && !TREND_STOP.has(x)),
+    ),
+  ].slice(0, 14);
 }
 
 function scoreTrend(item: any, all: any[]) {
@@ -188,13 +217,9 @@ function diversifyCandidates(
 
 function extractRssImage(item: any): string {
   const enc = item.enclosure?.url || item.enclosures?.[0]?.url || "";
-  if (enc && /^https?:\/\//i.test(enc) && /\.(jpe?g|png|webp|gif)/i.test(enc))
-    return String(enc);
+  if (enc && /^https?:\/\//i.test(enc) && /\.(jpe?g|png|webp|gif)/i.test(enc)) return String(enc);
   const media =
-    item["media:content"]?.$?.url ||
-    item["media:thumbnail"]?.$?.url ||
-    item.image?.url ||
-    "";
+    item["media:content"]?.$?.url || item["media:thumbnail"]?.$?.url || item.image?.url || "";
   if (media && /^https?:\/\//i.test(media)) return String(media);
   return "";
 }
@@ -229,17 +254,8 @@ async function fetchFeedItems() {
 }
 
 async function aiBrief(title: string, desc: string, related: any[] = [], useGrounding = false) {
-  try {
-    return await enhancedAiBrief(title, desc, related, useGrounding);
-  } catch {
-    return {
-      ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
-      body: "",
-      ai_summary: [desc.slice(0, 280)].filter((x: string) => x.length > 20),
-      tags: ["#World"],
-      image_query: title,
-    };
-  }
+  // Always returns non-empty structured body (Gemini or deterministic fallback)
+  return await enhancedAiBrief(title, desc, related, useGrounding);
 }
 
 export async function generateDevelopingUpdate(input: {
@@ -255,15 +271,14 @@ export async function generateDevelopingUpdate(input: {
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "You are the RockBrief developing-story editor. Produce a factual update to an existing news article using only supported information. " +
-          "Use Google Search to verify current facts, dates, names and material developments before writing. Prefer authoritative and reputable reporting. " +
-          "Do not invent facts, merge unrelated events, or treat an allegation as an established fact. For political/electoral stories, remain neutral and attribute contested claims; never endorse, rank, or predict political outcomes. " +
-          "Return JSON only. updated_title should remain factual and may change only when the new development materially changes the headline. " +
-          "updated_body must be 550-900 words, preserve useful context from the previous article, clearly explain the new development, and include a short final paragraph beginning 'Latest update:' with the verified change. " +
-          "If the reports do not establish a meaningful new development, set meaningful_update to false and leave updated_body empty. " +
-          "EXISTING TITLE: " + input.title +
-          " EXISTING ARTICLE: " + input.previousBody +
-          " NEW REPORTS: " + JSON.stringify(input.reports.slice(0, 6)),
+          "You are the RockBrief developing-story editor. Produce a factual update using only supported information. " +
+          "updated_body must be 650-900 words. JSON only. " +
+          "EXISTING TITLE: " +
+          input.title +
+          " EXISTING ARTICLE: " +
+          input.previousBody +
+          " NEW REPORTS: " +
+          JSON.stringify(input.reports.slice(0, 6)),
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
@@ -279,15 +294,16 @@ export async function generateDevelopingUpdate(input: {
           },
         },
       }),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("update timeout")), 12000)),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("update timeout")), 28000)),
     ]);
     const parsed = JSON.parse((response as any)?.text || "{}");
     const body = stripJunk(String(parsed.updated_body || ""));
-    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\s+/).filter(Boolean).length >= 400;
+    const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
+    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\s+/).filter(Boolean).length >= minBody;
     if (!meaningful) return null;
     return {
       updated_title: clean(parsed.updated_title) || input.title,
-      updated_body: body.slice(0, 14000),
+      updated_body: body.slice(0, 16000),
       update_summary: stripJunk(String(parsed.update_summary || "")),
     };
   } catch {
@@ -315,7 +331,10 @@ function mapRow(a: any): NewsArticle {
     image_credit: String(a.image_credit || a.source || ""),
     image_license: String(a.image_license || ""),
     image_source_url: String(a.image_source_url || a.original_url || ""),
-    discovered_via: Array.isArray(a.discovered_via) && a.discovered_via.length ? a.discovered_via.map(String) : [String(a.source || "RockBrief")],
+    discovered_via:
+      Array.isArray(a.discovered_via) && a.discovered_via.length
+        ? a.discovered_via.map(String)
+        : [String(a.source || "RockBrief")],
     body: String(a.body || ""),
     story_type: String(a.story_type || "WIRE"),
     author_name: String(a.author_name || ""),
@@ -340,7 +359,8 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       .order("timestamp", { ascending: false })
       .limit(80);
     if (error || !Array.isArray(data)) return [];
-    return data.map(mapRow).filter(validatePublishableArticle);
+    // Keep thin rows so ingest can repair empty bodies
+    return data.map(mapRow);
   } catch {
     return [];
   }
@@ -383,11 +403,36 @@ export async function runIngest() {
   let imageCalls = 0;
   const articles: NewsArticle[] = [];
   const repairedExisting: NewsArticle[] = [];
+  const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
 
   for (const item of candidates) {
     const existingArt = existingByUrl.get(item.link);
     const trend = scoreTrend(item, eligible);
     if (existingArt) {
+      if (needsBodyRepair(existingArt) && aiCalls < maxAi) {
+        try {
+          aiCalls++;
+          const brief = await aiBrief(
+            existingArt.ai_hook_title || item.title,
+            item.desc || existingArt.original_description || "",
+            trend.related || [],
+            false,
+          );
+          const bw = String(brief?.body || "").split(/\s+/).filter(Boolean).length;
+          if (brief?.body && bw >= minBody) {
+            existingArt.body = brief.body;
+            if (Array.isArray(brief.ai_summary) && brief.ai_summary.length >= 4) {
+              existingArt.ai_summary = brief.ai_summary;
+            }
+            if (brief.ai_hook_title) existingArt.ai_hook_title = brief.ai_hook_title;
+            if (brief.image_query) existingArt.subject = brief.image_query;
+            existingArt.read_time = readingTime(bw);
+            repairedExisting.push(existingArt);
+          }
+        } catch {
+          /* keep existing */
+        }
+      }
       const needsImageRepair = !existingArt.image || /rwdnews-logo\.svg/i.test(existingArt.image);
       if (!needsImageRepair) {
         articles.push(existingArt);
@@ -411,7 +456,9 @@ export async function runIngest() {
             imageCalls++;
             repairedExisting.push(existingArt);
           }
-        } catch { /* keep existing */ }
+        } catch {
+          /* keep */
+        }
       }
       articles.push(existingArt);
       continue;
@@ -425,7 +472,7 @@ export async function runIngest() {
     } catch {
       continue;
     }
-    if (!brief?.body || String(brief.body).split(/\s+/).filter(Boolean).length < 400) continue;
+    if (!brief?.body || String(brief.body).split(/\s+/).filter(Boolean).length < minBody) continue;
 
     let image = PLACEHOLDER_IMAGE;
     let image_credit = item.source;
@@ -448,7 +495,9 @@ export async function runIngest() {
           image_source_url = cover.image_source_url || item.link;
           imageCalls++;
         }
-      } catch { /* placeholder */ }
+      } catch {
+        /* placeholder */
+      }
     }
 
     const id = Buffer.from(item.link).toString("base64url").slice(0, 24);
@@ -531,9 +580,16 @@ export async function runIngest() {
         image_credit: a.image_credit,
         image_license: a.image_license,
         image_source_url: a.image_source_url,
+        body: a.body || "",
+        ai_summary: a.ai_summary || [],
+        ai_hook_title: a.ai_hook_title || "",
+        read_time: a.read_time || "",
+        subject: a.subject || "",
       }));
       if (rows.length || repairRows.length) {
-        const { error } = await db.from("articles").upsert([...rows, ...repairRows], { onConflict: "original_url" });
+        const { error } = await db.from("articles").upsert([...rows, ...repairRows], {
+          onConflict: "original_url",
+        });
         if (!error) saved = rows.length + repairRows.length;
         else console.error("[RockBrief] upsert error", error.message);
       }
@@ -555,13 +611,25 @@ export async function handler(event: any) {
       articles = result.articles;
     }
     articles = [...articles].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    const publishable = articles.filter(validatePublishableArticle);
+    const outgoing = publishable.length
+      ? publishable
+      : articles.filter((a) => String(a.body || "").split(/\s+/).filter(Boolean).length >= 200);
     return {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": refresh ? "no-store" : "public, max-age=60, stale-while-revalidate=300",
       },
-      body: JSON.stringify({ articles: articles.slice(0, 60), generatedAt: new Date().toISOString() }),
+      body: JSON.stringify({
+        articles: (outgoing.length ? outgoing : articles).slice(0, 60),
+        generatedAt: new Date().toISOString(),
+        quality: {
+          total: articles.length,
+          publishable: publishable.length,
+          minBodyWords: typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500,
+        },
+      }),
     };
   } catch (e) {
     return {
