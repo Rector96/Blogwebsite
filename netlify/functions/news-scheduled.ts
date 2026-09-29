@@ -46,7 +46,7 @@ function clusterKey(article: Article) {
   const stop = new Set(["the","and","for","with","from","that","this","after","about","into","over","said","news","report","reports","latest","today","official"]);
   const tokens = String(article.title || "")
     .toLowerCase()
-    .replace(/[^a-z0-9\\s]/g, " ")
+    .replace(/[^a-z0-9\s]/g, " ")
     .split(/\\s+/)
     .filter((x) => x.length >= 5 && !stop.has(x));
   return [...new Set(tokens)].slice(0, 5).sort().join("-");
