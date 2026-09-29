@@ -52,6 +52,67 @@ function clusterKey(article: Article) {
   return [...new Set(tokens)].slice(0, 5).sort().join("-");
 }
 
+async function syncStoryClusters(articles: Article[]) {
+  const db = dbClient();
+  if (!db || !articles.length) return { clusters: 0, updates: 0 };
+
+  const grouped = new Map<string, Article[]>();
+  for (const article of articles) {
+    const key = clusterKey(article);
+    if (!key) continue;
+    const list = grouped.get(key) || [];
+    list.push(article);
+    grouped.set(key, list);
+  }
+
+  let updates = 0;
+  const keys = [...grouped.keys()].slice(0, 60);
+  let existingRows: any[] = [];
+  try {
+    const { data } = await db.from("bot_story_clusters").select("*").in("cluster_key", keys);
+    existingRows = Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("[RockBrief Bot] cluster read failed", error);
+  }
+  const existing = new Map(existingRows.map((row) => [String(row.cluster_key), row]));
+
+  const rows = [...grouped.entries()].map(([key, members]) => {
+    const best = [...members].sort((a, b) => Number(b.trend_score || 0) - Number(a.trend_score || 0))[0];
+    const sources = [...new Set(members.flatMap((a) => Array.isArray(a.discovered_via) ? a.discovered_via : [a.source]).filter(Boolean).map(String))];
+    const previous = existing.get(key);
+    const previousSources = Array.isArray(previous?.sources) ? previous.sources.map(String) : [];
+    const hasNewSource = sources.some((source) => !previousSources.includes(source));
+    const shouldUpdate = Boolean(previous) && (members.length > Number(previous.member_count || 0) || hasNewSource);
+    if (shouldUpdate) updates++;
+
+    return {
+      cluster_key: key,
+      canonical_article_id: String(best.id),
+      canonical_title: String(best.ai_hook_title || best.original_title || ""),
+      source_count: sources.length,
+      sources,
+      member_count: members.length,
+      trend_score: Number(best.trend_score || 0),
+      trend_label: String(best.trend_label || "Fresh"),
+      first_seen: previous?.first_seen || new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+      update_needed: shouldUpdate || Boolean(previous?.update_needed),
+      metadata: {
+        category: String(best.category || "World"),
+        region: String(best.region || "Global"),
+        latest_source: String(best.source || ""),
+      },
+    };
+  });
+
+  try {
+    if (rows.length) await db.from("bot_story_clusters").upsert(rows, { onConflict: "cluster_key" });
+  } catch (error) {
+    console.error("[RockBrief Bot] cluster write failed", error);
+  }
+  return { clusters: rows.length, updates };
+}
+
 async function recordCandidates(articles: Article[]) {
   const db = dbClient();
   if (!db || !articles.length) return;
@@ -109,6 +170,7 @@ export default async function handler() {
     // without replacing the proven ingestion/image/grounding pipeline.
     const result = await runIngest();
     const articles = Array.isArray(result.articles) ? result.articles : [];
+    const clusterMetrics = await syncStoryClusters(articles);
     await recordCandidates(articles);
 
     const threshold = Math.max(0, Math.min(100, Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)));
@@ -152,6 +214,8 @@ export default async function handler() {
       saved: result.saved,
       scanned: articles.length,
       candidates: ranked.length,
+      clusters: clusterMetrics.clusters,
+      storyUpdatesDetected: clusterMetrics.updates,
       threshold,
       social,
       durationMs: Date.now() - startedAt,
