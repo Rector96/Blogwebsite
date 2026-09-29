@@ -35,6 +35,18 @@ export type NewsArticle = {
 
 const PLACEHOLDER_IMAGE = "/rwdnews-logo.svg";
 
+function validatePublishableArticle(article: NewsArticle) {
+  const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
+  const title = clean(article.ai_hook_title || article.original_title);
+  const sourceUrl = String(article.original_url || "");
+  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.map((x) => clean(x)).filter(Boolean) : [];
+  const hasRealImage = Boolean(article.image) && !String(article.image).toLowerCase().includes("rwdnews-logo.svg");
+  const hasImageEvidence = Boolean(article.image_source_url) && Boolean(article.image_credit);
+  const validUrl = sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://");
+  const safeSummary = summary.length === 4 && summary.every((x) => x.length >= 15);
+  return Boolean(title && title.length >= 20 && validUrl && bodyWords >= 400 && safeSummary && (hasRealImage ? hasImageEvidence : true));
+}
+
 const rss = new Parser({
   headers: {
     "User-Agent": "RockBrief/1.0 (+https://rwdnews.netlify.app)",
@@ -279,6 +291,59 @@ async function aiBrief(title: string, desc: string, related: any[] = [], useGrou
   }
 }
 
+export async function generateDevelopingUpdate(input: {
+  title: string;
+  previousBody: string;
+  reports: Array<{ title: string; description: string; source: string; timestamp: string }>;
+}) {
+  const key = process.env["GEMINI_API_KEY"] || "";
+  if (!key || !input.previousBody || !input.reports.length) return null;
+  try {
+    const ai = new GoogleGenAI({ apiKey: key });
+    const response = await Promise.race([
+      ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents:
+          "You are the RockBrief developing-story editor. Produce a factual update to an existing news article using only supported information. " +
+          "Use Google Search to verify current facts, dates, names and material developments before writing. Prefer authoritative and reputable reporting. " +
+          "Do not invent facts, merge unrelated events, or treat an allegation as an established fact. For political/electoral stories, remain neutral and attribute contested claims; never endorse, rank, or predict political outcomes. " +
+          "Return JSON only. updated_title should remain factual and may change only when the new development materially changes the headline. " +
+          "updated_body must be 550-900 words, preserve useful context from the previous article, clearly explain the new development, and include a short final paragraph beginning 'Latest update:' with the verified change. " +
+          "If the reports do not establish a meaningful new development, set meaningful_update to false and leave updated_body empty. " +
+          "EXISTING TITLE: " + input.title +
+          " EXISTING ARTICLE: " + input.previousBody +
+          " NEW REPORTS: " + JSON.stringify(input.reports.slice(0, 6)),
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              meaningful_update: { type: Type.BOOLEAN },
+              updated_title: { type: Type.STRING },
+              updated_body: { type: Type.STRING },
+              update_summary: { type: Type.STRING },
+            },
+            required: ["meaningful_update", "updated_title", "updated_body", "update_summary"],
+          },
+        },
+      }),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("update timeout")), 12000)),
+    ]);
+    const parsed = JSON.parse((response as any)?.text || "{}");
+    const body = stripJunk(String(parsed.updated_body || ""));
+    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\s+/).filter(Boolean).length >= 400;
+    if (!meaningful) return null;
+    return {
+      updated_title: clean(parsed.updated_title) || input.title,
+      updated_body: body.slice(0, 14000),
+      update_summary: stripJunk(String(parsed.update_summary || "")),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function mapRow(a: any): NewsArticle {
   return {
     id: String(a.id),
@@ -407,7 +472,7 @@ export async function runIngest() {
       image_query: item.title,
     };
     if (aiCalls < maxAi) {
-      brief = await aiBrief(item.title, item.desc, trend.related);
+      brief = await aiBrief(item.title, item.desc, trend.related, trend.score >= 65);
       aiCalls++;
     }
 
@@ -482,7 +547,10 @@ export async function runIngest() {
     try {
       const db = createClient(url, key);
       const newOnes = articles.filter((a) => !existingByUrl.has(a.original_url));
-      const rows = newOnes.map((a) => ({
+      const publishable = newOnes.filter(validatePublishableArticle);
+      const rejected = newOnes.length - publishable.length;
+      if (rejected > 0) console.warn("[RockBrief] quality gate rejected", rejected, "new article(s)");
+      const rows = publishable.map((a) => ({
         id: a.id,
         original_url: a.original_url,
         original_title: a.original_title,

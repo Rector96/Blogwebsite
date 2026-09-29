@@ -20,6 +20,27 @@ function storyPath(article) {
   return `${siteBase()}/news/${title}--${encodeURIComponent(String(article.id))}`;
 }
 
+function isPublishableSocialArticle(article) {
+  const title = String(article?.ai_hook_title || article?.original_title || "").trim();
+  const bodyWords = String(article?.body || "").split(/\s+/).filter(Boolean).length;
+  const bullets = Array.isArray(article?.ai_summary)
+    ? article.ai_summary.map(String).map((x) => x.trim()).filter(Boolean)
+    : [];
+  const sourceUrl = String(article?.original_url || "");
+  const image = String(article?.image || "");
+  const placeholder = /rwdnews-logo\.svg(?:$|[?#])/i.test(image);
+  const imageReady = placeholder || (
+    /^https?:\/\//i.test(String(article?.image_source_url || "")) &&
+    String(article?.image_credit || "").trim().length > 0
+  );
+  return title.length >= 20 &&
+    bodyWords >= 400 &&
+    bullets.length === 4 &&
+    bullets.every((b) => b.length >= 15) &&
+    /^https?:\/\//i.test(sourceUrl) &&
+    imageReady;
+}
+
 function buildCaption(article) {
   const title = String(article.ai_hook_title || article.original_title || "").trim();
   const bullets = Array.isArray(article.ai_summary)
@@ -58,29 +79,84 @@ export function toSocialPayload(article) {
   };
 }
 
+
+
+function socialMode() {
+  if (process.env.META_PAGE_ID && process.env.META_PAGE_ACCESS_TOKEN) return "meta";
+  if (process.env.X_USER_ACCESS_TOKEN) return "x";
+  if (process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL) return "make";
+  return "none";
+}
+
+async function postToMeta(article, payload) {
+  const pageId = process.env.META_PAGE_ID || "";
+  const token = process.env.META_PAGE_ACCESS_TOKEN || "";
+  const endpoint = "https://graph.facebook.com/v23.0/" + encodeURIComponent(pageId) + "/feed";
+  const r = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: payload.caption,
+      link: payload.url,
+      access_token: token,
+    }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok && Boolean(data.id), platform: "facebook", status: r.status, post_id: data.id || null, error: data.error?.message || null };
+}
+
+async function postToX(article, payload) {
+  const token = process.env.X_USER_ACCESS_TOKEN || "";
+  const text = (payload.title + "\n\n" + payload.summary + "\n\n" + payload.url).slice(0, 280);
+  const r = await fetch("https://api.x.com/2/tweets", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token,
+    },
+    body: JSON.stringify({ text }),
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await r.json().catch(() => ({}));
+  return { ok: r.ok && Boolean(data.data?.id), platform: "x", status: r.status, post_id: data.data?.id || null, error: data.errors?.[0]?.message || data.detail || null };
+}
+
 /**
  * POST up to N stories to Make.com webhook.
  * Make scenario should start with "Custom webhook" and map fields:
  *   title, caption, url, image, category
  */
-export async function dispatchToMake(articles) {
-  const webhook = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL || "";
-  if (!webhook) {
-    return { ok: false, skipped: true, reason: "MAKE_WEBHOOK_URL not set" };
-  }
-
+export async function dispatchToMake(articles, eventKey = "initial") {
+  const mode = socialMode();
   const max = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
   const list = (Array.isArray(articles) ? articles : [])
     .filter((a) => a && (a.ai_hook_title || a.original_title) && a.id)
+    .filter(isPublishableSocialArticle)
     .slice(0, max);
+  if (!list.length) return { ok: true, sent: 0, reason: "no articles" };
 
-  if (!list.length) {
-    return { ok: true, sent: 0, reason: "no articles" };
+  if (mode === "meta" || mode === "x") {
+    const results = [];
+    for (const article of list) {
+      const payload = { ...toSocialPayload(article), event_key: eventKey };
+      try {
+        const result = mode === "meta" ? await postToMeta(article, payload) : await postToX(article, payload);
+        results.push({ id: payload.id, event_key: eventKey, ...result, title: payload.title.slice(0, 80) });
+      } catch (e) {
+        results.push({ id: payload.id, event_key: eventKey, platform: mode === "meta" ? "facebook" : "x", ok: false, error: e instanceof Error ? e.message : "send failed" });
+      }
+      await new Promise((res) => setTimeout(res, 500));
+    }
+    return { ok: results.some((x) => x.ok), sent: results.filter((x) => x.ok).length, platform: mode, results };
   }
+
+  const webhook = process.env.MAKE_WEBHOOK_URL || process.env.MAKE_COM_WEBHOOK_URL || "";
+  if (!webhook) return { ok: false, skipped: true, reason: "No social publishing credentials configured" };
 
   const results = [];
   for (const article of list) {
-    const payload = toSocialPayload(article);
+    const payload = { ...toSocialPayload(article), event_key: eventKey };
     try {
       const r = await fetch(webhook, {
         method: "POST",
@@ -90,6 +166,7 @@ export async function dispatchToMake(articles) {
       });
       results.push({
         id: payload.id,
+        event_key: eventKey,
         status: r.status,
         ok: r.ok,
         title: payload.title.slice(0, 80),
@@ -99,6 +176,7 @@ export async function dispatchToMake(articles) {
     } catch (e) {
       results.push({
         id: payload.id,
+        event_key: eventKey,
         ok: false,
         error: e instanceof Error ? e.message : "send failed",
       });
