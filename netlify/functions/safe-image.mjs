@@ -33,7 +33,9 @@ const CATEGORY_FALLBACK = {
 };
 
 export function headlineImageQuery(title, category, preferredQuery = "") {
-  const preferred = String(preferredQuery || "").replace(/[^a-zA-Z0-9\\s-]/g, " ").replace(/\\s+/g, " ").trim().split(/\\s+/).filter(Boolean).slice(0, 10).join(" ");\n  if (preferred) return preferred;\n  const raw = String(title || "")
+  const preferred = String(preferredQuery || "").replace(/[^a-zA-Z0-9\s-]/g, " ").replace(/\s+/g, " ").trim().split(/\s+/).filter(Boolean).slice(0, 10).join(" ");
+  if (preferred) return preferred;
+  const raw = String(title || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
@@ -47,7 +49,7 @@ export function headlineImageQuery(title, category, preferredQuery = "") {
 
 
 function cleanMeta(value) {
-  return String(value || "").replace(/<[^>]*>/g, " ").replace(/&[^;]+;/g, " ").replace(/\\s+/g, " ").trim();
+  return String(value || "").replace(/<[^>]*>/g, " ").replace(/&[^;]+;/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function metaValue(meta, keys) {
@@ -103,7 +105,7 @@ async function commonsSearch(query) {
       };
     }).filter(Boolean);
     if (!candidates.length) return null;
-    const terms = query.toLowerCase().split(/\\s+/).filter((x) => x.length > 3);
+    const terms = query.toLowerCase().split(/\s+/).filter((x) => x.length > 3);
     candidates.sort((a, b) => {
       const score = (x) => terms.reduce((n, term) => n + (x.title.includes(term) || x.description.includes(term) ? 1 : 0), 0);
       return score(b) - score(a);
@@ -113,7 +115,8 @@ async function commonsSearch(query) {
     return null;
   }
 }
-\nasync function pexelsSearch(query) {
+
+async function pexelsSearch(query) {
   const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
   if (!key) return null;
   try {
@@ -136,6 +139,7 @@ async function commonsSearch(query) {
         ? `Photo: ${photo.photographer} / Pexels`
         : "Pexels",
       image_license: "Pexels License",
+      image_source_url: String(photo?.url || "https://www.pexels.com/"),
     };
   } catch {
     return null;
@@ -153,12 +157,15 @@ async function unsplashSearch(query) {
     });
     if (!r.ok) return null;
     const data = await r.json();
-    const url = data?.urls?.regular || data?.urls?.small || "";
+    const photo = Array.isArray(data?.results) ? data.results[0] : null;
+    const url = photo?.urls?.regular || photo?.urls?.small || "";
     if (!url) return null;
+    if (photo?.links?.download_location) void fetch(photo.links.download_location, { headers: { Authorization: `Client-ID ${key}` } }).catch(() => undefined);
     return {
       image: String(url),
-      image_credit: data?.user?.name ? `Photo: ${data.user.name} / Unsplash` : "Unsplash",
+      image_credit: photo?.user?.name ? `Photo: ${photo.user.name} / Unsplash` : "Unsplash",
       image_license: "Unsplash License",
+      image_source_url: String(photo?.links?.html || "https://unsplash.com/"),
     };
   } catch {
     return null;
@@ -168,8 +175,11 @@ async function unsplashSearch(query) {
 /**
  * @param {{ title?: string, category?: string, rssImage?: string, preferStock?: boolean }}
  */
-export async function resolveSafeCover({ title = "", category = "World", rssImage = "", preferStock = true } = {}) {
-  const query = headlineImageQuery(title, category);
+export async function resolveSafeCover({ title = "", category = "World", rssImage = "", preferredQuery = "", preferStock = true } = {}) {
+  const query = headlineImageQuery(title, category, preferredQuery);
+
+  const commons = await commonsSearch(query);
+  if (commons) return commons;
 
   if (preferStock) {
     const pexels = await pexelsSearch(query);
@@ -183,7 +193,8 @@ export async function resolveSafeCover({ title = "", category = "World", rssImag
     return {
       image: String(rssImage),
       image_credit: "Publisher feed",
-      image_license: "Feed preview",
+      image_license: "Feed preview — rights not verified",
+      image_source_url: "",
     };
   }
 
