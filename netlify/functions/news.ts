@@ -79,6 +79,42 @@ function readingTime(words: number) {
   return `${Math.max(1, Math.ceil(Math.max(words, 1) / 180))} min read`;
 }
 
+const TREND_STOP = new Set([
+  "about","after","again","also","been","being","before","could","from","have","into","more","over",
+  "said","than","that","their","there","these","they","this","through","what","when","where","which",
+  "while","with","would","will","news","report","reports","latest","today","world","official",
+]);
+
+function trendTokens(text: string) {
+  return [...new Set(
+    clean(text)
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9\s-]/g, " ")
+      .split(/\s+/)
+      .filter((x) => x.length >= 4 && !TREND_STOP.has(x)),
+  )].slice(0, 14);
+}
+
+function scoreTrend(item: any, all: any[]) {
+  const baseTerms = new Set(trendTokens(item.title + " " + item.desc));
+  const related = all.filter((other) => {
+    if (other === item || other.category !== item.category) return false;
+    const shared = trendTokens(other.title + " " + other.desc).filter((t) => baseTerms.has(t)).length;
+    return shared >= Math.max(2, Math.min(3, Math.ceil(baseTerms.size / 5)));
+  });
+  const sources = [...new Set([item.source, ...related.map((x) => x.source)])];
+  const ageHours = Math.max(0, (Date.now() - new Date(item.date).getTime()) / 3600000);
+  const freshness = Math.max(0, 22 - ageHours * 1.2);
+  const sourceSignal = Math.min(48, sources.length * 10);
+  const velocity = Math.min(20, related.length * 4);
+  return {
+    score: Math.min(100, Math.round(25 + freshness + sourceSignal + velocity)),
+    sources,
+    related: related.slice(0, 6),
+  };
+}
+
 function diversifyCandidates(
   items: Array<{
     title: string;
@@ -180,7 +216,7 @@ async function fetchFeedItems() {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
-async function aiBrief(title: string, desc: string) {
+async function aiBrief(title: string, desc: string, related: any[] = []) {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
     body: "",
@@ -198,11 +234,11 @@ async function aiBrief(title: string, desc: string) {
         contents:
           "Create an original RockBrief news report from the source material. JSON only. " +
           "(1) ai_hook_title: factual headline. " +
-          "(2) body: 450-650 words in paragraphs using only facts in the material; empty string if insufficient. " +
+          "(2) body: 550-800 words in clear, natural language using only supported facts; explain what happened and why it matters. " +
           "(3) ai_summary: exactly 4 bullets 30-55 words each. " +
           "(4) tags: 2-4 hashtags. " +
           "(5) image_query: 3-8 precise words identifying the real person, event, place, product or subject shown in the story; do not invent a person or event. " +
-          "TITLE: " + title + " DESCRIPTION: " + desc,
+          "TITLE: " + title + " DESCRIPTION: " + desc + " RELATED REPORTS: " + JSON.stringify(related.slice(0, 5)),
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -262,7 +298,7 @@ function mapRow(a: any): NewsArticle {
     image_credit: String(a.image_credit || a.source || ""),
     image_license: String(a.image_license || ""),
     image_source_url: String(a.image_source_url || a.original_url || ""),
-    discovered_via: [String(a.source || "RockBrief")],
+    discovered_via: Array.isArray(a.discovered_via) && a.discovered_via.length ? a.discovered_via.map(String) : [String(a.source || "RockBrief")],
     body: String(a.body || ""),
     story_type: String(a.story_type || "WIRE"),
     author_name: String(a.author_name || ""),
@@ -315,8 +351,12 @@ export async function runIngest() {
     }
   });
 
+  const eligible = fresh.filter((i) => stripJunk(i.desc).length >= 60);
   const candidates = diversifyCandidates(
-    fresh.filter((i) => stripJunk(i.desc).length >= 60),
+    eligible
+      .map((item) => ({ item, trend: scoreTrend(item, eligible) }))
+      .sort((a, b) => b.trend.score - a.trend.score)
+      .map(({ item }) => item),
     28,
   );
 
@@ -326,13 +366,37 @@ export async function runIngest() {
   let aiCalls = 0;
   let imageCalls = 0;
   const articles: NewsArticle[] = [];
+  const repairedExisting: NewsArticle[] = [];
 
   for (const item of candidates) {
     const existingArt = existingByUrl.get(item.link);
     if (existingArt) {
+      const needsImageRepair = !existingArt.image || /rwdnews-logo\.svg/i.test(existingArt.image);
+      if (!needsImageRepair) {
+        articles.push(existingArt);
+        continue;
+      }
+      if (imageCalls < maxImages) {
+        try {
+          const repair = await resolveSafeCover({
+            title: existingArt.ai_hook_title || item.title,
+            category: existingArt.category || item.category,
+            preferredQuery: existingArt.ai_hook_title || item.title,
+            preferStock: true,
+          });
+          if (repair.image && !/rwdnews-logo\.svg/i.test(repair.image)) {
+            existingArt.image = repair.image;
+            existingArt.image_credit = repair.image_credit || existingArt.image_credit;
+            existingArt.image_license = repair.image_license || existingArt.image_license;
+            existingArt.image_source_url = repair.image_source_url || existingArt.image_source_url;
+            imageCalls++;
+          }
+        } catch {}
+      }
       articles.push(existingArt);
       continue;
     }
+    const trend = scoreTrend(item, eligible);
     let brief = {
       ai_hook_title: item.title,
       body: "",
@@ -341,7 +405,7 @@ export async function runIngest() {
       image_query: item.title,
     };
     if (aiCalls < maxAi) {
-      brief = await aiBrief(item.title, item.desc);
+      brief = await aiBrief(item.title, item.desc, trend.related);
       aiCalls++;
     }
 
@@ -385,12 +449,12 @@ export async function runIngest() {
       read_time: readingTime(bodyWords || 120),
       category: item.category,
       region: item.region,
-      trend_score: 50,
-      trend_label: "Fresh",
+      trend_score: trend.score,
+      trend_label: trend.score >= 82 ? "Breaking" : trend.score >= 65 ? "Trending" : trend.score >= 50 ? "Developing" : "Fresh",
       image_credit,
       image_license,
       image_source_url,
-      discovered_via: [item.source],
+      discovered_via: trend.sources,
       body: brief.body,
       story_type: "WIRE",
       author_name: "RockBrief Wire",
@@ -416,31 +480,42 @@ export async function runIngest() {
     try {
       const db = createClient(url, key);
       const newOnes = articles.filter((a) => !existingByUrl.has(a.original_url));
-      if (newOnes.length) {
-        const rows = newOnes.map((a) => ({
-          id: a.id,
-          original_url: a.original_url,
-          original_title: a.original_title,
-          original_description: a.original_description,
-          ai_hook_title: a.ai_hook_title,
-          ai_summary: a.ai_summary,
-          tags: a.tags,
-          source: a.source,
-          image: a.image,
-          read_time: a.read_time,
-          timestamp: a.timestamp,
-          editorial_status: "published",
-          story_type: "WIRE",
-          body: a.body || "",
-          category: a.category,
-          region: a.region,
-          image_credit: a.image_credit,
-          image_license: a.image_license,
-          image_source_url: a.image_source_url,
-          author_name: a.author_name,
-        }));
-        const { error } = await db.from("articles").upsert(rows, { onConflict: "original_url" });
-        if (!error) saved = rows.length;
+      const rows = newOnes.map((a) => ({
+        id: a.id,
+        original_url: a.original_url,
+        original_title: a.original_title,
+        original_description: a.original_description,
+        ai_hook_title: a.ai_hook_title,
+        ai_summary: a.ai_summary,
+        tags: a.tags,
+        source: a.source,
+        image: a.image,
+        read_time: a.read_time,
+        timestamp: a.timestamp,
+        editorial_status: "published",
+        story_type: "WIRE",
+        body: a.body || "",
+        category: a.category,
+        region: a.region,
+        trend_score: a.trend_score,
+        trend_label: a.trend_label,
+        discovered_via: a.discovered_via,
+        image_credit: a.image_credit,
+        image_license: a.image_license,
+        image_source_url: a.image_source_url,
+        author_name: a.author_name,
+      }));
+      const repairRows = repairedExisting.map((a) => ({
+        id: a.id,
+        original_url: a.original_url,
+        image: a.image,
+        image_credit: a.image_credit,
+        image_license: a.image_license,
+        image_source_url: a.image_source_url,
+      }));
+      if (rows.length || repairRows.length) {
+        const { error } = await db.from("articles").upsert([...rows, ...repairRows], { onConflict: "original_url" });
+        if (!error) saved = rows.length + repairRows.length;
         else console.error("[RockBrief] upsert error", error.message);
       }
     } catch (e) {

@@ -94,7 +94,7 @@ async function verifyImageVisually(query, candidate) {
     const ai = new (await import("@google/genai")).GoogleGenAI({ apiKey: key });
     const result = await Promise.race([
       ai.models.generateContent({
-        model: process.env.GEMINI_IMAGE_VERIFY_MODEL || "gemini-2.0-flash",
+        model: process.env.GEMINI_IMAGE_VERIFY_MODEL || "gemini-2.5-flash",
         contents: [{
           role: "user",
           parts: [
