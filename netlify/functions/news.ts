@@ -79,6 +79,42 @@ function readingTime(words: number) {
   return `${Math.max(1, Math.ceil(Math.max(words, 1) / 180))} min read`;
 }
 
+const TREND_STOP = new Set([
+  "about","after","again","also","been","being","before","could","from","have","into","more","over",
+  "said","than","that","their","there","these","they","this","through","what","when","where","which",
+  "while","with","would","will","news","report","reports","latest","today","world","official",
+]);
+
+function trendTokens(text: string) {
+  return [...new Set(
+    clean(text)
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9\s-]/g, " ")
+      .split(/\s+/)
+      .filter((x) => x.length >= 4 && !TREND_STOP.has(x)),
+  )].slice(0, 14);
+}
+
+function scoreTrend(item: any, all: any[]) {
+  const baseTerms = new Set(trendTokens(item.title + " " + item.desc));
+  const related = all.filter((other) => {
+    if (other === item || other.category !== item.category) return false;
+    const shared = trendTokens(other.title + " " + other.desc).filter((t) => baseTerms.has(t)).length;
+    return shared >= Math.max(2, Math.min(3, Math.ceil(baseTerms.size / 5)));
+  });
+  const sources = [...new Set([item.source, ...related.map((x) => x.source)])];
+  const ageHours = Math.max(0, (Date.now() - new Date(item.date).getTime()) / 3600000);
+  const freshness = Math.max(0, 22 - ageHours * 1.2);
+  const sourceSignal = Math.min(48, sources.length * 10);
+  const velocity = Math.min(20, related.length * 4);
+  return {
+    score: Math.min(100, Math.round(25 + freshness + sourceSignal + velocity)),
+    sources,
+    related: related.slice(0, 6),
+  };
+}
+
 function diversifyCandidates(
   items: Array<{
     title: string;
