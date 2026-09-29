@@ -223,6 +223,104 @@ async function recordCandidates(articles: Article[]) {
   }
 }
 
+async function refreshBotPerformance() {
+  const db = dbClient();
+  if (!db) return { tracked: 0, performance: new Map<string, number>() };
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  try {
+    const { data: candidates } = await db
+      .from("bot_story_candidates")
+      .select("article_id,trend_score")
+      .order("updated_at", { ascending: false })
+      .limit(250);
+    const ids = (candidates || []).map((row: any) => String(row.article_id)).filter(Boolean);
+    if (!ids.length) return { tracked: 0, performance: new Map<string, number>() };
+
+    const [{ data: events }, { data: social }] = await Promise.all([
+      db.from("rwdnews_events")
+        .select("article_id,event_name,created_at")
+        .in("article_id", ids)
+        .gte("created_at", since)
+        .limit(10000),
+      db.from("social_posts")
+        .select("article_id,platform,status,event_key,updated_at")
+        .in("article_id", ids)
+        .gte("updated_at", since)
+        .limit(5000),
+    ]);
+
+    const eventMap = new Map<string, Record<string, number>>();
+    for (const row of events || []) {
+      const id = String(row.article_id || "");
+      if (!id) continue;
+      const bucket = eventMap.get(id) || {};
+      const name = String(row.event_name || "unknown");
+      bucket[name] = (bucket[name] || 0) + 1;
+      eventMap.set(id, bucket);
+    }
+
+    const socialMap = new Map<string, Record<string, number>>();
+    for (const row of social || []) {
+      const id = String(row.article_id || "");
+      if (!id) continue;
+      const bucket = socialMap.get(id) || { sent: 0, failed: 0 };
+      if (row.status === "sent") bucket.sent++;
+      if (row.status === "failed") bucket.failed++;
+      socialMap.set(id, bucket);
+    }
+
+    const rows = ids.map((articleId) => {
+      const e = eventMap.get(articleId) || {};
+      const s = socialMap.get(articleId) || { sent: 0, failed: 0 };
+      const views = Number(e.page_view || 0);
+      const opens = Number(e.article_open || 0);
+      const shares = Number(e.article_share || 0);
+      const saves = Number(e.article_save || 0);
+      const engaged = Number(e.reading_engaged || 0);
+      const returning = Number(e.return_visit || 0);
+      const weightedEngagement = opens + shares * 4 + saves * 3 + engaged * 5 + returning * 2;
+      const engagementRate = views > 0 ? Math.min(1, weightedEngagement / views) : 0;
+      const deliveryTotal = s.sent + s.failed;
+      const deliveryRate = deliveryTotal > 0 ? s.sent / deliveryTotal : 0;
+      const performanceScore = Math.round(Math.min(100, engagementRate * 85 + deliveryRate * 15));
+      return {
+        article_id: articleId,
+        window_start: since,
+        page_views: views,
+        article_opens: opens,
+        shares,
+        saves,
+        engaged_reads: engaged,
+        return_visits: returning,
+        social_sent: s.sent,
+        social_failed: s.failed,
+        engagement_rate: Number(engagementRate.toFixed(4)),
+        delivery_rate: Number(deliveryRate.toFixed(4)),
+        performance_score: performanceScore,
+        metrics: { views, opens, shares, saves, engaged, returning, weightedEngagement },
+        updated_at: new Date().toISOString(),
+      };
+    });
+
+    await db.from("bot_story_performance").upsert(rows, { onConflict: "article_id,window_start" });
+
+    const performance = new Map<string, number>();
+    for (const row of rows) performance.set(row.article_id, Number(row.performance_score || 0));
+
+    for (const row of rows) {
+      await db.from("bot_story_candidates")
+        .update({ performance_score: row.performance_score })
+        .eq("article_id", row.article_id);
+    }
+
+    return { tracked: rows.length, performance };
+  } catch (error) {
+    console.error("[RockBrief Bot] performance refresh failed", error);
+    return { tracked: 0, performance: new Map<string, number>() };
+  }
+}
+
 async function recordSocialResults(results: any[]) {
   const db = dbClient();
   if (!db || !results.length) return;
@@ -254,6 +352,7 @@ export default async function handler() {
     const clusterMetrics = await syncStoryClusters(articles);
     const updateMetrics = await applyDevelopingUpdates(articles);
     await recordCandidates(articles);
+    const performanceMetrics = await refreshBotPerformance();
 
     const threshold = Math.max(0, Math.min(100, Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)));
     const maxPosts = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
@@ -278,6 +377,7 @@ export default async function handler() {
       .sort(
         (a: Article, b: Article) =>
           Number(b.trend_score || 0) - Number(a.trend_score || 0) ||
+          Number(performanceMetrics.performance.get(String(b.id)) || 0) - Number(performanceMetrics.performance.get(String(a.id)) || 0) ||
           Date.parse(b.timestamp || 0) - Date.parse(a.timestamp || 0),
       )
       .slice(0, maxPosts);
@@ -300,6 +400,7 @@ export default async function handler() {
       storyUpdatesDetected: clusterMetrics.updates,
       storiesCheckedForUpdate: updateMetrics.checked,
       storiesUpdated: updateMetrics.updated,
+      performanceTracked: performanceMetrics.tracked,
       threshold,
       social,
       durationMs: Date.now() - startedAt,
