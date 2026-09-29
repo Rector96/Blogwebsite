@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
-import { runIngest } from "./news";
+import { generateDevelopingUpdate, runIngest } from "./news";
 import { dispatchToMake } from "./social-dispatch.mjs";
 
 type Article = Record<string, any>;
@@ -113,6 +113,81 @@ async function syncStoryClusters(articles: Article[]) {
   return { clusters: rows.length, updates };
 }
 
+async function applyDevelopingUpdates(articles: Article[]) {
+  const db = dbClient();
+  if (!db || !articles.length) return { checked: 0, updated: 0 };
+
+  const { data: clusters } = await db
+    .from("bot_story_clusters")
+    .select("*")
+    .eq("update_needed", true)
+    .order("trend_score", { ascending: false })
+    .limit(8);
+  if (!Array.isArray(clusters) || !clusters.length) return { checked: 0, updated: 0 };
+
+  let updated = 0;
+  for (const cluster of clusters) {
+    const canonicalId = String(cluster.canonical_article_id || "");
+    const current = articles.find((a) => String(a.id) === canonicalId);
+    if (!current?.body) continue;
+
+    const reports = articles
+      .filter((a) => clusterKey(a) === String(cluster.cluster_key))
+      .sort((a, b) => Date.parse(b.timestamp || "") - Date.parse(a.timestamp || ""))
+      .slice(0, 6)
+      .map((a) => ({
+        title: String(a.original_title || a.ai_hook_title || ""),
+        description: String(a.original_description || a.ai_summary?.join(" ") || ""),
+        source: String(a.source || ""),
+        timestamp: String(a.timestamp || ""),
+      }));
+
+    const result = await generateDevelopingUpdate({
+      title: String(current.ai_hook_title || current.original_title || ""),
+      previousBody: String(current.body || ""),
+      reports,
+    });
+    if (!result) continue;
+
+    const nextTimestamp = new Date().toISOString();
+    const updateRecord = {
+      cluster_key: String(cluster.cluster_key),
+      article_id: canonicalId,
+      previous_title: String(current.ai_hook_title || current.original_title || ""),
+      new_title: result.updated_title,
+      summary: result.update_summary,
+      source_count: Number(cluster.source_count || reports.length),
+      created_at: nextTimestamp,
+    };
+
+    const { error: articleError } = await db
+      .from("articles")
+      .update({
+        ai_hook_title: result.updated_title,
+        body: result.updated_body,
+        timestamp: nextTimestamp,
+        trend_score: Number(cluster.trend_score || current.trend_score || 0),
+        trend_label: String(cluster.trend_label || current.trend_label || "Developing"),
+        discovered_via: Array.isArray(cluster.sources) ? cluster.sources : current.discovered_via,
+      })
+      .eq("id", canonicalId);
+
+    if (articleError) {
+      console.error("[RockBrief Bot] article update failed", articleError.message);
+      continue;
+    }
+
+    await db.from("bot_story_updates").insert(updateRecord);
+    await db.from("bot_story_clusters").update({
+      update_needed: false,
+      last_updated_at: nextTimestamp,
+    }).eq("cluster_key", String(cluster.cluster_key));
+    updated++;
+  }
+
+  return { checked: clusters.length, updated };
+}
+
 async function recordCandidates(articles: Article[]) {
   const db = dbClient();
   if (!db || !articles.length) return;
@@ -171,6 +246,7 @@ export default async function handler() {
     const result = await runIngest();
     const articles = Array.isArray(result.articles) ? result.articles : [];
     const clusterMetrics = await syncStoryClusters(articles);
+    const updateMetrics = await applyDevelopingUpdates(articles);
     await recordCandidates(articles);
 
     const threshold = Math.max(0, Math.min(100, Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)));
@@ -216,6 +292,8 @@ export default async function handler() {
       candidates: ranked.length,
       clusters: clusterMetrics.clusters,
       storyUpdatesDetected: clusterMetrics.updates,
+      storiesCheckedForUpdate: updateMetrics.checked,
+      storiesUpdated: updateMetrics.updated,
       threshold,
       social,
       durationMs: Date.now() - startedAt,
