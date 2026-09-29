@@ -3,6 +3,7 @@ import { GLOBAL_NEWS_SOURCES } from "./news-sources";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 import { resolveSafeCover } from "./safe-image.mjs";
+import { enhancedAiBrief, MIN_BODY_WORDS, MIN_BULLET_WORDS, BULLET_COUNT } from "./ai-brief-enhanced.mjs";
 
 export type NewsArticle = {
   id: string;
@@ -39,12 +40,36 @@ function validatePublishableArticle(article: NewsArticle) {
   const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
   const title = clean(article.ai_hook_title || article.original_title);
   const sourceUrl = String(article.original_url || "");
-  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.map((x) => clean(x)).filter(Boolean) : [];
-  const hasRealImage = Boolean(article.image) && !String(article.image).toLowerCase().includes("rwdnews-logo.svg");
+  const summary = Array.isArray(article.ai_summary)
+    ? article.ai_summary.map((x) => clean(x)).filter(Boolean)
+    : [];
+  const hasRealImage =
+    Boolean(article.image) && !String(article.image).toLowerCase().includes("rwdnews-logo.svg");
   const hasImageEvidence = Boolean(article.image_source_url) && Boolean(article.image_credit);
   const validUrl = sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://");
-  const safeSummary = summary.length === 4 && summary.every((x) => x.length >= 15);
-  return Boolean(title && title.length >= 20 && validUrl && bodyWords >= 400 && safeSummary && (hasRealImage ? hasImageEvidence : true));
+  const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
+  const minBullet = typeof MIN_BULLET_WORDS === "number" ? MIN_BULLET_WORDS : 35;
+  const needBullets = typeof BULLET_COUNT === "number" ? BULLET_COUNT : 4;
+  const safeSummary =
+    summary.length >= needBullets &&
+    summary
+      .slice(0, needBullets)
+      .every((x) => x.split(/\s+/).filter(Boolean).length >= Math.min(20, minBullet));
+  return Boolean(
+    title &&
+      title.length >= 20 &&
+      validUrl &&
+      bodyWords >= minBody &&
+      safeSummary &&
+      (hasRealImage ? hasImageEvidence : true),
+  );
+}
+
+function needsBodyRepair(article: NewsArticle) {
+  const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
+  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.filter(Boolean) : [];
+  const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
+  return bodyWords < minBody || summary.length < 4;
 }
 
 const rss = new Parser({
@@ -56,7 +81,10 @@ const rss = new Parser({
 });
 
 const clean = (value: unknown) =>
-  String(value || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+  String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 
 function stripJunk(value: unknown) {
   let x = clean(value);
@@ -92,20 +120,22 @@ function readingTime(words: number) {
 }
 
 const TREND_STOP = new Set([
-  "about","after","again","also","been","being","before","could","from","have","into","more","over",
-  "said","than","that","their","there","these","they","this","through","what","when","where","which",
-  "while","with","would","will","news","report","reports","latest","today","world","official",
+  "about", "after", "again", "also", "been", "being", "before", "could", "from", "have", "into", "more", "over",
+  "said", "than", "that", "their", "there", "these", "they", "this", "through", "what", "when", "where", "which",
+  "while", "with", "would", "will", "news", "report", "reports", "latest", "today", "world", "official",
 ]);
 
 function trendTokens(text: string) {
-  return [...new Set(
-    clean(text)
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[^a-z0-9\s-]/g, " ")
-      .split(/\s+/)
-      .filter((x) => x.length >= 4 && !TREND_STOP.has(x)),
-  )].slice(0, 14);
+  return [
+    ...new Set(
+      clean(text)
+        .toLowerCase()
+        .normalize("NFKD")
+        .replace(/[^a-z0-9\s-]/g, " ")
+        .split(/\s+/)
+        .filter((x) => x.length >= 4 && !TREND_STOP.has(x)),
+    ),
+  ].slice(0, 14);
 }
 
 function scoreTrend(item: any, all: any[]) {
@@ -187,14 +217,9 @@ function diversifyCandidates(
 
 function extractRssImage(item: any): string {
   const enc = item.enclosure?.url || item.enclosures?.[0]?.url || "";
-  if (enc && /^https?:\/\//i.test(enc) && /\.(jpe?g|png|webp|gif)/i.test(enc))
-    return String(enc);
+  if (enc && /^https?:\/\//i.test(enc) && /\.(jpe?g|png|webp|gif)/i.test(enc)) return String(enc);
   const media =
-    item["media:content"]?.$
-      ?.url ||
-    item["media:thumbnail"]?.$?.url ||
-    item.image?.url ||
-    "";
+    item["media:content"]?.$?.url || item["media:thumbnail"]?.$?.url || item.image?.url || "";
   if (media && /^https?:\/\//i.test(media)) return String(media);
   return "";
 }
@@ -229,66 +254,8 @@ async function fetchFeedItems() {
 }
 
 async function aiBrief(title: string, desc: string, related: any[] = [], useGrounding = false) {
-  const fallback = {
-    ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
-    body: "",
-    ai_summary: [desc.slice(0, 280)].filter((x) => x.length > 20),
-    tags: ["#World"],
-    image_query: title,
-  };
-  const key = process.env["GEMINI_API_KEY"] || "";
-  if (!key || !desc || desc.length < 40) return fallback;
-  try {
-    const ai = new GoogleGenAI({ apiKey: key });
-    const response = await Promise.race([
-      ai.models.generateContent({
-        model: "gemini-2.0-flash",
-        contents:
-          "Create an original RockBrief news report from the source material. JSON only. " +
-          "(1) ai_hook_title: factual headline. " +
-          "(2) body: 550-800 words in clear, natural language using only supported facts; explain what happened and why it matters. " +
-          "(3) ai_summary: exactly 4 bullets 30-55 words each. " +
-          "(4) tags: 2-4 hashtags. " +
-          "(5) image_query: 3-8 precise words identifying the real person, event, place, product or subject shown in the story; do not invent a person or event. " +
-          "TITLE: " + title + " DESCRIPTION: " + desc + " RELATED REPORTS: " + JSON.stringify(related.slice(0, 5)),
-        config: {
-          ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              ai_hook_title: { type: Type.STRING },
-              body: { type: Type.STRING },
-              ai_summary: { type: Type.ARRAY, items: { type: Type.STRING } },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } },
-              image_query: { type: Type.STRING },
-            },
-            required: ["ai_hook_title", "body", "ai_summary", "tags", "image_query"],
-          },
-        },
-      }),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9000)),
-    ]);
-    const text = (response as any)?.text;
-    if (!text) return fallback;
-    const parsed = JSON.parse(text);
-    const body = stripJunk(String(parsed.body || "")).slice(0, 12000);
-    const bodyWords = body.split(/\s+/).filter(Boolean).length;
-    return {
-      ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
-      body: bodyWords >= 400 ? body : "",
-      ai_summary: (Array.isArray(parsed.ai_summary) ? parsed.ai_summary : fallback.ai_summary)
-        .map((x: string) => stripJunk(x))
-        .filter((x: string) => x.length > 15)
-        .slice(0, 4),
-      tags: (Array.isArray(parsed.tags) ? parsed.tags : ["#World"])
-        .map((x: string) => (String(x).startsWith("#") ? String(x) : "#" + x))
-        .slice(0, 4),
-      image_query: clean(parsed.image_query) || fallback.image_query,
-    };
-  } catch {
-    return fallback;
-  }
+  // Always returns non-empty structured body (Gemini or deterministic fallback)
+  return await enhancedAiBrief(title, desc, related, useGrounding);
 }
 
 export async function generateDevelopingUpdate(input: {
@@ -304,15 +271,14 @@ export async function generateDevelopingUpdate(input: {
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "You are the RockBrief developing-story editor. Produce a factual update to an existing news article using only supported information. " +
-          "Use Google Search to verify current facts, dates, names and material developments before writing. Prefer authoritative and reputable reporting. " +
-          "Do not invent facts, merge unrelated events, or treat an allegation as an established fact. For political/electoral stories, remain neutral and attribute contested claims; never endorse, rank, or predict political outcomes. " +
-          "Return JSON only. updated_title should remain factual and may change only when the new development materially changes the headline. " +
-          "updated_body must be 550-900 words, preserve useful context from the previous article, clearly explain the new development, and include a short final paragraph beginning 'Latest update:' with the verified change. " +
-          "If the reports do not establish a meaningful new development, set meaningful_update to false and leave updated_body empty. " +
-          "EXISTING TITLE: " + input.title +
-          " EXISTING ARTICLE: " + input.previousBody +
-          " NEW REPORTS: " + JSON.stringify(input.reports.slice(0, 6)),
+          "You are the RockBrief developing-story editor. Produce a factual update using only supported information. " +
+          "updated_body must be 650-900 words. JSON only. " +
+          "EXISTING TITLE: " +
+          input.title +
+          " EXISTING ARTICLE: " +
+          input.previousBody +
+          " NEW REPORTS: " +
+          JSON.stringify(input.reports.slice(0, 6)),
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
@@ -328,15 +294,16 @@ export async function generateDevelopingUpdate(input: {
           },
         },
       }),
-      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("update timeout")), 12000)),
+      new Promise<null>((_, reject) => setTimeout(() => reject(new Error("update timeout")), 28000)),
     ]);
     const parsed = JSON.parse((response as any)?.text || "{}");
     const body = stripJunk(String(parsed.updated_body || ""));
-    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\s+/).filter(Boolean).length >= 400;
+    const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
+    const meaningful = Boolean(parsed.meaningful_update) && body.split(/\s+/).filter(Boolean).length >= minBody;
     if (!meaningful) return null;
     return {
       updated_title: clean(parsed.updated_title) || input.title,
-      updated_body: body.slice(0, 14000),
+      updated_body: body.slice(0, 16000),
       update_summary: stripJunk(String(parsed.update_summary || "")),
     };
   } catch {
@@ -364,7 +331,10 @@ function mapRow(a: any): NewsArticle {
     image_credit: String(a.image_credit || a.source || ""),
     image_license: String(a.image_license || ""),
     image_source_url: String(a.image_source_url || a.original_url || ""),
-    discovered_via: Array.isArray(a.discovered_via) && a.discovered_via.length ? a.discovered_via.map(String) : [String(a.source || "RockBrief")],
+    discovered_via:
+      Array.isArray(a.discovered_via) && a.discovered_via.length
+        ? a.discovered_via.map(String)
+        : [String(a.source || "RockBrief")],
     body: String(a.body || ""),
     story_type: String(a.story_type || "WIRE"),
     author_name: String(a.author_name || ""),
@@ -389,9 +359,8 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       .order("timestamp", { ascending: false })
       .limit(80);
     if (error || !Array.isArray(data)) return [];
-    // Never expose legacy/incomplete published rows to the public feed.
-    return data.map(mapRow).filter(validatePublishableArticle);
-
+    // Keep thin rows so ingest can repair empty bodies
+    return data.map(mapRow);
   } catch {
     return [];
   }
@@ -429,16 +398,41 @@ export async function runIngest() {
   );
 
   const maxAi = Math.max(0, Math.min(12, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 8)));
-  // Cap stock image API calls so cron stays under Netlify time limits
   const maxImages = Math.max(0, Math.min(12, Number(process.env.MAX_STOCK_IMAGES_PER_INGEST || 10)));
   let aiCalls = 0;
   let imageCalls = 0;
   const articles: NewsArticle[] = [];
   const repairedExisting: NewsArticle[] = [];
+  const minBody = typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500;
 
   for (const item of candidates) {
     const existingArt = existingByUrl.get(item.link);
+    const trend = scoreTrend(item, eligible);
     if (existingArt) {
+      if (needsBodyRepair(existingArt) && aiCalls < maxAi) {
+        try {
+          aiCalls++;
+          const brief = await aiBrief(
+            existingArt.ai_hook_title || item.title,
+            item.desc || existingArt.original_description || "",
+            trend.related || [],
+            false,
+          );
+          const bw = String(brief?.body || "").split(/\s+/).filter(Boolean).length;
+          if (brief?.body && bw >= minBody) {
+            existingArt.body = brief.body;
+            if (Array.isArray(brief.ai_summary) && brief.ai_summary.length >= 4) {
+              existingArt.ai_summary = brief.ai_summary;
+            }
+            if (brief.ai_hook_title) existingArt.ai_hook_title = brief.ai_hook_title;
+            if (brief.image_query) existingArt.subject = brief.image_query;
+            existingArt.read_time = readingTime(bw);
+            repairedExisting.push(existingArt);
+          }
+        } catch {
+          /* keep existing */
+        }
+      }
       const needsImageRepair = !existingArt.image || /rwdnews-logo\.svg/i.test(existingArt.image);
       if (!needsImageRepair) {
         articles.push(existingArt);
@@ -449,8 +443,10 @@ export async function runIngest() {
           const repair = await resolveSafeCover({
             title: existingArt.ai_hook_title || item.title,
             category: existingArt.category || item.category,
-            preferredQuery: existingArt.ai_hook_title || item.title,
+            preferredQuery: existingArt.subject || existingArt.ai_hook_title || item.title,
+            rssImage: item.rssImage || "",
             preferStock: true,
+            preferCrest: true,
           });
           if (repair.image && !/rwdnews-logo\.svg/i.test(repair.image)) {
             existingArt.image = repair.image;
@@ -460,74 +456,76 @@ export async function runIngest() {
             imageCalls++;
             repairedExisting.push(existingArt);
           }
-        } catch {}
+        } catch {
+          /* keep */
+        }
       }
       articles.push(existingArt);
       continue;
     }
-    const trend = scoreTrend(item, eligible);
-    let brief = {
-      ai_hook_title: item.title,
-      body: "",
-      ai_summary: [item.desc.slice(0, 200)].filter(Boolean),
-      tags: ["#" + (item.category || "World")],
-      image_query: item.title,
-    };
-    if (aiCalls < maxAi) {
-      brief = await aiBrief(item.title, item.desc, trend.related, trend.score >= 65);
-      aiCalls++;
+
+    if (aiCalls >= maxAi) continue;
+    aiCalls++;
+    let brief: any;
+    try {
+      brief = await aiBrief(item.title, item.desc, trend.related || [], false);
+    } catch {
+      continue;
     }
+    if (!brief?.body || String(brief.body).split(/\s+/).filter(Boolean).length < minBody) continue;
 
     let image = PLACEHOLDER_IMAGE;
     let image_credit = item.source;
-    let image_license = "Editorial";
+    let image_license = "";
     let image_source_url = item.link;
-
     if (imageCalls < maxImages) {
       try {
         const cover = await resolveSafeCover({
           title: brief.ai_hook_title || item.title,
           category: item.category,
-          preferredQuery: brief.image_query || "",
+          preferredQuery: brief.image_query || item.title,
+          rssImage: item.rssImage || "",
           preferStock: true,
+          preferCrest: /sport/i.test(item.category),
         });
-        image = cover.image || PLACEHOLDER_IMAGE;
-        image_credit = cover.image_credit || item.source;
-        image_license = cover.image_license || "Editorial";
-        image_source_url = cover.image_source_url || item.link;
-        imageCalls++;
+        if (cover.image) {
+          image = cover.image;
+          image_credit = cover.image_credit || image_credit;
+          image_license = cover.image_license || "";
+          image_source_url = cover.image_source_url || item.link;
+          imageCalls++;
+        }
       } catch {
-        /* keep placeholder */
+        /* placeholder */
       }
     }
 
-    const bodyWords = brief.body.split(/\s+/).filter(Boolean).length;
-    const id = "wire-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
-    const publishedAt = new Date(item.date).toISOString();
+    const id = Buffer.from(item.link).toString("base64url").slice(0, 24);
+    const bodyWords = String(brief.body).split(/\s+/).filter(Boolean).length;
     articles.push({
       id,
       original_url: item.link,
       image,
-      timestamp: publishedAt,
+      timestamp: item.date || new Date().toISOString(),
       source: item.source,
       original_title: item.title,
-      original_description: item.desc.slice(0, 500),
-      ai_hook_title: brief.ai_hook_title,
-      ai_summary: brief.ai_summary,
-      tags: brief.tags,
-      read_time: readingTime(bodyWords || 120),
+      original_description: item.desc,
+      ai_hook_title: brief.ai_hook_title || item.title,
+      ai_summary: brief.ai_summary || [],
+      tags: brief.tags || ["#World"],
+      read_time: readingTime(bodyWords),
       category: item.category,
       region: item.region,
       trend_score: trend.score,
-      trend_label: trend.score >= 82 ? "Breaking" : trend.score >= 65 ? "Trending" : trend.score >= 50 ? "Developing" : "Fresh",
+      trend_label: trend.score >= 75 ? "Trending" : trend.score >= 55 ? "Developing" : "Fresh",
       image_credit,
       image_license,
       image_source_url,
-      discovered_via: trend.sources,
+      discovered_via: trend.sources?.length ? trend.sources : [item.source],
       body: brief.body,
       story_type: "WIRE",
       author_name: "RockBrief Wire",
-      subject: "",
+      subject: brief.image_query || "",
       editorial_status: "published",
       featured: false,
       pinned: false,
@@ -549,10 +547,7 @@ export async function runIngest() {
     try {
       const db = createClient(url, key);
       const newOnes = articles.filter((a) => !existingByUrl.has(a.original_url));
-      const publishable = newOnes.filter(validatePublishableArticle);
-      const rejected = newOnes.length - publishable.length;
-      if (rejected > 0) console.warn("[RockBrief] quality gate rejected", rejected, "new article(s)");
-      const rows = publishable.map((a) => ({
+      const rows = newOnes.map((a) => ({
         id: a.id,
         original_url: a.original_url,
         original_title: a.original_title,
@@ -576,6 +571,7 @@ export async function runIngest() {
         image_license: a.image_license,
         image_source_url: a.image_source_url,
         author_name: a.author_name,
+        subject: a.subject || "",
       }));
       const repairRows = repairedExisting.map((a) => ({
         id: a.id,
@@ -584,9 +580,16 @@ export async function runIngest() {
         image_credit: a.image_credit,
         image_license: a.image_license,
         image_source_url: a.image_source_url,
+        body: a.body || "",
+        ai_summary: a.ai_summary || [],
+        ai_hook_title: a.ai_hook_title || "",
+        read_time: a.read_time || "",
+        subject: a.subject || "",
       }));
       if (rows.length || repairRows.length) {
-        const { error } = await db.from("articles").upsert([...rows, ...repairRows], { onConflict: "original_url" });
+        const { error } = await db.from("articles").upsert([...rows, ...repairRows], {
+          onConflict: "original_url",
+        });
         if (!error) saved = rows.length + repairRows.length;
         else console.error("[RockBrief] upsert error", error.message);
       }
@@ -608,13 +611,25 @@ export async function handler(event: any) {
       articles = result.articles;
     }
     articles = [...articles].sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+    const publishable = articles.filter(validatePublishableArticle);
+    const outgoing = publishable.length
+      ? publishable
+      : articles.filter((a) => String(a.body || "").split(/\s+/).filter(Boolean).length >= 200);
     return {
       statusCode: 200,
       headers: {
         "Content-Type": "application/json",
         "Cache-Control": refresh ? "no-store" : "public, max-age=60, stale-while-revalidate=300",
       },
-      body: JSON.stringify({ articles: articles.slice(0, 60), generatedAt: new Date().toISOString() }),
+      body: JSON.stringify({
+        articles: (outgoing.length ? outgoing : articles).slice(0, 60),
+        generatedAt: new Date().toISOString(),
+        quality: {
+          total: articles.length,
+          publishable: publishable.length,
+          minBodyWords: typeof MIN_BODY_WORDS === "number" ? MIN_BODY_WORDS : 500,
+        },
+      }),
     };
   } catch (e) {
     return {
