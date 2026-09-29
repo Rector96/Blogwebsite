@@ -134,7 +134,7 @@ export async function dispatchToMake(articles, eventKey = "initial") {
 
   const results = [];
   for (const article of list) {
-    const payload = toSocialPayload(article);
+    const payload = { ...toSocialPayload(article), event_key: eventKey };
     try {
       const r = await fetch(webhook, {
         method: "POST",
