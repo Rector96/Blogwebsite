@@ -4,10 +4,12 @@
  * Order:
  * 1) Wikimedia Commons: reusable image + machine-readable license/credit + strong metadata match.
  * 2) Pexels: only when the returned photo metadata strongly matches the AI-selected subject.
- * 3) No image: use the RockBrief logo placeholder.
+ * 3) Gemini vision verification: only a visually relevant candidate is accepted.
+ * 4) No image: use the RockBrief logo placeholder.
  *
  * We intentionally do not use generic category images, RSS thumbnails, or Unsplash here.
  * A wrong image is worse than no image.
+ * Verification is fail-closed: API errors, unsupported images, or uncertainty produce no image.
  */
 
 const PLACEHOLDER = "https://rwdnews.netlify.app/rwdnews-logo.svg";
@@ -70,6 +72,76 @@ function metaValue(meta, keys) {
     if (value) return cleanMeta(value);
   }
   return "";
+}
+
+async function verifyImageVisually(query, candidate) {
+  const key = process.env.GEMINI_API_KEY || "";
+  if (!key || !candidate?.image) return false;
+
+  try {
+    const response = await fetch(candidate.image, {
+      headers: { Accept: "image/avif,image/webp,image/jpeg,image/png,image/*" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return false;
+
+    const contentType = String(response.headers.get("content-type") || "").split(";")[0].toLowerCase();
+    if (!/^image\/(jpeg|png|webp|gif|avif)$/i.test(contentType)) return false;
+
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length < 10000 || buffer.length > 7000000) return false;
+
+    const ai = new (await import("@google/genai")).GoogleGenAI({ apiKey: key });
+    const result = await Promise.race([
+      ai.models.generateContent({
+        model: process.env.GEMINI_IMAGE_VERIFY_MODEL || "gemini-2.0-flash",
+        contents: [{
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                mimeType: contentType,
+                data: buffer.toString("base64"),
+              },
+            },
+            {
+              text:
+                "You are a strict image verification gate for a global news site. " +
+                "The requested story subject is: " + query + ". " +
+                "The candidate image metadata is: " + JSON.stringify({
+                  credit: candidate.image_credit || "",
+                  source: candidate.image_source_url || "",
+                }) + ". " +
+                "Decide whether the visible image itself is clearly relevant to that exact subject. " +
+                "PASS only when the image visibly depicts the named person, event, place, product, object, or other specific subject. " +
+                "Do not use generic thematic similarity. Do not guess identity or context from weak clues. " +
+                "If the subject is a named person, PASS only if the person is visibly the same person. " +
+                "If uncertain, return FAIL. Return JSON only with verdict PASS or FAIL and a short reason.",
+            },
+          ],
+        }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "OBJECT",
+            properties: {
+              verdict: { type: "STRING", enum: ["PASS", "FAIL"] },
+              reason: { type: "STRING" },
+            },
+            required: ["verdict", "reason"],
+          },
+        },
+      }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("image verification timeout")), 9000)),
+    ]);
+
+    const text = String(result?.text || "").trim();
+    if (!text) return false;
+    const parsed = JSON.parse(text);
+    return parsed?.verdict === "PASS";
+  } catch {
+    return false;
+  }
 }
 
 async function commonsSearch(query) {
@@ -138,13 +210,17 @@ async function commonsSearch(query) {
       (b.matchRatio - a.matchRatio),
     );
 
-    const best = candidates[0];
-    return {
-      image: best.image,
-      image_credit: best.image_credit,
-      image_license: best.image_license,
-      image_source_url: best.image_source_url,
-    };
+    for (const candidate of candidates.slice(0, 3)) {
+      if (await verifyImageVisually(query, candidate)) {
+        return {
+          image: candidate.image,
+          image_credit: candidate.image_credit,
+          image_license: candidate.image_license,
+          image_source_url: candidate.image_source_url,
+        };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -200,13 +276,17 @@ async function pexelsSearch(query) {
       (b.matchRatio - a.matchRatio),
     );
 
-    const best = candidates[0];
-    return {
-      image: best.image,
-      image_credit: best.image_credit,
-      image_license: best.image_license,
-      image_source_url: best.image_source_url,
-    };
+    for (const candidate of candidates.slice(0, 3)) {
+      if (await verifyImageVisually(query, candidate)) {
+        return {
+          image: candidate.image,
+          image_credit: candidate.image_credit,
+          image_license: candidate.image_license,
+          image_source_url: candidate.image_source_url,
+        };
+      }
+    }
+    return null;
   } catch {
     return null;
   }
