@@ -27,6 +27,9 @@ const checks = [
   [news, "googleSearch", "grounded verification"],
   [social, "dispatchToMake", "social dispatch"],
   [social, "event_key", "social event propagation"],
+  [social, "isPublishableSocialArticle", "social quality gate"],
+  [scheduler, "try_acquire_bot_lock", "scheduled-run lock"],
+  [scheduler, "releaseBotLock", "scheduled-run lock release"],
   [health, "staleMinutes", "bot stale-run detection"],
   [health, "statusCode: status === \"healthy\" ? 200 : 503", "health HTTP status"],
   [health, "recentFailures", "bot failure visibility"],
@@ -35,6 +38,7 @@ const checks = [
   [sql, "bot_story_candidates", "candidate table"],
   [sql, "bot_story_performance", "performance table"],
   [sql, "bot_story_updates", "update table"],
+  [sql, "bot_run_locks", "scheduled-run lock table"],
 ];
 
 for (const [source, needle, label] of checks) {
