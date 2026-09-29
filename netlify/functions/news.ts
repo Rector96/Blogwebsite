@@ -186,6 +186,7 @@ async function aiBrief(title: string, desc: string) {
     body: "",
     ai_summary: [desc.slice(0, 280)].filter((x) => x.length > 20),
     tags: ["#World"],
+    image_query: title,
   };
   const key = process.env["GEMINI_API_KEY"] || "";
   if (!key || !desc || desc.length < 40) return fallback;
@@ -200,6 +201,7 @@ async function aiBrief(title: string, desc: string) {
           "(2) body: 450-650 words in paragraphs using only facts in the material; empty string if insufficient. " +
           "(3) ai_summary: exactly 4 bullets 30-55 words each. " +
           "(4) tags: 2-4 hashtags. " +
+          "(5) image_query: 3-8 precise words identifying the real person, event, place, product or subject shown in the story; do not invent a person or event. " +
           "TITLE: " + title + " DESCRIPTION: " + desc,
         config: {
           responseMimeType: "application/json",
@@ -210,8 +212,9 @@ async function aiBrief(title: string, desc: string) {
               body: { type: Type.STRING },
               ai_summary: { type: Type.ARRAY, items: { type: Type.STRING } },
               tags: { type: Type.ARRAY, items: { type: Type.STRING } },
+              image_query: { type: Type.STRING },
             },
-            required: ["ai_hook_title", "body", "ai_summary", "tags"],
+            required: ["ai_hook_title", "body", "ai_summary", "tags", "image_query"],
           },
         },
       }),
@@ -232,6 +235,7 @@ async function aiBrief(title: string, desc: string) {
       tags: (Array.isArray(parsed.tags) ? parsed.tags : ["#World"])
         .map((x: string) => (String(x).startsWith("#") ? String(x) : "#" + x))
         .slice(0, 4),
+      image_query: clean(parsed.image_query) || fallback.image_query,
     };
   } catch {
     return fallback;
@@ -334,6 +338,7 @@ export async function runIngest() {
       body: "",
       ai_summary: [item.desc.slice(0, 200)].filter(Boolean),
       tags: ["#" + (item.category || "World")],
+      image_query: item.title,
     };
     if (aiCalls < maxAi) {
       brief = await aiBrief(item.title, item.desc);
@@ -350,21 +355,17 @@ export async function runIngest() {
         const cover = await resolveSafeCover({
           title: brief.ai_hook_title || item.title,
           category: item.category,
-          rssImage: item.rssImage || "",
+          preferredQuery: brief.image_query || "",
           preferStock: true,
         });
         image = cover.image || PLACEHOLDER_IMAGE;
         image_credit = cover.image_credit || item.source;
         image_license = cover.image_license || "Editorial";
-        image_source_url = cover.image?.startsWith("http") ? cover.image : item.link;
+        image_source_url = cover.image_source_url || item.link;
         imageCalls++;
       } catch {
         /* keep placeholder */
       }
-    } else if (item.rssImage && /^https?:\/\//i.test(item.rssImage)) {
-      image = item.rssImage;
-      image_credit = "Publisher feed";
-      image_license = "Feed preview";
     }
 
     const bodyWords = brief.body.split(/\s+/).filter(Boolean).length;

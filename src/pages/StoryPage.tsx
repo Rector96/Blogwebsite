@@ -201,7 +201,7 @@ export default function StoryPage() {
         {article.image ? (
           <figure className="mt-8">
             <img src={article.image} alt={title} className="aspect-[16/9] w-full bg-neutral-100 object-cover" />
-            {article.image_credit ? <figcaption className="mt-2 text-xs leading-5 text-neutral-500">{article.image_credit}</figcaption> : null}
+            {article.image_credit ? <figcaption className="mt-2 text-xs leading-5 text-neutral-500">{article.image_credit}{article.image_source_url ? <> · <a href={article.image_source_url} target="_blank" rel="noopener noreferrer" className="underline">source</a></> : null}</figcaption> : null}
           </figure>
         ) : null}
 
