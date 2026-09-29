@@ -42,6 +42,16 @@ async function getUnpostedIds(articles: Article[]) {
   }
 }
 
+function clusterKey(article: Article) {
+  const stop = new Set(["the","and","for","with","from","that","this","after","about","into","over","said","news","report","reports","latest","today","official"]);
+  const tokens = String(article.title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\\s+/)
+    .filter((x) => x.length >= 5 && !stop.has(x));
+  return [...new Set(tokens)].slice(0, 5).sort().join("-");
+}
+
 async function recordCandidates(articles: Article[]) {
   const db = dbClient();
   if (!db || !articles.length) return;
@@ -59,6 +69,10 @@ async function recordCandidates(articles: Article[]) {
       decision: Number(a.trend_score || 0) >= Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)
         ? "social_candidate"
         : "monitor",
+      cluster_key: clusterKey(a),
+      cluster_title: String(a.ai_hook_title || a.original_title || ""),
+      cluster_sources: Array.isArray(a.discovered_via) ? a.discovered_via : [],
+      cluster_size: Array.isArray(a.discovered_via) ? Math.max(1, a.discovered_via.length) : 1,
       updated_at: new Date().toISOString(),
     }));
   try {

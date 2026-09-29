@@ -274,3 +274,16 @@ create index if not exists social_posts_status_idx
 alter table public.social_posts enable row level security;
 
 -- No public write/read policies are added: service-role bot access only.
+
+
+-- =============================================================================
+-- 8) ROCKBRIEF NEWS BOT — persistent story clustering
+-- =============================================================================
+alter table public.bot_story_candidates
+  add column if not exists cluster_key text,
+  add column if not exists cluster_title text,
+  add column if not exists cluster_sources jsonb not null default '[]'::jsonb,
+  add column if not exists cluster_size integer not null default 1;
+
+create index if not exists bot_story_candidates_cluster_idx
+  on public.bot_story_candidates (cluster_key, trend_score desc);
