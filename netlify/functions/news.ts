@@ -351,8 +351,12 @@ export async function runIngest() {
     }
   });
 
+  const eligible = fresh.filter((i) => stripJunk(i.desc).length >= 60);
   const candidates = diversifyCandidates(
-    fresh.filter((i) => stripJunk(i.desc).length >= 60),
+    eligible
+      .map((item) => ({ item, trend: scoreTrend(item, eligible) }))
+      .sort((a, b) => b.trend.score - a.trend.score)
+      .map(({ item }) => item),
     28,
   );
 
@@ -369,6 +373,7 @@ export async function runIngest() {
       articles.push(existingArt);
       continue;
     }
+    const trend = scoreTrend(item, eligible);
     let brief = {
       ai_hook_title: item.title,
       body: "",
@@ -421,12 +426,12 @@ export async function runIngest() {
       read_time: readingTime(bodyWords || 120),
       category: item.category,
       region: item.region,
-      trend_score: 50,
-      trend_label: "Fresh",
+      trend_score: trend.score,
+      trend_label: trend.score >= 82 ? "Breaking" : trend.score >= 65 ? "Trending" : trend.score >= 50 ? "Developing" : "Fresh",
       image_credit,
       image_license,
       image_source_url,
-      discovered_via: [item.source],
+      discovered_via: trend.sources,
       body: brief.body,
       story_type: "WIRE",
       author_name: "RockBrief Wire",
