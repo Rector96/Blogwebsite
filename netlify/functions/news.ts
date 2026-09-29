@@ -216,7 +216,7 @@ async function fetchFeedItems() {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
-async function aiBrief(title: string, desc: string, related: any[] = []) {
+async function aiBrief(title: string, desc: string, related: any[] = [], useGrounding = false) {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
     body: "",
@@ -240,6 +240,7 @@ async function aiBrief(title: string, desc: string, related: any[] = []) {
           "(5) image_query: 3-8 precise words identifying the real person, event, place, product or subject shown in the story; do not invent a person or event. " +
           "TITLE: " + title + " DESCRIPTION: " + desc + " RELATED REPORTS: " + JSON.stringify(related.slice(0, 5)),
         config: {
+          ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
           responseMimeType: "application/json",
           responseSchema: {
             type: Type.OBJECT,
@@ -390,6 +391,7 @@ export async function runIngest() {
             existingArt.image_license = repair.image_license || existingArt.image_license;
             existingArt.image_source_url = repair.image_source_url || existingArt.image_source_url;
             imageCalls++;
+            repairedExisting.push(existingArt);
           }
         } catch {}
       }
