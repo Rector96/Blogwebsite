@@ -11,21 +11,33 @@ async function applyKoraPayment(reference: string, payload: any) {
 
   if (!payment) return { ok: false, reason: "payment_not_found" };
 
-  const expectedCurrency = String(payment.currency || "USD").toUpperCase();
-  const expectedAmount = Number(payment.amount ?? payment.amount_subunit ?? 0);
-  const actualCurrency = String(payload?.currency || "").toUpperCase();
-  const actualAmount = Number(payload?.amount_accepted ?? payload?.amount ?? payload?.amount_paid ?? 0);
+  if (String(payment.status || "").toLowerCase() === "paid") {
+    return { ok: true, already_processed: true, payment };
+  }
 
-  const successful = String(payload?.status || "").toLowerCase() === "success"
+  const expectedCurrency = String(payment.currency || "USD").toUpperCase();
+  const expectedAmount = Number(payment.amount ?? payment.amount_usd ?? 0);
+  const actualCurrency = String(payload?.currency || "").toUpperCase();
+  const actualAmount = Number(
+    payload?.amount_paid ?? payload?.amount ?? payload?.amount_accepted ?? 0,
+  );
+  const transactionStatus = String(
+    payload?.transaction_status ?? payload?.status ?? "",
+  ).toLowerCase();
+
+  const successful = transactionStatus === "success"
     && actualCurrency === expectedCurrency
+    && Number.isFinite(actualAmount)
     && actualAmount === expectedAmount;
 
   if (!successful) {
-    const failed = String(payload?.status || "").toLowerCase() === "failed";
+    const failed = transactionStatus === "failed";
     await db.from("sponsor_payments").update({
       status: failed ? "failed" : "pending",
-      provider_status: String(payload?.status || "unknown"),
-      provider_transaction_id: payload?.payment_reference ? String(payload.payment_reference) : String(payload?.reference || ""),
+      provider_status: transactionStatus || "unknown",
+      provider_transaction_id: payload?.payment_reference
+        ? String(payload.payment_reference)
+        : String(payload?.reference || ""),
       provider_currency: actualCurrency || null,
       updated_at: new Date().toISOString(),
     }).eq("reference", reference);
@@ -36,7 +48,9 @@ async function applyKoraPayment(reference: string, payload: any) {
   await db.from("sponsor_payments").update({
     status: "paid",
     provider_status: "success",
-    provider_transaction_id: payload?.payment_reference ? String(payload.payment_reference) : String(payload.reference),
+    provider_transaction_id: payload?.payment_reference
+      ? String(payload.payment_reference)
+      : String(payload.reference),
     provider_currency: actualCurrency,
     paid_at: paidAt,
     updated_at: paidAt,
@@ -55,7 +69,7 @@ export default async (req: Request) => {
   try {
     const response = await koraRequest("/api/v1/charges/" + encodeURIComponent(reference));
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok || !payload?.status) {
+    if (!response.ok || payload?.status !== true || !payload?.data) {
       return json({ error: payload?.message || "Kora payment verification failed." }, 502);
     }
     const result = await applyKoraPayment(reference, payload.data);
