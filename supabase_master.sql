@@ -338,3 +338,18 @@ create index if not exists bot_story_updates_article_idx
   on public.bot_story_updates (article_id, created_at desc);
 
 alter table public.bot_story_updates enable row level security;
+
+
+-- =============================================================================
+-- 11) ROCKBRIEF NEWS BOT — social delivery event identity
+-- =============================================================================
+alter table public.social_posts
+  add column if not exists event_key text not null default 'initial';
+
+create index if not exists social_posts_event_idx
+  on public.social_posts (article_id, platform, event_key);
+
+-- Replace the original article/platform uniqueness with event-aware uniqueness.
+alter table public.social_posts drop constraint if exists social_posts_article_id_platform_key;
+create unique index if not exists social_posts_article_platform_event_key
+  on public.social_posts (article_id, platform, event_key);
