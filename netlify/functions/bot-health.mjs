@@ -1,4 +1,3 @@
-import type { Config } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
 
 function dbClient() {
@@ -50,4 +49,4 @@ export default async function handler() {
   }
 }
 
-export const config: Config = { path: "/api/bot-health" };
+export const config = { path: "/api/bot-health" };
