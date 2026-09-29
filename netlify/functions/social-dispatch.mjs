@@ -106,7 +106,7 @@ async function postToX(article, payload) {
  * Make scenario should start with "Custom webhook" and map fields:
  *   title, caption, url, image, category
  */
-export async function dispatchToMake(articles) {
+export async function dispatchToMake(articles, eventKey = "initial") {
   const mode = socialMode();
   const max = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
   const list = (Array.isArray(articles) ? articles : [])
@@ -117,12 +117,12 @@ export async function dispatchToMake(articles) {
   if (mode === "meta" || mode === "x") {
     const results = [];
     for (const article of list) {
-      const payload = toSocialPayload(article);
+      const payload = { ...toSocialPayload(article), event_key: eventKey };
       try {
         const result = mode === "meta" ? await postToMeta(article, payload) : await postToX(article, payload);
-        results.push({ id: payload.id, ...result, title: payload.title.slice(0, 80) });
+        results.push({ id: payload.id, event_key: eventKey, ...result, title: payload.title.slice(0, 80) });
       } catch (e) {
-        results.push({ id: payload.id, platform: mode === "meta" ? "facebook" : "x", ok: false, error: e instanceof Error ? e.message : "send failed" });
+        results.push({ id: payload.id, event_key: eventKey, platform: mode === "meta" ? "facebook" : "x", ok: false, error: e instanceof Error ? e.message : "send failed" });
       }
       await new Promise((res) => setTimeout(res, 500));
     }
@@ -134,7 +134,7 @@ export async function dispatchToMake(articles) {
 
   const results = [];
   for (const article of list) {
-    const payload = toSocialPayload(article);
+    const payload = { ...toSocialPayload(article), event_key: eventKey };
     try {
       const r = await fetch(webhook, {
         method: "POST",
@@ -144,6 +144,7 @@ export async function dispatchToMake(articles) {
       });
       results.push({
         id: payload.id,
+        event_key: eventKey,
         status: r.status,
         ok: r.ok,
         title: payload.title.slice(0, 80),
@@ -153,6 +154,7 @@ export async function dispatchToMake(articles) {
     } catch (e) {
       results.push({
         id: payload.id,
+        event_key: eventKey,
         ok: false,
         error: e instanceof Error ? e.message : "send failed",
       });

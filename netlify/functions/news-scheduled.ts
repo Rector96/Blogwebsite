@@ -26,7 +26,7 @@ async function recordBotRun(status: string, metrics: Record<string, any>, errorM
   }
 }
 
-async function getUnpostedIds(articles: Article[]) {
+async function getUnpostedIds(articles: Article[], eventKey = "initial") {
   const db = dbClient();
   if (!db || !articles.length) return new Set<string>();
   try {
@@ -35,7 +35,8 @@ async function getUnpostedIds(articles: Article[]) {
       .from("social_posts")
       .select("article_id")
       .in("article_id", ids)
-      .eq("status", "sent");
+      .eq("status", "sent")
+      .eq("event_key", eventKey);
     return new Set((data || []).map((row: any) => String(row.article_id)));
   } catch {
     return new Set<string>();
@@ -113,9 +114,9 @@ async function syncStoryClusters(articles: Article[]) {
   return { clusters: rows.length, updates };
 }
 
-async function applyDevelopingUpdates(articles: Article[]) {
+async function applyDevelopingUpdates(articles: Article[], socialEventKey: string) {
   const db = dbClient();
-  if (!db || !articles.length) return { checked: 0, updated: 0 };
+  if (!db || !articles.length) return { checked: 0, updated: 0, updatedArticles: [] as Article[] };
 
   const { data: clusters } = await db
     .from("bot_story_clusters")
@@ -123,9 +124,10 @@ async function applyDevelopingUpdates(articles: Article[]) {
     .eq("update_needed", true)
     .order("trend_score", { ascending: false })
     .limit(8);
-  if (!Array.isArray(clusters) || !clusters.length) return { checked: 0, updated: 0 };
+  if (!Array.isArray(clusters) || !clusters.length) return { checked: 0, updated: 0, updatedArticles: [] as Article[] };
 
   let updated = 0;
+  const updatedArticles: Article[] = [];
   for (const cluster of clusters) {
     const canonicalId = String(cluster.canonical_article_id || "");
     const current = articles.find((a) => String(a.id) === canonicalId);
@@ -183,6 +185,7 @@ async function applyDevelopingUpdates(articles: Article[]) {
     }
 
     await db.from("bot_story_updates").insert(updateRecord);
+    updatedArticles.push({ ...current, ai_hook_title: result.updated_title, body: result.updated_body, timestamp: nextTimestamp, trend_score: Number(cluster.trend_score || current.trend_score || 0), trend_label: String(cluster.trend_label || current.trend_label || "Developing"), discovered_via: Array.isArray(cluster.sources) ? cluster.sources : current.discovered_via, _social_event_key: socialEventKey });
     await db.from("bot_story_clusters").update({
       update_needed: false,
       last_updated_at: nextTimestamp,
@@ -190,7 +193,7 @@ async function applyDevelopingUpdates(articles: Article[]) {
     updated++;
   }
 
-  return { checked: clusters.length, updated };
+  return { checked: clusters.length, updated, updatedArticles };
 }
 
 async function recordCandidates(articles: Article[]) {
@@ -350,13 +353,13 @@ export default async function handler() {
     const result = await runIngest();
     const articles = Array.isArray(result.articles) ? result.articles : [];
     const clusterMetrics = await syncStoryClusters(articles);
-    const updateMetrics = await applyDevelopingUpdates(articles);
+    const updateMetrics = await applyDevelopingUpdates(articles, `update:${startedAt}`);
     await recordCandidates(articles);
     const performanceMetrics = await refreshBotPerformance();
 
     const threshold = Math.max(0, Math.min(100, Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)));
     const maxPosts = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
-    const posted = await getUnpostedIds(articles);
+    const posted = await getUnpostedIds(articles, "initial");
 
     const clusterMap = new Map<string, Article>();
     for (const article of articles) {
@@ -385,10 +388,28 @@ export default async function handler() {
     let social: any = { skipped: true, reason: "no fresh high-trend candidates" };
     if (ranked.length) {
       try {
-        social = await dispatchToMake(ranked);
+        social = await dispatchToMake(ranked, "initial");
         if (Array.isArray(social?.results)) await recordSocialResults(social.results);
       } catch (error) {
         social = { ok: false, error: error instanceof Error ? error.message : "social dispatch failed" };
+      }
+    }
+
+    let updateSocial: any = { skipped: true, reason: "no developing updates" };
+    const updatedArticles = Array.isArray(updateMetrics.updatedArticles) ? updateMetrics.updatedArticles : [];
+    if (updatedArticles.length) {
+      const updateEventKey = `update:${startedAt}`;
+      const unpostedUpdates = await getUnpostedIds(updatedArticles, updateEventKey);
+      const updateCandidates = updatedArticles.filter((a) => !unpostedUpdates.has(String(a.id))).slice(0, maxPosts);
+      if (updateCandidates.length) {
+        try {
+          updateSocial = await dispatchToMake(updateCandidates, updateEventKey);
+          if (Array.isArray(updateSocial?.results)) await recordSocialResults(updateSocial.results);
+        } catch (error) {
+          updateSocial = { ok: false, error: error instanceof Error ? error.message : "developing update social dispatch failed" };
+        }
+      } else {
+        updateSocial = { skipped: true, reason: "developing updates already distributed" };
       }
     }
 
@@ -403,6 +424,7 @@ export default async function handler() {
       performanceTracked: performanceMetrics.tracked,
       threshold,
       social,
+      updateSocial,
       durationMs: Date.now() - startedAt,
       generatedAt: result.generatedAt,
     };
