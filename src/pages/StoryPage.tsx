@@ -12,7 +12,22 @@ import { SiteFooter } from "../components/SiteFooter";
 function currentStoryId() {
   const path = window.location.pathname.replace(/^\/news\//, "");
   const marker = path.lastIndexOf("--");
-  return marker >= 0 ? decodeURIComponent(path.slice(marker + 2)) : "";
+  if (marker < 0) return "";
+  try {
+    return decodeURIComponent(path.slice(marker + 2)).trim();
+  } catch {
+    return "";
+  }
+}
+
+function storyPath(article: EnrichedArticle) {
+  const title = (article.ai_hook_title || article.original_title || "story")
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 90);
+  return "/news/" + title + "--" + encodeURIComponent(article.id);
 }
 
 function cleanText(value: string) {
@@ -62,24 +77,68 @@ export default function StoryPage() {
     async function load() {
       try {
         let foundArticle: EnrichedArticle | null = null;
-        if (supabase && id) {
+        if (id) {
+          try {
+            const pending = sessionStorage.getItem("rwdnews_pending_story");
+            const pendingId = sessionStorage.getItem("rwdnews_pending_story_id");
+            if (pending && pendingId === id) {
+              const parsed = JSON.parse(pending) as EnrichedArticle;
+              if (parsed?.id === id) {
+                foundArticle = {
+                  ...parsed,
+                  ai_summary: Array.isArray(parsed.ai_summary) ? parsed.ai_summary : [],
+                  tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+                };
+              }
+            }
+          } catch { /* ignore malformed session data */ }
+        }
+
+        if (!foundArticle && supabase && id) {
           const { data } = await supabase.from("articles").select("*").eq("id", id).maybeSingle();
-          if (data) foundArticle = { ...data, ai_summary: Array.isArray(data.ai_summary) ? data.ai_summary : [], tags: Array.isArray(data.tags) ? data.tags : [] } as EnrichedArticle;
+          if (data) {
+            foundArticle = {
+              ...data,
+              ai_summary: Array.isArray(data.ai_summary) ? data.ai_summary : [],
+              tags: Array.isArray(data.tags) ? data.tags : [],
+            } as EnrichedArticle;
+          }
         }
+
         if (!foundArticle && id) {
-          const response = await fetch("/api/news");
-          const payload = await response.json();
-          const found = Array.isArray(payload.articles) ? payload.articles.find((x: EnrichedArticle) => x.id === id) : null;
-          if (found) foundArticle = found;
+          const response = await fetch("/api/news", { headers: { Accept: "application/json" } });
+          if (response.ok) {
+            const payload = await response.json();
+            const found = Array.isArray(payload.articles)
+              ? payload.articles.find((x: EnrichedArticle) => String(x.id) === id)
+              : null;
+            if (found) foundArticle = found;
+          }
         }
+
+        if (!foundArticle && id) {
+          const response = await fetch("/api/news?refresh=true", {
+            headers: { Accept: "application/json" },
+          });
+          if (response.ok) {
+            const payload = await response.json();
+            const found = Array.isArray(payload.articles)
+              ? payload.articles.find((x: EnrichedArticle) => String(x.id) === id)
+              : null;
+            if (found) foundArticle = found;
+          }
+        }
+
         if (foundArticle && !cancelled) {
           setArticle(foundArticle);
           try {
-            const response = await fetch("/api/news");
-            const payload = await response.json();
-            const pool = Array.isArray(payload.articles) ? (payload.articles as EnrichedArticle[]) : [];
-            if (!cancelled) setRelated(pool.filter((x) => x.id !== foundArticle!.id).slice(0, 6));
-          } catch { /* ignore */ }
+            const response = await fetch("/api/news", { headers: { Accept: "application/json" } });
+            if (response.ok) {
+              const payload = await response.json();
+              const pool = Array.isArray(payload.articles) ? (payload.articles as EnrichedArticle[]) : [];
+              if (!cancelled) setRelated(pool.filter((x) => x.id !== foundArticle!.id).slice(0, 6));
+            }
+          } catch { /* related stories are optional */ }
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -123,11 +182,27 @@ export default function StoryPage() {
   if (loading) return <PageLoader />;
   if (!article) {
     return (
-      <div className="grid min-h-dvh place-items-center p-6 text-center">
-        <div>
-          <h1 className="font-display text-3xl font-semibold">Story not found</h1>
-          <a href="/" className="mt-5 inline-block font-semibold text-teal-800">Return to RockBrief →</a>
-        </div>
+      <div className="min-h-dvh bg-[#f5f7f7] text-neutral-950">
+        <header className="border-b border-neutral-200 bg-white">
+          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
+            <a href="/" aria-label="RockBrief home">
+              <img src="/rwdnews-logo.svg" alt="RockBrief" className="h-auto w-[170px]" />
+            </a>
+            <a href="/" className="rounded-full border border-neutral-200 bg-neutral-50 px-4 py-2 text-xs font-bold text-teal-800">← Back to RockBrief</a>
+          </div>
+        </header>
+        <main className="grid min-h-[70dvh] place-items-center p-6 text-center">
+          <div className="max-w-md">
+            <p className="text-[10px] font-extrabold tracking-[0.18em] text-amber-800 uppercase">RockBrief News Desk</p>
+            <h1 className="font-display mt-3 text-3xl font-semibold">This story is unavailable</h1>
+            <p className="mt-3 text-sm leading-6 text-neutral-600">The story may have moved, expired from the live feed, or is temporarily unavailable.</p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              <a href="/" className="rounded-xl bg-teal-800 px-5 py-3 text-sm font-bold text-white">← Back to RockBrief</a>
+              <a href="/?refresh=true" className="rounded-xl border border-neutral-200 bg-white px-5 py-3 text-sm font-bold">View latest news</a>
+            </div>
+          </div>
+        </main>
+        <SiteFooter />
       </div>
     );
   }
@@ -257,7 +332,7 @@ export default function StoryPage() {
             <h2 className="font-display text-xl font-semibold">More stories</h2>
             <div className="mt-4 space-y-3">
               {related.map((item) => (
-                <a key={item.id} href={"/news/" + (item.ai_hook_title || item.original_title).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 90) + "--" + encodeURIComponent(item.id)} className="block rounded-xl border border-neutral-200 bg-white p-4">
+                <a key={item.id} href={storyPath(item)} className="block rounded-xl border border-neutral-200 bg-white p-4">
                   <p className="text-[10px] font-bold uppercase text-amber-800">{item.category}</p>
                   <p className="mt-1 font-semibold">{item.ai_hook_title || item.original_title}</p>
                 </a>
