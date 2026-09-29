@@ -10,11 +10,6 @@
   directory = "netlify/functions"
   node_bundler = "esbuild"
 
-# Edge OG re-enabled after stable deploy (see netlify/edge-functions/news-og.ts)
-# [[edge_functions]]
-#   function = "news-og"
-#   path = "/news/*"
-
 [[redirects]]
   from = "/api/news"
   to = "/.netlify/functions/news"
@@ -42,6 +37,24 @@
 [[redirects]]
   from = "/api/social-dispatch"
   to = "/.netlify/functions/social-dispatch"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bot-health"
+  to = "/.netlify/functions/bot-health"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/bot/run"
+  to = "/.netlify/functions/news-scheduled-manual"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/research"
+  to = "/.netlify/functions/research"
   status = 200
   force = true
 
