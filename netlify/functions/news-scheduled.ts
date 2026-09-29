@@ -229,6 +229,7 @@ async function recordSocialResults(results: any[]) {
   try {
     const rows = results.map((r) => ({
       article_id: String(r.id),
+      event_key: String(r.event_key || "initial"),
       platform: String(r.platform || "make"),
       status: r.ok ? "sent" : "failed",
       response_code: Number(r.status || 0) || null,
@@ -236,7 +237,7 @@ async function recordSocialResults(results: any[]) {
       sent_at: r.ok ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     }));
-    await db.from("social_posts").upsert(rows, { onConflict: "article_id,platform" });
+    await db.from("social_posts").upsert(rows, { onConflict: "article_id,platform,event_key" });
   } catch (error) {
     console.error("[RockBrief Bot] social log failed", error);
   }
