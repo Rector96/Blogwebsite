@@ -32,19 +32,88 @@ const CATEGORY_FALLBACK = {
   "Middle East": "middle east city",
 };
 
-export function headlineImageQuery(title, category) {
-  const raw = String(title || "")
+export function headlineImageQuery(title, category, preferredQuery = "") {
+  const preferred = String(preferredQuery || "").replace(/[^a-zA-Z0-9\\s-]/g, " ").replace(/\\s+/g, " ").trim().split(/\\s+/).filter(Boolean).slice(0, 10).join(" ");\n  if (preferred) return preferred;\n  const raw = String(title || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
     .split(/\s+/)
     .filter((w) => w.length >= 4 && !STOP.has(w))
-    .slice(0, 5);
+    .slice(0, 8);
   const base = raw.join(" ").trim();
   if (base) return base;
   return CATEGORY_FALLBACK[category] || "news journalism desk";
 }
 
-async function pexelsSearch(query) {
+
+
+function cleanMeta(value) {
+  return String(value || "").replace(/<[^>]*>/g, " ").replace(/&[^;]+;/g, " ").replace(/\\s+/g, " ").trim();
+}
+
+function metaValue(meta, keys) {
+  for (const key of keys) {
+    const value = meta?.[key]?.value;
+    if (value) return cleanMeta(value);
+  }
+  return "";
+}
+
+async function commonsSearch(query) {
+  try {
+    const u = new URL("https://commons.wikimedia.org/w/api.php");
+    u.searchParams.set("action", "query");
+    u.searchParams.set("format", "json");
+    u.searchParams.set("generator", "search");
+    u.searchParams.set("gsrsearch", query);
+    u.searchParams.set("gsrnamespace", "6");
+    u.searchParams.set("gsrlimit", "6");
+    u.searchParams.set("prop", "imageinfo");
+    u.searchParams.set("iiprop", "url|size|mime|extmetadata");
+    u.searchParams.set("iiurlwidth", "1200");
+    u.searchParams.set("iiextmetadatafilter", "Artist|Credit|ImageDescription|LicenseShortName|UsageTerms");
+    const r = await fetch(u.toString(), {
+      headers: {
+        Accept: "application/json",
+        "Api-User-Agent": "RockBrief/1.0 (https://rwdnews.netlify.app/)",
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const pages = Object.values(data?.query?.pages || {});
+    const allowed = /^(CC0|CC BY|CC BY-SA|Public domain|PD|PDM|GFDL)/i;
+    const candidates = pages.map((page) => {
+      const info = page?.imageinfo?.[0];
+      const meta = info?.extmetadata || {};
+      const license = metaValue(meta, ["LicenseShortName", "UsageTerms"]);
+      const artist = metaValue(meta, ["Artist", "Credit"]) || "Wikimedia Commons contributor";
+      const description = metaValue(meta, ["ImageDescription"]);
+      const image = info?.thumburl || info?.url || "";
+      const source = info?.descriptionurl || "";
+      if (!image || !/^https?:\\/\\//i.test(image) || !/^image\\//i.test(String(info?.mime || ""))) return null;
+      if (Number(info?.width || 0) < 500 || Number(info?.height || 0) < 300) return null;
+      if (!license || !allowed.test(license)) return null;
+      return {
+        title: String(page?.title || "").toLowerCase(),
+        description: description.toLowerCase(),
+        image: String(image),
+        image_credit: `Photo: ${artist} / Wikimedia Commons`,
+        image_license: license,
+        image_source_url: String(source),
+      };
+    }).filter(Boolean);
+    if (!candidates.length) return null;
+    const terms = query.toLowerCase().split(/\\s+/).filter((x) => x.length > 3);
+    candidates.sort((a, b) => {
+      const score = (x) => terms.reduce((n, term) => n + (x.title.includes(term) || x.description.includes(term) ? 1 : 0), 0);
+      return score(b) - score(a);
+    });
+    return candidates[0];
+  } catch {
+    return null;
+  }
+}
+\nasync function pexelsSearch(query) {
   const key = process.env.PEXELS_API_KEY || process.env.PEXELS_KEY || process.env.PEXELS_API || "";
   if (!key) return null;
   try {
@@ -77,7 +146,7 @@ async function unsplashSearch(query) {
   const key = process.env.UNSPLASH_ACCESS_KEY || "";
   if (!key) return null;
   try {
-    const u = `https://api.unsplash.com/photos/random?query=${encodeURIComponent(query)}&orientation=landscape&content_filter=high`;
+    const u = `https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&orientation=landscape&content_filter=high&per_page=5`;
     const r = await fetch(u, {
       headers: { Authorization: `Client-ID ${key}`, "Accept-Version": "v1" },
       signal: AbortSignal.timeout(4500),
