@@ -238,7 +238,7 @@ async function aiBrief(title: string, desc: string, related: any[] = []) {
           "(3) ai_summary: exactly 4 bullets 30-55 words each. " +
           "(4) tags: 2-4 hashtags. " +
           "(5) image_query: 3-8 precise words identifying the real person, event, place, product or subject shown in the story; do not invent a person or event. " +
-          "TITLE: " + title + " DESCRIPTION: " + desc,
+          "TITLE: " + title + " DESCRIPTION: " + desc + " RELATED REPORTS: " + JSON.stringify(related.slice(0, 5)),
         config: {
           responseMimeType: "application/json",
           responseSchema: {
