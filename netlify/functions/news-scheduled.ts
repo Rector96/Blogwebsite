@@ -395,7 +395,25 @@ export default async function handler() {
       }
     }
 
-    let updateSocial: any = { skipped: true, reason: "no developing updates" };\n    const updatedArticles = Array.isArray(updateMetrics.updatedArticles) ? updateMetrics.updatedArticles : [];\n    if (updatedArticles.length) {\n      const updateEventKey = `update:${startedAt}`;\n      const unpostedUpdates = await getUnpostedIds(updatedArticles, updateEventKey);\n      const updateCandidates = updatedArticles.filter((a) => !unpostedUpdates.has(String(a.id))).slice(0, maxPosts);\n      if (updateCandidates.length) {\n        try {\n          updateSocial = await dispatchToMake(updateCandidates, updateEventKey);\n          if (Array.isArray(updateSocial?.results)) await recordSocialResults(updateSocial.results);\n        } catch (error) {\n          updateSocial = { ok: false, error: error instanceof Error ? error.message : "developing update social dispatch failed" };\n        }\n      } else {\n        updateSocial = { skipped: true, reason: "developing updates already distributed" };\n      }\n    }\n\n    const metrics = {
+    let updateSocial: any = { skipped: true, reason: "no developing updates" };
+    const updatedArticles = Array.isArray(updateMetrics.updatedArticles) ? updateMetrics.updatedArticles : [];
+    if (updatedArticles.length) {
+      const updateEventKey = `update:${startedAt}`;
+      const unpostedUpdates = await getUnpostedIds(updatedArticles, updateEventKey);
+      const updateCandidates = updatedArticles.filter((a) => !unpostedUpdates.has(String(a.id))).slice(0, maxPosts);
+      if (updateCandidates.length) {
+        try {
+          updateSocial = await dispatchToMake(updateCandidates, updateEventKey);
+          if (Array.isArray(updateSocial?.results)) await recordSocialResults(updateSocial.results);
+        } catch (error) {
+          updateSocial = { ok: false, error: error instanceof Error ? error.message : "developing update social dispatch failed" };
+        }
+      } else {
+        updateSocial = { skipped: true, reason: "developing updates already distributed" };
+      }
+    }
+
+    const metrics = {
       saved: result.saved,
       scanned: articles.length,
       candidates: ranked.length,
