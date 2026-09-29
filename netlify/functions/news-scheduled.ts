@@ -43,6 +43,17 @@ async function getUnpostedIds(articles: Article[], eventKey = "initial") {
   }
 }
 
+function socialQualityGate(article: Article) {
+  const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
+  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.filter(Boolean) : [];
+  const title = String(article.ai_hook_title || article.original_title || "").trim();
+  const sourceUrl = String(article.original_url || "");
+  return title.length >= 20 &&
+    bodyWords >= 400 &&
+    summary.length === 4 &&
+    (sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://"));
+}
+
 function clusterKey(article: Article) {
   const stop = new Set(["the","and","for","with","from","that","this","after","about","into","over","said","news","report","reports","latest","today","official"]);
   const tokens = String(article.title || "")
@@ -375,7 +386,7 @@ export default async function handler() {
       .filter((a: Article) => {
         const score = Number(a.trend_score || 0);
         const ageHours = (Date.now() - Date.parse(a.timestamp || "")) / 3600000;
-        return score >= threshold && ageHours >= -1 && ageHours <= 36 && !posted.has(String(a.id));
+        return score >= threshold && ageHours >= -1 && ageHours <= 36 && !posted.has(String(a.id)) && socialQualityGate(a);
       })
       .sort(
         (a: Article, b: Article) =>

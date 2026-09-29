@@ -35,6 +35,18 @@ export type NewsArticle = {
 
 const PLACEHOLDER_IMAGE = "/rwdnews-logo.svg";
 
+function validatePublishableArticle(article: NewsArticle) {
+  const bodyWords = String(article.body || "").split(/\s+/).filter(Boolean).length;
+  const title = clean(article.ai_hook_title || article.original_title);
+  const sourceUrl = String(article.original_url || "");
+  const summary = Array.isArray(article.ai_summary) ? article.ai_summary.map((x) => clean(x)).filter(Boolean) : [];
+  const hasRealImage = Boolean(article.image) && !String(article.image).toLowerCase().includes("rwdnews-logo.svg");
+  const hasImageEvidence = Boolean(article.image_source_url) && Boolean(article.image_credit);
+  const validUrl = sourceUrl.startsWith("http://") || sourceUrl.startsWith("https://");
+  const safeSummary = summary.length === 4 && summary.every((x) => x.length >= 15);
+  return Boolean(title && title.length >= 20 && validUrl && bodyWords >= 400 && safeSummary && (hasRealImage ? hasImageEvidence : true));
+}
+
 const rss = new Parser({
   headers: {
     "User-Agent": "RockBrief/1.0 (+https://rwdnews.netlify.app)",
@@ -535,7 +547,10 @@ export async function runIngest() {
     try {
       const db = createClient(url, key);
       const newOnes = articles.filter((a) => !existingByUrl.has(a.original_url));
-      const rows = newOnes.map((a) => ({
+      const publishable = newOnes.filter(validatePublishableArticle);
+      const rejected = newOnes.length - publishable.length;
+      if (rejected > 0) console.warn("[RockBrief] quality gate rejected", rejected, "new article(s)");
+      const rows = publishable.map((a) => ({
         id: a.id,
         original_url: a.original_url,
         original_title: a.original_title,
