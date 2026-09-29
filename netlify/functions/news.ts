@@ -2,6 +2,7 @@ import Parser from "rss-parser";
 import { GLOBAL_NEWS_SOURCES } from "./news-sources";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
+import { resolveSafeCover } from "./safe-image.mjs";
 
 export type NewsArticle = {
   id: string;
@@ -54,7 +55,6 @@ function stripJunk(value: unknown) {
 
 function category(text: string, hint?: string, region?: string) {
   const x = text.toLowerCase();
-  // Content keywords win over feed origin so PUNCH world wires are not forced into Nigeria
   if (/\b(sport|football|soccer|nba|premier league|fifa|uefa|nfl|tennis|cricket)\b/.test(x)) return "Sports";
   if (/\b(bitcoin|crypto|ethereum|blockchain)\b/.test(x)) return "Crypto";
   if (/\b(ai|technology|tech|software|cyber|iphone|google|apple|microsoft)\b/.test(x)) return "Tech";
@@ -68,7 +68,6 @@ function category(text: string, hint?: string, region?: string) {
   if (hint === "Africa") return "Africa";
   if (hint === "Sports" || hint === "Tech" || hint === "Crypto" || hint === "Business") return hint;
   if (hint === "World") return "World";
-  // Default global when feed is Nigerian but story is international
   if (region === "Nigeria" || region === "Ghana") {
     if (!/\bnigeria|ghana|lagos|abuja|accra\b/.test(x)) return "World";
   }
@@ -80,7 +79,6 @@ function readingTime(words: number) {
   return `${Math.max(1, Math.ceil(Math.max(words, 1) / 180))} min read`;
 }
 
-/** Pick a balanced mix so one region cannot fill the whole ingest window. */
 function diversifyCandidates(
   items: Array<{
     title: string;
@@ -90,6 +88,7 @@ function diversifyCandidates(
     source: string;
     category: string;
     region: string;
+    rssImage?: string;
   }>,
   limit = 28,
 ) {
@@ -108,7 +107,6 @@ function diversifyCandidates(
     const key = buckets[item.category] ? item.category : "World";
     buckets[key].push(item);
   }
-  // Soft quotas — total ~28 with global priority
   const quotas: Record<string, number> = {
     World: 6,
     Africa: 3,
@@ -125,13 +123,11 @@ function diversifyCandidates(
     for (const item of buckets[cat] || []) {
       if (picked.length >= limit) break;
       if (used.has(item.link)) continue;
-      if ((buckets[cat] || []).indexOf(item) >= max) continue;
       used.add(item.link);
       picked.push(item);
       if (picked.filter((p) => p.category === cat).length >= max) break;
     }
   }
-  // Fill remainder with newest leftover (any category)
   for (const item of sorted) {
     if (picked.length >= limit) break;
     if (used.has(item.link)) continue;
@@ -139,6 +135,20 @@ function diversifyCandidates(
     picked.push(item);
   }
   return picked.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+function extractRssImage(item: any): string {
+  const enc = item.enclosure?.url || item.enclosures?.[0]?.url || "";
+  if (enc && /^https?:\/\//i.test(enc) && /\.(jpe?g|png|webp|gif)/i.test(enc))
+    return String(enc);
+  const media =
+    item["media:content"]?.$
+      ?.url ||
+    item["media:thumbnail"]?.$?.url ||
+    item.image?.url ||
+    "";
+  if (media && /^https?:\/\//i.test(media)) return String(media);
+  return "";
 }
 
 async function fetchFeedItems() {
@@ -159,6 +169,7 @@ async function fetchFeedItems() {
             source,
             category: category(title + " " + desc, feedCategory || undefined, region || undefined),
             region: region || "Global",
+            rssImage: extractRssImage(item),
           };
         });
       } catch {
@@ -306,7 +317,10 @@ export async function runIngest() {
   );
 
   const maxAi = Math.max(0, Math.min(12, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 8)));
+  // Cap stock image API calls so cron stays under Netlify time limits
+  const maxImages = Math.max(0, Math.min(12, Number(process.env.MAX_STOCK_IMAGES_PER_INGEST || 10)));
   let aiCalls = 0;
+  let imageCalls = 0;
   const articles: NewsArticle[] = [];
 
   for (const item of candidates) {
@@ -325,13 +339,41 @@ export async function runIngest() {
       brief = await aiBrief(item.title, item.desc);
       aiCalls++;
     }
+
+    let image = PLACEHOLDER_IMAGE;
+    let image_credit = item.source;
+    let image_license = "Editorial";
+    let image_source_url = item.link;
+
+    if (imageCalls < maxImages) {
+      try {
+        const cover = await resolveSafeCover({
+          title: brief.ai_hook_title || item.title,
+          category: item.category,
+          rssImage: item.rssImage || "",
+          preferStock: true,
+        });
+        image = cover.image || PLACEHOLDER_IMAGE;
+        image_credit = cover.image_credit || item.source;
+        image_license = cover.image_license || "Editorial";
+        image_source_url = cover.image?.startsWith("http") ? cover.image : item.link;
+        imageCalls++;
+      } catch {
+        /* keep placeholder */
+      }
+    } else if (item.rssImage && /^https?:\/\//i.test(item.rssImage)) {
+      image = item.rssImage;
+      image_credit = "Publisher feed";
+      image_license = "Feed preview";
+    }
+
     const bodyWords = brief.body.split(/\s+/).filter(Boolean).length;
     const id = "wire-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
     const publishedAt = new Date(item.date).toISOString();
     articles.push({
       id,
       original_url: item.link,
-      image: PLACEHOLDER_IMAGE,
+      image,
       timestamp: publishedAt,
       source: item.source,
       original_title: item.title,
@@ -344,9 +386,9 @@ export async function runIngest() {
       region: item.region,
       trend_score: 50,
       trend_label: "Fresh",
-      image_credit: item.source,
-      image_license: "Editorial",
-      image_source_url: item.link,
+      image_credit,
+      image_license,
+      image_source_url,
       discovered_via: [item.source],
       body: brief.body,
       story_type: "WIRE",
