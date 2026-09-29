@@ -216,7 +216,7 @@ async function fetchFeedItems() {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
-async function aiBrief(title: string, desc: string) {
+async function aiBrief(title: string, desc: string, related: any[] = []) {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
     body: "",
