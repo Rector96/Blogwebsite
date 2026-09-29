@@ -350,6 +350,6 @@ create index if not exists social_posts_event_idx
   on public.social_posts (article_id, platform, event_key);
 
 -- Replace the original article/platform uniqueness with event-aware uniqueness.
-drop index if exists social_posts_article_platform_key;
+alter table public.social_posts drop constraint if exists social_posts_article_id_platform_key;
 create unique index if not exists social_posts_article_platform_event_key
   on public.social_posts (article_id, platform, event_key);
