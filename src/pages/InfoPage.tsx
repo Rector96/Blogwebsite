@@ -135,6 +135,7 @@ function AdvertisePage() {
   });
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [uploadingCreative, setUploadingCreative] = useState(false);
 
   const selectedPackage = packages.find((p) => p.code === selected) || packages[0];
   const total = selectedPackage.usd * months;
@@ -166,7 +167,10 @@ function AdvertisePage() {
   }, []);
 
   const uploadCreative = async (file: File) => {
-    if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) throw new Error("Use JPG, PNG, WebP or AVIF.");
+    setUploadingCreative(true);
+    setMessage("");
+    try {
+      if (!["image/jpeg","image/png","image/webp","image/avif"].includes(file.type)) throw new Error("Use JPG, PNG, WebP or AVIF.");
     if (file.size > 4 * 1024 * 1024) throw new Error("Creative must be 4 MB or smaller.");
     const data = await new Promise<string>((resolve,reject) => {
       const reader = new FileReader();
@@ -181,7 +185,13 @@ function AdvertisePage() {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.error || "Creative upload failed.");
-    setForm(v => ({...v, creative_url: String(payload.url || "")}));
+      const uploadedUrl = String(payload.url || "");
+      if (!uploadedUrl) throw new Error("Creative upload did not return an image URL.");
+      setForm(v => ({...v, creative_url: uploadedUrl}));
+      setMessage("Advert creative uploaded. You can continue to secure checkout.");
+    } finally {
+      setUploadingCreative(false);
+    }
   };
 
   const submit = async (e: FormEvent) => {
@@ -189,6 +199,8 @@ function AdvertisePage() {
     setBusy(true);
     setMessage("");
     try {
+      if (uploadingCreative) throw new Error("Please wait for the advert image to finish uploading.");
+      if (form.creative_mode === "upload" && !form.creative_url) throw new Error("Upload your advert image before continuing.");
       const result = await fetch("/api/kora/init", {
         method: "POST",
         headers: {"content-type":"application/json"},
@@ -298,6 +310,7 @@ function AdvertisePage() {
               <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4 sm:p-5">
                 <p className="text-xs font-bold uppercase tracking-wider text-neutral-500">4. Creative</p>
                 <p className="mt-1 text-xs leading-relaxed text-neutral-600">{creativeSpec}. JPG, PNG, WebP or AVIF · max 4 MB.</p>
+                <p className="mt-2 text-xs leading-relaxed text-neutral-500">Your campaign price stays in USD. Kora may display the payment amount in the available local checkout currency before settlement.</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"upload"}))} className={form.creative_mode==="upload"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>I have my advert</button>
                   <button type="button" onClick={()=>setForm(v=>({...v,creative_mode:"design"}))} className={form.creative_mode==="design"?"rounded-xl bg-neutral-950 px-3 py-3 text-xs font-bold text-white":"rounded-xl border border-neutral-200 bg-white px-3 py-3 text-xs font-bold"}>Have RockBrief design it</button>
@@ -315,8 +328,8 @@ function AdvertisePage() {
                 )}
               </div>
 
-              <button disabled={busy} className="h-13 w-full rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white shadow-lg transition hover:opacity-90 disabled:opacity-50">
-                {busy ? "Preparing secure checkout…" : "Continue to secure checkout"}
+              <button disabled={busy || uploadingCreative} className="h-13 w-full rounded-xl bg-neutral-950 px-4 text-sm font-bold text-white shadow-lg transition hover:opacity-90 disabled:opacity-50">
+                {uploadingCreative ? "Uploading advert…" : busy ? "Preparing secure checkout…" : "Continue to secure checkout"}
               </button>
             </form>
           </section>

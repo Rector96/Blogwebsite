@@ -66,11 +66,19 @@ export default async (req: Request) => {
     placement: pkg.placement,
     duration_days: months * 30,
     duration_months: months,
+    monthly_rate_usd: pkg.usd,
+    total_amount_usd: baseAmount,
     status: "pending",
     payment_provider: "kora",
     provider_status: "initialized",
     provider_currency: currency,
-    metadata: { source: "rockbrief_advertise", currency, payment_provider: "kora", duration_months: months, monthly_rate_usd: pkg.usd },
+    metadata: {
+      source: "rockbrief_advertise",
+      currency,
+      payment_provider: "kora",
+      duration_months: months,
+      monthly_rate_usd: pkg.usd,
+    },
   });
 
   if (insertError) return json({ error: "Could not create payment record." }, 500);
@@ -80,34 +88,55 @@ export default async (req: Request) => {
   const redirectUrl = siteUrl + "/advertise?payment=callback";
 
   try {
+    /*
+     * RockBrief prices campaigns in USD. Kora's current card collection in
+     * Nigeria is NGN, while Kora's DCC flow supports a USD collection amount,
+     * a local payment currency and USD settlement. This keeps our public rate
+     * card in USD while giving Kora a supported card-payment path.
+     */
     const response = await koraRequest("/api/v1/charges/initialize", {
       method: "POST",
       body: JSON.stringify({
         amount: baseAmount,
         currency: "USD",
+        payment_currency: "NGN",
+        settlement_currency: "USD",
+        channels: ["card"],
+        default_channel: "card",
         reference,
         redirect_url: redirectUrl,
         notification_url: notificationUrl,
         narration: "RockBrief " + pkg.name,
         merchant_bears_cost: true,
         customer: { name: name || company || "RockBrief Advertiser", email },
-        metadata: { payment_reference: reference, package_code: packageCode, source: "rwdnews" },
+        metadata: {
+          payment_reference: reference,
+          package_code: packageCode,
+          source: "rwdnews",
+        },
       }),
     });
 
     const payload = await response.json().catch(() => ({}));
     const checkoutUrl = payload?.data?.checkout_url;
-    if (!response.ok || !payload?.status || !checkoutUrl) {
+    if (!response.ok || payload?.status !== true || !checkoutUrl) {
       await db.from("sponsor_payments").update({
         status: "failed",
         provider_status: "initialize_failed",
         updated_at: new Date().toISOString(),
       }).eq("reference", reference);
-      return json({ error: payload?.message || "Kora could not initialize the payment." }, 502);
+
+      const providerMessage = String(payload?.message || "").trim();
+      return json({
+        error: providerMessage
+          ? "Kora could not start checkout: " + providerMessage
+          : "Kora could not initialize the payment.",
+        reference,
+      }, 502);
     }
 
     await db.from("sponsor_payments").update({
-      provider_status: "initialized",
+      provider_status: "checkout_ready",
       updated_at: new Date().toISOString(),
     }).eq("reference", reference);
 
@@ -121,6 +150,7 @@ export default async (req: Request) => {
       months,
       monthly_rate_usd: pkg.usd,
       payment_provider: "kora",
+      checkout_mode: "kora_dcc",
     });
   } catch (error) {
     await db.from("sponsor_payments").update({
@@ -128,6 +158,9 @@ export default async (req: Request) => {
       provider_status: "initialize_failed",
       updated_at: new Date().toISOString(),
     }).eq("reference", reference);
-    return json({ error: error instanceof Error ? error.message : "Kora is unavailable." }, 502);
+    return json({
+      error: error instanceof Error ? error.message : "Kora is unavailable.",
+      reference,
+    }, 502);
   }
 };
