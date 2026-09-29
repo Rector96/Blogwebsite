@@ -234,7 +234,7 @@ async function aiBrief(title: string, desc: string) {
         contents:
           "Create an original RockBrief news report from the source material. JSON only. " +
           "(1) ai_hook_title: factual headline. " +
-          "(2) body: 450-650 words in paragraphs using only facts in the material; empty string if insufficient. " +
+          "(2) body: 550-800 words in clear, natural language using only supported facts; explain what happened and why it matters. " +
           "(3) ai_summary: exactly 4 bullets 30-55 words each. " +
           "(4) tags: 2-4 hashtags. " +
           "(5) image_query: 3-8 precise words identifying the real person, event, place, product or subject shown in the story; do not invent a person or event. " +
