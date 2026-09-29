@@ -41,7 +41,7 @@ export interface EnrichedArticle {
 }
 
 const SAVED_KEY = "rwdnews_saved_v1";
-const NEWS_CACHE_KEY = "rwdnews_news_cache_v1";
+const NEWS_CACHE_KEY = "rwdnews_news_cache_v2";
 const VISIT_KEY = "rwdnews_last_visit_v1";
 
 function formatRelativeTime(iso: string) {
