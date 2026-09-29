@@ -20,6 +20,27 @@ function storyPath(article) {
   return `${siteBase()}/news/${title}--${encodeURIComponent(String(article.id))}`;
 }
 
+function isPublishableSocialArticle(article) {
+  const title = String(article?.ai_hook_title || article?.original_title || "").trim();
+  const bodyWords = String(article?.body || "").split(/\s+/).filter(Boolean).length;
+  const bullets = Array.isArray(article?.ai_summary)
+    ? article.ai_summary.map(String).map((x) => x.trim()).filter(Boolean)
+    : [];
+  const sourceUrl = String(article?.original_url || "");
+  const image = String(article?.image || "");
+  const placeholder = /rwdnews-logo\.svg(?:$|[?#])/i.test(image);
+  const imageReady = placeholder || (
+    /^https?:\/\//i.test(String(article?.image_source_url || "")) &&
+    String(article?.image_credit || "").trim().length > 0
+  );
+  return title.length >= 20 &&
+    bodyWords >= 400 &&
+    bullets.length === 4 &&
+    bullets.every((b) => b.length >= 15) &&
+    /^https?:\/\//i.test(sourceUrl) &&
+    imageReady;
+}
+
 function buildCaption(article) {
   const title = String(article.ai_hook_title || article.original_title || "").trim();
   const bullets = Array.isArray(article.ai_summary)
@@ -111,6 +132,7 @@ export async function dispatchToMake(articles, eventKey = "initial") {
   const max = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
   const list = (Array.isArray(articles) ? articles : [])
     .filter((a) => a && (a.ai_hook_title || a.original_title) && a.id)
+    .filter(isPublishableSocialArticle)
     .slice(0, max);
   if (!list.length) return { ok: true, sent: 0, reason: "no articles" };
 
