@@ -39,7 +39,7 @@ const rss = new Parser({
     "User-Agent": "RockBrief/1.0 (+https://rwdnews.netlify.app)",
     Accept: "application/rss+xml, application/xml, text/xml, */*",
   },
-  timeout: 4000,
+  timeout: 6000,
 });
 
 const clean = (value: unknown) =>
@@ -54,13 +54,24 @@ function stripJunk(value: unknown) {
 
 function category(text: string, hint?: string, region?: string) {
   const x = text.toLowerCase();
-  if (/\b(sport|football|soccer|nba|premier league|fifa|uefa)\b/.test(x)) return "Sports";
-  if (/\b(bitcoin|crypto|ethereum)\b/.test(x)) return "Crypto";
-  if (/\b(ai|technology|tech|software|cyber)\b/.test(x)) return "Tech";
-  if (/\b(market|stock|bank|economy|finance|oil)\b/.test(x) || hint === "Business") return "Business";
-  if (hint === "Nigeria" || /\bnigeria|lagos|abuja\b/.test(x)) return "Nigeria";
-  if (hint === "Ghana" || /\bghana|accra\b/.test(x)) return "Ghana";
-  if (hint === "Africa" || region === "Africa" || /\bafrica\b/.test(x)) return "Africa";
+  // Content keywords win over feed origin so PUNCH world wires are not forced into Nigeria
+  if (/\b(sport|football|soccer|nba|premier league|fifa|uefa|nfl|tennis|cricket)\b/.test(x)) return "Sports";
+  if (/\b(bitcoin|crypto|ethereum|blockchain)\b/.test(x)) return "Crypto";
+  if (/\b(ai|technology|tech|software|cyber|iphone|google|apple|microsoft)\b/.test(x)) return "Tech";
+  if (/\b(market|stock|bank|economy|finance|oil|petrol|fed |ecb|inflation)\b/.test(x) || hint === "Business")
+    return "Business";
+  if (/\bnigeria|lagos|abuja|anambra|jigawa\b/.test(x)) return "Nigeria";
+  if (/\bghana|accra\b/.test(x)) return "Ghana";
+  if (/\bkenya|south africa|ethiopia|senegal|africa\b/.test(x) || region === "Africa") return "Africa";
+  if (hint === "Nigeria" && /\b(lagos|abuja|nigeria)\b/.test(x)) return "Nigeria";
+  if (hint === "Ghana" && /\b(ghana|accra)\b/.test(x)) return "Ghana";
+  if (hint === "Africa") return "Africa";
+  if (hint === "Sports" || hint === "Tech" || hint === "Crypto" || hint === "Business") return hint;
+  if (hint === "World") return "World";
+  // Default global when feed is Nigerian but story is international
+  if (region === "Nigeria" || region === "Ghana") {
+    if (!/\bnigeria|ghana|lagos|abuja|accra\b/.test(x)) return "World";
+  }
   if (hint) return hint;
   return "World";
 }
@@ -69,13 +80,74 @@ function readingTime(words: number) {
   return `${Math.max(1, Math.ceil(Math.max(words, 1) / 180))} min read`;
 }
 
+/** Pick a balanced mix so one region cannot fill the whole ingest window. */
+function diversifyCandidates(
+  items: Array<{
+    title: string;
+    link: string;
+    desc: string;
+    date: string;
+    source: string;
+    category: string;
+    region: string;
+  }>,
+  limit = 28,
+) {
+  const buckets: Record<string, typeof items> = {
+    World: [],
+    Africa: [],
+    Nigeria: [],
+    Ghana: [],
+    Business: [],
+    Tech: [],
+    Crypto: [],
+    Sports: [],
+  };
+  const sorted = [...items].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  for (const item of sorted) {
+    const key = buckets[item.category] ? item.category : "World";
+    buckets[key].push(item);
+  }
+  // Soft quotas — total ~28 with global priority
+  const quotas: Record<string, number> = {
+    World: 6,
+    Africa: 3,
+    Nigeria: 4,
+    Ghana: 2,
+    Business: 4,
+    Tech: 4,
+    Crypto: 2,
+    Sports: 5,
+  };
+  const picked: typeof items = [];
+  const used = new Set<string>();
+  for (const [cat, max] of Object.entries(quotas)) {
+    for (const item of buckets[cat] || []) {
+      if (picked.length >= limit) break;
+      if (used.has(item.link)) continue;
+      if ((buckets[cat] || []).indexOf(item) >= max) continue;
+      used.add(item.link);
+      picked.push(item);
+      if (picked.filter((p) => p.category === cat).length >= max) break;
+    }
+  }
+  // Fill remainder with newest leftover (any category)
+  for (const item of sorted) {
+    if (picked.length >= limit) break;
+    if (used.has(item.link)) continue;
+    used.add(item.link);
+    picked.push(item);
+  }
+  return picked.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
 async function fetchFeedItems() {
   const feeds = GLOBAL_NEWS_SOURCES.map((s) => [s.url, s.name, s.region, s.category] as const);
   const results = await Promise.allSettled(
     feeds.map(async ([url, source, region, feedCategory]) => {
       try {
         const feed = await rss.parseURL(url);
-        return (feed.items || []).slice(0, 10).map((item: any) => {
+        return (feed.items || []).slice(0, 8).map((item: any) => {
           const title = clean(item.title);
           const desc = stripJunk(item.contentSnippet || item.content || item.summary).slice(0, 1200);
           const date = item.isoDate || item.pubDate || new Date().toISOString();
@@ -228,10 +300,10 @@ export async function runIngest() {
     }
   });
 
-  const candidates = fresh
-    .filter((i) => stripJunk(i.desc).length >= 60)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 24);
+  const candidates = diversifyCandidates(
+    fresh.filter((i) => stripJunk(i.desc).length >= 60),
+    28,
+  );
 
   const maxAi = Math.max(0, Math.min(12, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 8)));
   let aiCalls = 0;
