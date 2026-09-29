@@ -1,17 +1,10 @@
 /**
  * Native social publishing for RockBrief — no Make.com required.
  *
- * Configure any of:
- *   META_PAGE_ID + META_PAGE_ACCESS_TOKEN  → Facebook Page posts
- *   X_API_KEY + X_API_SECRET + X_ACCESS_TOKEN + X_ACCESS_SECRET  → X (OAuth 1.0a)
- *   X_USER_ACCESS_TOKEN  → X Bearer (only if your app supports tweet write)
+ * META_PAGE_ID + META_PAGE_ACCESS_TOKEN → Facebook
+ * X_API_KEY + X_API_SECRET + X_ACCESS_TOKEN + X_ACCESS_SECRET → X
  *
- * Recommended cadence (set on the scheduled bot, not here):
- *   Peak: every 3–4 hours, max 3–6 posts/day per network
- *   Never dump every wire — only high-trend, 500+ word stories
- *
- * Env:
- *   APP_URL, SOCIAL_MAX_POSTS (default 3), CRON_SECRET
+ * Only posts high-trend stories with 300+ word bodies and 4 bullets.
  */
 
 function siteBase() {
@@ -25,7 +18,7 @@ function storyPath(article) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 90);
-  return `${siteBase()}/news/${title}--${encodeURIComponent(String(article.id))}`;
+  return siteBase() + "/news/" + title + "--" + encodeURIComponent(String(article.id));
 }
 
 function isPublishableSocialArticle(article) {
@@ -43,33 +36,23 @@ function isPublishableSocialArticle(article) {
       String(article?.image_credit || "").trim().length > 0);
   return (
     title.length >= 20 &&
-    bodyWords >= 500 &&
+    bodyWords >= 300 &&
     bullets.length === 4 &&
-    bullets.every((b) => b.split(/\s+/).filter(Boolean).length >= 20) &&
+    bullets.every((b) => b.split(/\s+/).filter(Boolean).length >= 15) &&
     /^https?:\/\//i.test(sourceUrl) &&
     imageReady
   );
 }
 
-function buildCaption(article, maxLen = 1800) {
+function buildCaption(article, maxLen) {
+  if (maxLen == null) maxLen = 1800;
   const title = String(article.ai_hook_title || article.original_title || "").trim();
-  const hook = Array.isArray(article.ai_summary)
-    ? String(article.ai_summary[0] || "").trim()
-    : "";
-  const tags = Array.isArray(article.tags)
-    ? article.tags.map(String).slice(0, 3).join(" ")
-    : "#News";
+  const hook = Array.isArray(article.ai_summary) ? String(article.ai_summary[0] || "").trim() : "";
+  const tags = Array.isArray(article.tags) ? article.tags.map(String).slice(0, 3).join(" ") : "#News";
   const url = storyPath(article);
-  const lines = [
-    title,
-    "",
-    hook ? hook.slice(0, 220) : "Full briefing on RockBrief — sources credited.",
-    "",
-    `Read → ${url}`,
-    "",
-    tags,
-  ];
-  return lines.join("\n").slice(0, maxLen);
+  return [title, "", hook ? hook.slice(0, 220) : "Full briefing on RockBrief — sources credited.", "", "Read → " + url, "", tags]
+    .join("\n")
+    .slice(0, maxLen);
 }
 
 function buildXText(article) {
@@ -77,7 +60,7 @@ function buildXText(article) {
   const url = storyPath(article);
   const maxTitle = 240;
   const t = title.length > maxTitle ? title.slice(0, maxTitle - 1) + "…" : title;
-  return `${t}\n\n${url}`;
+  return t + "\n\n" + url;
 }
 
 export function toSocialPayload(article) {
@@ -89,7 +72,7 @@ export function toSocialPayload(article) {
       ? article.ai_summary.map(String).slice(0, 5).join(" ")
       : String(article.original_description || "").slice(0, 400),
     bullets: Array.isArray(article.ai_summary) ? article.ai_summary.map(String).slice(0, 5) : [],
-    url,
+    url: url,
     image: String(article.image || ""),
     category: String(article.category || "World"),
     source: String(article.source || "Wire"),
@@ -97,7 +80,7 @@ export function toSocialPayload(article) {
     x_text: buildXText(article),
     hashtags: Array.isArray(article.tags)
       ? article.tags.map(String).slice(0, 4).join(" ")
-      : `#${String(article.category || "News").replace(/\s+/g, "")}`,
+      : "#" + String(article.category || "News").replace(/\s+/g, ""),
   };
 }
 
@@ -132,17 +115,21 @@ async function oauth1Header(method, url, consumerKey, consumerSecret, token, tok
   };
   const paramString = Object.keys(params)
     .sort()
-    .map((k) => `${encodeURIComponent(k)}=${encodeURIComponent(params[k])}`)
+    .map(function (k) {
+      return encodeURIComponent(k) + "=" + encodeURIComponent(params[k]);
+    })
     .join("&");
   const base = [method.toUpperCase(), encodeURIComponent(url), encodeURIComponent(paramString)].join("&");
-  const signingKey = `${encodeURIComponent(consumerSecret)}&${encodeURIComponent(tokenSecret)}`;
+  const signingKey = encodeURIComponent(consumerSecret) + "&" + encodeURIComponent(tokenSecret);
   const signature = crypto.createHmac("sha1", signingKey).update(base).digest("base64");
   params.oauth_signature = signature;
   return (
     "OAuth " +
     Object.keys(params)
       .sort()
-      .map((k) => `${encodeURIComponent(k)}="${encodeURIComponent(params[k])}"`)
+      .map(function (k) {
+        return encodeURIComponent(k) + "=\"" + encodeURIComponent(params[k]) + "\"";
+      })
       .join(", ")
   );
 }
@@ -157,14 +144,16 @@ async function postToMeta(payload) {
     body: JSON.stringify({ message: payload.caption, link: payload.url, access_token: token }),
     signal: AbortSignal.timeout(15000),
   });
-  const data = await r.json().catch(() => ({}));
+  const data = await r.json().catch(function () {
+    return {};
+  });
   return {
     ok: r.ok && Boolean(data.id),
     platform: "facebook",
     status: r.status,
     post_id: data.id || null,
-    post_url: data.id ? `https://facebook.com/${data.id}` : null,
-    error: data.error?.message || null,
+    post_url: data.id ? "https://facebook.com/" + data.id : null,
+    error: data.error && data.error.message ? data.error.message : null,
   };
 }
 
@@ -183,17 +172,19 @@ async function postToX(payload) {
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: auth },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: text }),
       signal: AbortSignal.timeout(15000),
     });
-    const data = await r.json().catch(() => ({}));
+    const data = await r.json().catch(function () {
+      return {};
+    });
     return {
-      ok: r.ok && Boolean(data.data?.id),
+      ok: r.ok && Boolean(data.data && data.data.id),
       platform: "x",
       status: r.status,
-      post_id: data.data?.id || null,
-      post_url: data.data?.id ? `https://x.com/i/web/status/${data.data.id}` : null,
-      error: data.errors?.[0]?.message || data.detail || null,
+      post_id: data.data && data.data.id ? data.data.id : null,
+      post_url: data.data && data.data.id ? "https://x.com/i/web/status/" + data.data.id : null,
+      error: (data.errors && data.errors[0] && data.errors[0].message) || data.detail || null,
     };
   }
   if (hasXBearer()) {
@@ -203,30 +194,36 @@ async function postToX(payload) {
         "Content-Type": "application/json",
         Authorization: "Bearer " + process.env.X_USER_ACCESS_TOKEN,
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text: text }),
       signal: AbortSignal.timeout(15000),
     });
-    const data = await r.json().catch(() => ({}));
+    const data = await r.json().catch(function () {
+      return {};
+    });
     return {
-      ok: r.ok && Boolean(data.data?.id),
+      ok: r.ok && Boolean(data.data && data.data.id),
       platform: "x",
       status: r.status,
-      post_id: data.data?.id || null,
-      post_url: data.data?.id ? `https://x.com/i/web/status/${data.data.id}` : null,
-      error: data.errors?.[0]?.message || data.detail || null,
+      post_id: data.data && data.data.id ? data.data.id : null,
+      post_url: data.data && data.data.id ? "https://x.com/i/web/status/" + data.data.id : null,
+      error: (data.errors && data.errors[0] && data.errors[0].message) || data.detail || null,
     };
   }
   return { ok: false, platform: "x", error: "X credentials not configured" };
 }
 
-export async function dispatchToMake(articles, eventKey = "initial") {
+export async function dispatchToMake(articles, eventKey) {
+  if (eventKey == null) eventKey = "initial";
   return dispatchNative(articles, eventKey);
 }
 
-export async function dispatchNative(articles, eventKey = "initial") {
+export async function dispatchNative(articles, eventKey) {
+  if (eventKey == null) eventKey = "initial";
   const max = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
   const list = (Array.isArray(articles) ? articles : [])
-    .filter((a) => a && (a.ai_hook_title || a.original_title) && a.id)
+    .filter(function (a) {
+      return a && (a.ai_hook_title || a.original_title) && a.id;
+    })
     .filter(isPublishableSocialArticle)
     .slice(0, max);
 
@@ -248,9 +245,11 @@ export async function dispatchNative(articles, eventKey = "initial") {
   }
 
   const results = [];
-  for (const article of list) {
-    const payload = { ...toSocialPayload(article), event_key: eventKey };
-    for (const platform of targets) {
+  for (let i = 0; i < list.length; i++) {
+    const article = list[i];
+    const payload = Object.assign({}, toSocialPayload(article), { event_key: eventKey });
+    for (let j = 0; j < targets.length; j++) {
+      const platform = targets[j];
       try {
         let result;
         if (platform === "facebook") result = await postToMeta(payload);
@@ -264,35 +263,41 @@ export async function dispatchNative(articles, eventKey = "initial") {
           });
           result = { ok: r.ok, platform: "make", status: r.status, post_id: null, error: r.ok ? null : "webhook failed" };
         }
-        results.push({ id: payload.id, event_key: eventKey, title: payload.title.slice(0, 80), ...result });
+        results.push(Object.assign({ id: payload.id, event_key: eventKey, title: payload.title.slice(0, 80) }, result));
       } catch (e) {
         results.push({
           id: payload.id,
           event_key: eventKey,
-          platform,
+          platform: platform,
           ok: false,
           error: e instanceof Error ? e.message : "send failed",
         });
       }
-      await new Promise((res) => setTimeout(res, 600));
+      await new Promise(function (res) {
+        setTimeout(res, 600);
+      });
     }
   }
 
   return {
-    ok: results.some((x) => x.ok),
-    sent: results.filter((x) => x.ok).length,
+    ok: results.some(function (x) {
+      return x.ok;
+    }),
+    sent: results.filter(function (x) {
+      return x.ok;
+    }).length,
     platforms: targets,
-    results,
+    results: results,
   };
 }
 
 export async function handler(event) {
   const secret = process.env.CRON_SECRET || process.env.BOT_MANUAL_SECRET || "";
-  const auth = event.headers?.authorization || event.headers?.Authorization || "";
+  const auth = (event.headers && (event.headers.authorization || event.headers.Authorization)) || "";
   const supplied =
     auth.replace(/^Bearer\s+/i, "") ||
-    event.headers?.["x-rockbrief-bot-secret"] ||
-    event.queryStringParameters?.secret ||
+    (event.headers && event.headers["x-rockbrief-bot-secret"]) ||
+    (event.queryStringParameters && event.queryStringParameters.secret) ||
     "";
 
   if (secret && supplied !== secret) {
@@ -311,7 +316,7 @@ export async function handler(event) {
     }
     if (!articles.length) {
       const base = siteBase();
-      const r = await fetch(`${base}/api/news`, {
+      const r = await fetch(base + "/api/news", {
         headers: { Accept: "application/json" },
         signal: AbortSignal.timeout(15000),
       });
