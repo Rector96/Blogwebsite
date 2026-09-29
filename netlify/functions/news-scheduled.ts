@@ -115,7 +115,17 @@ export default async function handler() {
     const maxPosts = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
     const posted = await getUnpostedIds(articles);
 
-    const ranked = [...articles]
+    const clusterMap = new Map<string, Article>();
+    for (const article of articles) {
+      const key = clusterKey(article);
+      if (!key) continue;
+      const previous = clusterMap.get(key);
+      if (!previous || Number(article.trend_score || 0) > Number(previous.trend_score || 0)) {
+        clusterMap.set(key, article);
+      }
+    }
+
+    const ranked = [...clusterMap.values()]
       .filter((a: Article) => {
         const score = Number(a.trend_score || 0);
         const ageHours = (Date.now() - Date.parse(a.timestamp || "")) / 3600000;
