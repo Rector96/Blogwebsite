@@ -355,8 +355,7 @@ export async function runIngest() {
         const cover = await resolveSafeCover({
           title: brief.ai_hook_title || item.title,
           category: item.category,
-          rssImage: item.rssImage || "",
-          preferredQuery: brief.image_query || item.title,
+          preferredQuery: brief.image_query || "",
           preferStock: true,
         });
         image = cover.image || PLACEHOLDER_IMAGE;
@@ -367,10 +366,6 @@ export async function runIngest() {
       } catch {
         /* keep placeholder */
       }
-    } else if (item.rssImage && /^https?:\/\//i.test(item.rssImage)) {
-      image = item.rssImage;
-      image_credit = "Publisher feed";
-      image_license = "Feed preview";
     }
 
     const bodyWords = brief.body.split(/\s+/).filter(Boolean).length;
