@@ -53,6 +53,12 @@
   force = true
 
 [[redirects]]
+  from = "/api/ask-article"
+  to = "/.netlify/functions/ask-article"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/research"
   to = "/.netlify/functions/research"
   status = 200
