@@ -229,7 +229,7 @@ async function recordSocialResults(results: any[]) {
   try {
     const rows = results.map((r) => ({
       article_id: String(r.id),
-      platform: "make",
+      platform: String(r.platform || "make"),
       status: r.ok ? "sent" : "failed",
       response_code: Number(r.status || 0) || null,
       error_message: r.ok ? null : String(r.error || "Social dispatch failed"),
