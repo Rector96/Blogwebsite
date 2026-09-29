@@ -216,7 +216,7 @@ async function fetchFeedItems() {
   return results.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
 }
 
-async function aiBrief(title: string, desc: string, related: any[] = []) {
+async function aiBrief(title: string, desc: string, related: any[] = [], useGrounding = false) {
   const fallback = {
     ai_hook_title: title.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
     body: "",
@@ -228,6 +228,7 @@ async function aiBrief(title: string, desc: string, related: any[] = []) {
   if (!key || !desc || desc.length < 40) return fallback;
   try {
     const ai = new GoogleGenAI({ apiKey: key });
+    if (useGrounding) config.tools = [{ googleSearch: {} }];
     const response = await Promise.race([
       ai.models.generateContent({
         model: "gemini-2.0-flash",
