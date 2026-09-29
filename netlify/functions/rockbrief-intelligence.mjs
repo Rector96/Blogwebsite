@@ -1,5 +1,5 @@
 /**
- * RockBrief intelligence helpers — result-oriented enrichment for every story.
+ * RockBrief intelligence helpers — enrichment for stories + social.
  * Used by news ingest + social dispatch. No Make.com dependency.
  */
 
@@ -22,16 +22,23 @@ export function buildSharePack(article, siteBase = "https://rwdnews.netlify.app"
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "")
     .slice(0, 90);
-  const url = `${String(siteBase).replace(/\/$/, "")}/news/${slug}--${encodeURIComponent(String(article.id || ""))}`;
+  const url =
+    String(siteBase).replace(/\/$/, "") +
+    "/news/" +
+    slug +
+    "--" +
+    encodeURIComponent(String(article.id || ""));
   const hook = bullets[0] || cleanText(article.original_description || "").slice(0, 180);
   const tags = Array.isArray(article.tags)
     ? article.tags.map(String).slice(0, 3).join(" ")
     : "#RockBrief";
 
-  const x = `${title.slice(0, 200)}\n\n${url}`.slice(0, 280);
-  const facebook = [title, "", hook, "", `Read the full briefing → ${url}`, "", tags].join("\n").slice(0, 1800);
-  const whatsapp = `*RockBrief*\n${title}\n\n${hook}\n\n${url}`;
-  const linkedin = `${title}\n\n${hook}\n\nFull analysis: ${url}`;
+  const x = (title.slice(0, 200) + "\n\n" + url).slice(0, 280);
+  const facebook = [title, "", hook, "", "Read the full briefing → " + url, "", tags]
+    .join("\n")
+    .slice(0, 1800);
+  const whatsapp = "*RockBrief*\n" + title + "\n\n" + hook + "\n\n" + url;
+  const linkedin = title + "\n\n" + hook + "\n\nFull analysis: " + url;
 
   return { url, x, facebook, whatsapp, linkedin, title, hook, tags };
 }
@@ -55,20 +62,21 @@ export function buildAudioScript(article) {
   const bullets = Array.isArray(article.ai_summary)
     ? article.ai_summary.map(cleanText).filter(Boolean).slice(0, 3)
     : [];
-  const body = cleanText(String(article.body || "").replace(/##[^
-]+/g, " ")).slice(0, 400);
+  // Strip markdown headings without multi-line regex literals (Netlify/esbuild safe)
+  const bodyRaw = String(article.body || "").replace(new RegExp("##[^\\n]+", "g"), " ");
+  const body = cleanText(bodyRaw).slice(0, 400);
   const parts = [
-    `RockBrief. ${title}.`,
+    "RockBrief. " + title + ".",
     bullets.length ? bullets.join(" ") : body,
     "Full report on RockBrief. Sources credited.",
   ];
   return parts.join(" ").replace(/\s+/g, " ").trim().slice(0, 900);
 }
 
-/** Extract "Why this matters in Africa" block from stored HTML/markdown body. */
+/** Extract "Why this matters in Africa" block from stored markdown body. */
 export function extractAfricaLensFromBody(body) {
   const raw = String(body || "");
-  const m = raw.match(/##\s*Why this matters in Africa\s*([\s\S]*?)(?=##\s|$)/i);
+  const m = raw.match(new RegExp("##\\s*Why this matters in Africa\\s*([\\s\\S]*?)(?=##\\s|$)", "i"));
   if (!m) return "";
   return cleanText(m[1]).slice(0, 1200);
 }
@@ -76,23 +84,52 @@ export function extractAfricaLensFromBody(body) {
 /** Rank articles for a user preference profile (client or server). */
 export function rankForYou(articles, prefs) {
   const list = Array.isArray(articles) ? [...articles] : [];
-  const cats = new Set((prefs?.categories || []).map(String));
-  const tags = new Set((prefs?.tags || []).map((t) => String(t).toLowerCase()));
+  const cats = new Set((prefs && prefs.categories ? prefs.categories : []).map(String));
+  const tags = new Set(
+    (prefs && prefs.tags ? prefs.tags : []).map(function (t) {
+      return String(t).toLowerCase();
+    }),
+  );
   const now = Date.now();
   return list
-    .map((a) => {
-      let score = Number(a.trend_score || 0);
-      const ageH = Math.max(0, (now - Date.parse(a.timestamp || 0)) / 3600000);
+    .map(function (a) {
+      var score = Number(a.trend_score || 0);
+      var ageH = Math.max(0, (now - Date.parse(a.timestamp || 0)) / 3600000);
       score += Math.max(0, 30 - ageH);
       if (cats.has(String(a.category || ""))) score += 40;
-      const atags = Array.isArray(a.tags) ? a.tags.map((t) => String(t).toLowerCase()) : [];
-      if (atags.some((t) => tags.has(t) || [...tags].some((p) => t.includes(p)))) score += 20;
-      if (prefs?.sportsBoost && /sport|football|soccer/i.test(`${a.category} ${a.ai_hook_title}`))
+      var atags = Array.isArray(a.tags)
+        ? a.tags.map(function (t) {
+            return String(t).toLowerCase();
+          })
+        : [];
+      if (
+        atags.some(function (t) {
+          return tags.has(t) || [...tags].some(function (p) {
+            return t.indexOf(p) !== -1;
+          });
+        })
+      )
+        score += 20;
+      if (
+        prefs &&
+        prefs.sportsBoost &&
+        /sport|football|soccer/i.test(String(a.category || "") + " " + String(a.ai_hook_title || ""))
+      )
         score += 25;
-      if (prefs?.africaBoost && /africa|nigeria|ghana|kenya/i.test(`${a.category} ${a.region} ${a.ai_hook_title}`))
+      if (
+        prefs &&
+        prefs.africaBoost &&
+        /africa|nigeria|ghana|kenya/i.test(
+          String(a.category || "") + " " + String(a.region || "") + " " + String(a.ai_hook_title || ""),
+        )
+      )
         score += 25;
-      return { a, score };
+      return { a: a, score: score };
     })
-    .sort((x, y) => y.score - x.score)
-    .map((x) => x.a);
+    .sort(function (x, y) {
+      return y.score - x.score;
+    })
+    .map(function (x) {
+      return x.a;
+    });
 }
