@@ -37,11 +37,16 @@ async function recordBotRun(status: string, metrics: Record<string, any>, errorM
   const db = dbClient();
   if (!db) return;
   try {
+    const now = new Date().toISOString();
     await db.from("bot_runs").insert({
-      bot_name: "RockBrief News Bot",
+      started_at: now,
+      finished_at: now,
       status,
-      metrics,
-      error_message: errorMessage || null,
+      stories_discovered: Number(metrics.scanned || metrics.stories_discovered || 0),
+      stories_published: Number(metrics.saved || metrics.stories_published || 0),
+      social_sent: Number(metrics.social_sent || 0),
+      social_failed: Number(metrics.social_failed || 0),
+      metrics: errorMessage ? { ...metrics, error: errorMessage } : metrics,
     });
   } catch (error) {
     console.error("[RockBrief Bot] run log failed", error);
@@ -237,19 +242,22 @@ async function recordCandidates(articles: Article[]) {
     .slice(0, 30)
     .map((a) => ({
       article_id: String(a.id),
-      original_url: String(a.original_url),
       title: String(a.ai_hook_title || a.original_title || ""),
+      source: String(a.source || ""),
+      url: String(a.original_url),
       trend_score: Number(a.trend_score || 0),
       trend_label: String(a.trend_label || "Fresh"),
-      source: String(a.source || ""),
       discovered_via: Array.isArray(a.discovered_via) ? a.discovered_via : [],
-      decision: Number(a.trend_score || 0) >= Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)
-        ? "social_candidate"
-        : "monitor",
+      timestamp: String(a.timestamp || new Date().toISOString()),
       cluster_key: clusterKey(a),
       cluster_title: String(a.ai_hook_title || a.original_title || ""),
       cluster_sources: Array.isArray(a.discovered_via) ? a.discovered_via : [],
       cluster_size: Array.isArray(a.discovered_via) ? Math.max(1, a.discovered_via.length) : 1,
+      metadata: {
+        decision: Number(a.trend_score || 0) >= Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)
+          ? "social_candidate"
+          : "monitor",
+      },
       updated_at: new Date().toISOString(),
     }));
   try {
@@ -366,9 +374,10 @@ async function recordSocialResults(results: any[]) {
       event_key: String(r.event_key || "initial"),
       platform: String(r.platform || "make"),
       status: r.ok ? "sent" : "failed",
-      response_code: Number(r.status || 0) || null,
-      error_message: r.ok ? null : String(r.error || "Social dispatch failed"),
-      sent_at: r.ok ? new Date().toISOString() : null,
+      post_id: r.post_id ? String(r.post_id) : null,
+      post_url: r.post_url ? String(r.post_url) : null,
+      error: r.ok ? null : String(r.error || "Social dispatch failed"),
+      created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }));
     await db.from("social_posts").upsert(rows, { onConflict: "article_id,platform,event_key" });
