@@ -147,7 +147,12 @@ async function applyDevelopingUpdates(articles: Article[]) {
       previousBody: String(current.body || ""),
       reports,
     });
-    if (!result) continue;
+    if (!result) {
+      await db.from("bot_story_clusters").update({
+        update_needed: false,
+      }).eq("cluster_key", String(cluster.cluster_key));
+      continue;
+    }
 
     const nextTimestamp = new Date().toISOString();
     const updateRecord = {
