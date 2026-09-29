@@ -388,8 +388,8 @@ async function getStoredArticles(): Promise<NewsArticle[]> {
       .gte("timestamp", new Date(Date.now() - 7 * 24 * 3600000).toISOString())
       .order("timestamp", { ascending: false })
       .limit(80);
-    if (error || !Array.isArray(data)) return [];
-    return data.filter((a: any) => a?.original_url).map(mapRow);
+    if (error || !Array.isArray(data)) return [];\n    // Never expose legacy/incomplete published rows to the public feed.\n    return data.map(mapRow).filter(validatePublishableArticle);
+
   } catch {
     return [];
   }
