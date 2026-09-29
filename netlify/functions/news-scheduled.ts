@@ -1,6 +1,6 @@
 import type { Config } from "@netlify/functions";
 import { createClient } from "@supabase/supabase-js";
-import { runIngest } from "./news";
+import { generateDevelopingUpdate, runIngest } from "./news";
 import { dispatchToMake } from "./social-dispatch.mjs";
 
 type Article = Record<string, any>;
@@ -47,9 +47,150 @@ function clusterKey(article: Article) {
   const tokens = String(article.title || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\\s+/)
+    .split(/\s+/)
     .filter((x) => x.length >= 5 && !stop.has(x));
   return [...new Set(tokens)].slice(0, 5).sort().join("-");
+}
+
+async function syncStoryClusters(articles: Article[]) {
+  const db = dbClient();
+  if (!db || !articles.length) return { clusters: 0, updates: 0 };
+
+  const grouped = new Map<string, Article[]>();
+  for (const article of articles) {
+    const key = clusterKey(article);
+    if (!key) continue;
+    const list = grouped.get(key) || [];
+    list.push(article);
+    grouped.set(key, list);
+  }
+
+  let updates = 0;
+  const keys = [...grouped.keys()].slice(0, 60);
+  let existingRows: any[] = [];
+  try {
+    const { data } = await db.from("bot_story_clusters").select("*").in("cluster_key", keys);
+    existingRows = Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error("[RockBrief Bot] cluster read failed", error);
+  }
+  const existing = new Map(existingRows.map((row) => [String(row.cluster_key), row]));
+
+  const rows = [...grouped.entries()].map(([key, members]) => {
+    const best = [...members].sort((a, b) => Number(b.trend_score || 0) - Number(a.trend_score || 0))[0];
+    const sources = [...new Set(members.flatMap((a) => Array.isArray(a.discovered_via) ? a.discovered_via : [a.source]).filter(Boolean).map(String))];
+    const previous = existing.get(key);
+    const previousSources = Array.isArray(previous?.sources) ? previous.sources.map(String) : [];
+    const hasNewSource = sources.some((source) => !previousSources.includes(source));
+    const shouldUpdate = Boolean(previous) && (members.length > Number(previous.member_count || 0) || hasNewSource);
+    if (shouldUpdate) updates++;
+
+    return {
+      cluster_key: key,
+      canonical_article_id: String(best.id),
+      canonical_title: String(best.ai_hook_title || best.original_title || ""),
+      source_count: sources.length,
+      sources,
+      member_count: members.length,
+      trend_score: Number(best.trend_score || 0),
+      trend_label: String(best.trend_label || "Fresh"),
+      first_seen: previous?.first_seen || new Date().toISOString(),
+      last_seen: new Date().toISOString(),
+      update_needed: shouldUpdate || Boolean(previous?.update_needed),
+      metadata: {
+        category: String(best.category || "World"),
+        region: String(best.region || "Global"),
+        latest_source: String(best.source || ""),
+      },
+    };
+  });
+
+  try {
+    if (rows.length) await db.from("bot_story_clusters").upsert(rows, { onConflict: "cluster_key" });
+  } catch (error) {
+    console.error("[RockBrief Bot] cluster write failed", error);
+  }
+  return { clusters: rows.length, updates };
+}
+
+async function applyDevelopingUpdates(articles: Article[]) {
+  const db = dbClient();
+  if (!db || !articles.length) return { checked: 0, updated: 0 };
+
+  const { data: clusters } = await db
+    .from("bot_story_clusters")
+    .select("*")
+    .eq("update_needed", true)
+    .order("trend_score", { ascending: false })
+    .limit(8);
+  if (!Array.isArray(clusters) || !clusters.length) return { checked: 0, updated: 0 };
+
+  let updated = 0;
+  for (const cluster of clusters) {
+    const canonicalId = String(cluster.canonical_article_id || "");
+    const current = articles.find((a) => String(a.id) === canonicalId);
+    if (!current?.body) continue;
+
+    const reports = articles
+      .filter((a) => clusterKey(a) === String(cluster.cluster_key))
+      .sort((a, b) => Date.parse(b.timestamp || "") - Date.parse(a.timestamp || ""))
+      .slice(0, 6)
+      .map((a) => ({
+        title: String(a.original_title || a.ai_hook_title || ""),
+        description: String(a.original_description || a.ai_summary?.join(" ") || ""),
+        source: String(a.source || ""),
+        timestamp: String(a.timestamp || ""),
+      }));
+
+    const result = await generateDevelopingUpdate({
+      title: String(current.ai_hook_title || current.original_title || ""),
+      previousBody: String(current.body || ""),
+      reports,
+    });
+    if (!result) {
+      await db.from("bot_story_clusters").update({
+        update_needed: false,
+      }).eq("cluster_key", String(cluster.cluster_key));
+      continue;
+    }
+
+    const nextTimestamp = new Date().toISOString();
+    const updateRecord = {
+      cluster_key: String(cluster.cluster_key),
+      article_id: canonicalId,
+      previous_title: String(current.ai_hook_title || current.original_title || ""),
+      new_title: result.updated_title,
+      summary: result.update_summary,
+      source_count: Number(cluster.source_count || reports.length),
+      created_at: nextTimestamp,
+    };
+
+    const { error: articleError } = await db
+      .from("articles")
+      .update({
+        ai_hook_title: result.updated_title,
+        body: result.updated_body,
+        timestamp: nextTimestamp,
+        trend_score: Number(cluster.trend_score || current.trend_score || 0),
+        trend_label: String(cluster.trend_label || current.trend_label || "Developing"),
+        discovered_via: Array.isArray(cluster.sources) ? cluster.sources : current.discovered_via,
+      })
+      .eq("id", canonicalId);
+
+    if (articleError) {
+      console.error("[RockBrief Bot] article update failed", articleError.message);
+      continue;
+    }
+
+    await db.from("bot_story_updates").insert(updateRecord);
+    await db.from("bot_story_clusters").update({
+      update_needed: false,
+      last_updated_at: nextTimestamp,
+    }).eq("cluster_key", String(cluster.cluster_key));
+    updated++;
+  }
+
+  return { checked: clusters.length, updated };
 }
 
 async function recordCandidates(articles: Article[]) {
@@ -109,13 +250,25 @@ export default async function handler() {
     // without replacing the proven ingestion/image/grounding pipeline.
     const result = await runIngest();
     const articles = Array.isArray(result.articles) ? result.articles : [];
+    const clusterMetrics = await syncStoryClusters(articles);
+    const updateMetrics = await applyDevelopingUpdates(articles);
     await recordCandidates(articles);
 
     const threshold = Math.max(0, Math.min(100, Number(process.env.BOT_AUTO_SOCIAL_TREND_THRESHOLD || 65)));
     const maxPosts = Math.max(1, Math.min(10, Number(process.env.SOCIAL_MAX_POSTS || 3)));
     const posted = await getUnpostedIds(articles);
 
-    const ranked = [...articles]
+    const clusterMap = new Map<string, Article>();
+    for (const article of articles) {
+      const key = clusterKey(article);
+      if (!key) continue;
+      const previous = clusterMap.get(key);
+      if (!previous || Number(article.trend_score || 0) > Number(previous.trend_score || 0)) {
+        clusterMap.set(key, article);
+      }
+    }
+
+    const ranked = [...clusterMap.values()]
       .filter((a: Article) => {
         const score = Number(a.trend_score || 0);
         const ageHours = (Date.now() - Date.parse(a.timestamp || "")) / 3600000;
@@ -142,6 +295,10 @@ export default async function handler() {
       saved: result.saved,
       scanned: articles.length,
       candidates: ranked.length,
+      clusters: clusterMetrics.clusters,
+      storyUpdatesDetected: clusterMetrics.updates,
+      storiesCheckedForUpdate: updateMetrics.checked,
+      storiesUpdated: updateMetrics.updated,
       threshold,
       social,
       durationMs: Date.now() - startedAt,
