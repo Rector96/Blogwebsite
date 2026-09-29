@@ -116,7 +116,7 @@ async function verifyImageVisually(query, candidate) {
                 "PASS only when the image visibly depicts the named person, event, place, product, object, or other specific subject. " +
                 "Do not use generic thematic similarity. Do not guess identity or context from weak clues. " +
                 "If the subject is a named person, PASS only if the person is visibly the same person. " +
-                "If uncertain, return FAIL. Return JSON only: {"verdict":"PASS"|"FAIL","reason":"short reason"}.",
+                "If uncertain, return FAIL. Return JSON only with verdict PASS or FAIL and a short reason.",
             },
           ],
         }],
