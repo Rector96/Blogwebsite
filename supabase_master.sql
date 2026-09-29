@@ -218,3 +218,59 @@ order by priority asc, created_at desc;
 -- 1) Project Settings → API: copy URL + anon key to VITE_* env
 -- 2) Service role key only on the Node server (cron ingest)
 -- 3) cron-job.org → https://YOUR_HOST/api/cron/ingest?secret=CRON_SECRET
+
+
+-- =============================================================================
+-- 7) ROCKBRIEF NEWS BOT — intelligence + social delivery state
+-- Applied separately from code so the bot can fail closed if tables are absent.
+-- =============================================================================
+create table if not exists public.bot_runs (
+  id bigint generated always as identity primary key,
+  bot_name text not null default 'RockBrief News Bot',
+  status text not null check (status in ('success','failed','partial')),
+  metrics jsonb not null default '{}'::jsonb,
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists bot_runs_created_idx
+  on public.bot_runs (created_at desc);
+
+alter table public.bot_runs enable row level security;
+
+create table if not exists public.bot_story_candidates (
+  article_id text primary key references public.articles(id) on delete cascade,
+  original_url text not null,
+  title text not null default '',
+  trend_score numeric(6,2) not null default 0,
+  trend_label text not null default 'Fresh',
+  source text not null default '',
+  discovered_via jsonb not null default '[]'::jsonb,
+  decision text not null default 'monitor'
+    check (decision in ('monitor','social_candidate','held','rejected')),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists bot_story_candidates_score_idx
+  on public.bot_story_candidates (trend_score desc, updated_at desc);
+
+alter table public.bot_story_candidates enable row level security;
+
+create table if not exists public.social_posts (
+  id bigint generated always as identity primary key,
+  article_id text not null references public.articles(id) on delete cascade,
+  platform text not null,
+  status text not null check (status in ('queued','sent','failed')),
+  response_code integer,
+  error_message text,
+  sent_at timestamptz,
+  updated_at timestamptz not null default now(),
+  unique(article_id, platform)
+);
+
+create index if not exists social_posts_status_idx
+  on public.social_posts (status, updated_at desc);
+
+alter table public.social_posts enable row level security;
+
+-- No public write/read policies are added: service-role bot access only.
