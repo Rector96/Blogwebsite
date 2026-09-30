@@ -1,4 +1,4 @@
-/** Canonical homepage category tabs */
+/** Canonical homepage category tabs — responsive chips on mobile */
 export const CANONICAL_CATEGORIES = [
   "Breaking",
   "World",
@@ -13,6 +13,24 @@ export const CANONICAL_CATEGORIES = [
   "Tech",
   "Crypto",
   "Entertainment",
+] as const;
+
+/** Categories available when publishing from admin (must appear on All + own tab) */
+export const PUBLISH_CATEGORIES = [
+  "World",
+  "Nigeria",
+  "Ghana",
+  "Africa",
+  "Europe",
+  "Middle East",
+  "Asia",
+  "Sports",
+  "Business",
+  "Tech",
+  "Crypto",
+  "Entertainment",
+  "Explainers",
+  "Profiles",
 ] as const;
 
 export type CanonicalCategory = (typeof CANONICAL_CATEGORIES)[number] | "All";
@@ -30,7 +48,7 @@ const BUSINESS_RE =
   /\b(market|markets|stock|stocks|bank|banking|economy|economic|finance|financial|oil|trade|company|companies|revenue|profit|gdp|inflation|interest rate|central bank)\b/i;
 
 const ENTERTAINMENT_RE =
-  /\b(movie|film|music|celebrity|actor|actress|nollywood|actress|wedding|marriage|divorce|award|oscar|grammy|netflix|series|tv show)\b/i;
+  /\b(movie|film|music|celebrity|actor|actress|nollywood|wedding|marriage|divorce|award|oscar|grammy|netflix|series|tv show)\b/i;
 
 function blobOf(article: {
   category?: string;
@@ -53,7 +71,7 @@ function blobOf(article: {
     .toLowerCase();
 }
 
-/** Infer a better category when feed metadata is missing or wrong */
+/** Infer category only when none was saved by the desk */
 export function inferCategory(article: {
   category?: string;
   tags?: string[];
@@ -63,6 +81,14 @@ export function inferCategory(article: {
   source?: string;
 }): string {
   const raw = String(article.category || "").trim();
+  // Respect explicit desk category (including Explainers / Profiles)
+  if (raw) {
+    const hit = PUBLISH_CATEGORIES.find((c) => c.toLowerCase() === raw.toLowerCase());
+    if (hit) return hit;
+    const can = CANONICAL_CATEGORIES.find((c) => c.toLowerCase() === raw.toLowerCase());
+    if (can) return can;
+  }
+
   const blob = blobOf(article);
 
   if (SPORT_RE.test(blob) || /espn|bbc sport|guardian sport/i.test(article.source || ""))
@@ -78,11 +104,15 @@ export function inferCategory(article: {
   if (/\b(middle east|israel|gaza|iran|saudi|uae)\b/i.test(blob)) return "Middle East";
   if (/\b(asia|china|india|japan|korea)\b/i.test(blob)) return "Asia";
 
-  if (raw && raw !== "Business") return raw;
   return raw || "World";
 }
 
-/** Strict tab filter: All = everything; other tabs = that category only */
+/**
+ * Tab filter:
+ * - All = every story
+ * - Breaking = trending labels
+ * - Else = stored category first (admin choice sticks), then inference
+ */
 export function matchesCategory(
   article: {
     category?: string;
@@ -100,11 +130,11 @@ export function matchesCategory(
     return article.trend_label === "Breaking" || article.trend_label === "Trending";
   }
 
-  const inferred = inferCategory(article);
-  if (inferred === selected) return true;
-
   const stored = String(article.category || "").trim();
-  if (stored.toLowerCase() === selected.toLowerCase()) return true;
+  if (stored && stored.toLowerCase() === selected.toLowerCase()) return true;
+
+  const inferred = inferCategory(article);
+  if (inferred.toLowerCase() === selected.toLowerCase()) return true;
 
   const tags = (article.tags || []).map((t) => String(t).replace(/^#/, "").toLowerCase());
   if (tags.includes(selected.toLowerCase())) return true;
