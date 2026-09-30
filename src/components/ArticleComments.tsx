@@ -9,24 +9,32 @@ type Comment = {
   created_at: string;
 };
 
+/** Stable storage key — must include article id or threads mix */
 function storageKey(articleId: string) {
-  return "rwdnews_comments_" + articleId;
+  return "rwdnews_comments_v2_" + encodeURIComponent(String(articleId || ""));
 }
 
 function loadLocal(articleId: string): Comment[] {
+  if (!articleId) return [];
   try {
     const raw = localStorage.getItem(storageKey(articleId));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    // Hard filter: only rows for THIS article
+    return parsed.filter(
+      (c: Comment) => c && String(c.article_id) === String(articleId) && String(c.body || "").trim(),
+    );
   } catch {
     return [];
   }
 }
 
 function saveLocal(articleId: string, list: Comment[]) {
+  if (!articleId) return;
   try {
-    localStorage.setItem(storageKey(articleId), JSON.stringify(list.slice(0, 100)));
+    const only = list.filter((c) => String(c.article_id) === String(articleId));
+    localStorage.setItem(storageKey(articleId), JSON.stringify(only.slice(0, 100)));
   } catch {
     /* ignore quota */
   }
@@ -44,6 +52,7 @@ function timeAgo(iso: string) {
 }
 
 export function ArticleComments({ articleId }: { articleId: string }) {
+  const id = String(articleId || "").trim();
   const [comments, setComments] = useState<Comment[]>([]);
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
@@ -52,43 +61,60 @@ export function ArticleComments({ articleId }: { articleId: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    // Reset immediately so previous article's comments never flash
+    setComments([]);
+    setBody("");
+    setError("");
+
+    if (!id) return;
+
     async function load() {
-      const local = loadLocal(articleId);
+      const local = loadLocal(id);
       if (!cancelled) setComments(local);
 
-      if (!supabase || !articleId) return;
+      if (!supabase) return;
       try {
         const { data, error: err } = await supabase
           .from("article_comments")
           .select("id,article_id,author_name,body,created_at")
-          .eq("article_id", articleId)
+          .eq("article_id", id)
           .eq("status", "visible")
           .order("created_at", { ascending: false })
           .limit(50);
-        if (!err && Array.isArray(data) && data.length && !cancelled) {
-          const rows = data.map((r: any) => ({
-            id: String(r.id),
-            article_id: String(r.article_id),
-            author_name: String(r.author_name || "Guest"),
-            body: String(r.body || ""),
-            created_at: String(r.created_at || new Date().toISOString()),
-          }));
+        if (!err && Array.isArray(data) && !cancelled) {
+          const rows = data
+            .map((r: any) => ({
+              id: String(r.id),
+              article_id: String(r.article_id),
+              author_name: String(r.author_name || "Guest"),
+              body: String(r.body || ""),
+              created_at: String(r.created_at || new Date().toISOString()),
+            }))
+            .filter((c) => c.article_id === id);
           setComments(rows);
-          saveLocal(articleId, rows);
+          saveLocal(id, rows);
         }
       } catch {
-        /* table may not exist yet — local works */
+        /* table may not exist — local only */
       }
     }
     void load();
     return () => {
       cancelled = true;
     };
-  }, [articleId]);
+  }, [id]);
+
+  if (!id) {
+    return null;
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
+    if (!id) {
+      setError("Missing article id — cannot post comment.");
+      return;
+    }
     const author = name.trim().slice(0, 40) || "Guest";
     const text = body.trim().slice(0, 1200);
     if (text.length < 3) {
@@ -97,8 +123,8 @@ export function ArticleComments({ articleId }: { articleId: string }) {
     }
     setBusy(true);
     const row: Comment = {
-      id: "c-" + Date.now().toString(36),
-      article_id: articleId,
+      id: "c-" + id.slice(0, 12) + "-" + Date.now().toString(36),
+      article_id: id,
       author_name: author,
       body: text,
       created_at: new Date().toISOString(),
@@ -108,20 +134,17 @@ export function ArticleComments({ articleId }: { articleId: string }) {
       if (supabase) {
         const { error: err } = await supabase.from("article_comments").insert({
           id: row.id,
-          article_id: articleId,
+          article_id: id,
           author_name: author,
           body: text,
           status: "visible",
           created_at: row.created_at,
         });
-        if (err) {
-          // still save locally so engagement works without migration
-          console.warn("[comments]", err.message);
-        }
+        if (err) console.warn("[comments]", err.message);
       }
-      const next = [row, ...comments];
+      const next = [row, ...comments.filter((c) => c.article_id === id)];
       setComments(next);
-      saveLocal(articleId, next);
+      saveLocal(id, next);
       setBody("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not post");
@@ -131,7 +154,11 @@ export function ArticleComments({ articleId }: { articleId: string }) {
   };
 
   return (
-    <section className="mt-12 rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7">
+    <section
+      className="mt-12 rounded-2xl border border-neutral-200 bg-white p-5 sm:p-7"
+      data-article-id={id}
+      key={"comments-" + id}
+    >
       <div className="flex items-end justify-between gap-3">
         <div>
           <p className="text-[10px] font-extrabold tracking-[0.16em] text-amber-800 uppercase">Conversation</p>
@@ -170,7 +197,7 @@ export function ArticleComments({ articleId }: { articleId: string }) {
 
       <div className="mt-8 divide-y divide-neutral-100">
         {comments.length === 0 ? (
-          <p className="py-6 text-center text-sm text-neutral-500">Be the first to comment.</p>
+          <p className="py-6 text-center text-sm text-neutral-500">Be the first to comment on this story.</p>
         ) : (
           comments.map((c) => (
             <article key={c.id} className="py-4">
