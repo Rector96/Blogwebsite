@@ -2,7 +2,7 @@ import Parser from "rss-parser";
 import { GLOBAL_NEWS_SOURCES } from "./news-sources";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
-import { resolveSafeCover } from "./safe-image.mjs";
+import { resolveSafeCover, isBadCover } from "./safe-image.mjs";
 import { enhancedAiBrief, MIN_BODY_WORDS, MIN_BULLET_WORDS, BULLET_COUNT } from "./ai-brief-enhanced.mjs";
 
 export type NewsArticle = {
@@ -379,7 +379,7 @@ export async function runIngest() {
   );
 
   const maxAi = Math.max(0, Math.min(12, Number(process.env.GEMINI_MAX_NEW_STORIES_PER_INGEST || 8)));
-  const maxImages = Math.max(0, Math.min(12, Number(process.env.MAX_STOCK_IMAGES_PER_INGEST || 10)));
+  const maxImages = Math.max(0, Math.min(40, Number(process.env.MAX_STOCK_IMAGES_PER_INGEST || 35)));
   let aiCalls = 0;
   let imageCalls = 0;
   const articles: NewsArticle[] = [];
@@ -414,12 +414,7 @@ export async function runIngest() {
           /* keep */
         }
       }
-      const needsImageRepair =
-        !existingArt.image ||
-        /rwdnews-logo\.svg/i.test(existingArt.image) ||
-        /butterfly|moth|insect|phocides|pigmalion|flower garden/i.test(
-          String(existingArt.image || "") + " " + String(existingArt.image_credit || ""),
-        );
+      const needsImageRepair = isBadCover(existingArt.image, existingArt.image_credit);
       if (!needsImageRepair) {
         articles.push(existingArt);
         continue;
@@ -434,7 +429,7 @@ export async function runIngest() {
             preferStock: true,
             preferCrest: true,
           });
-          if (repair.image && !/rwdnews-logo\.svg/i.test(repair.image)) {
+          if (repair.image && !isBadCover(repair.image, repair.image_credit)) {
             existingArt.image = repair.image;
             existingArt.image_credit = repair.image_credit || existingArt.image_credit;
             existingArt.image_license = repair.image_license || existingArt.image_license;
@@ -474,7 +469,7 @@ export async function runIngest() {
           preferStock: true,
           preferCrest: /sport/i.test(item.category),
         });
-        if (cover.image) {
+        if (cover.image && !isBadCover(cover.image, cover.image_credit)) {
           image = cover.image;
           image_credit = cover.image_credit || image_credit;
           image_license = cover.image_license || "";
@@ -516,6 +511,34 @@ export async function runIngest() {
       featured: false,
       pinned: false,
     });
+  }
+
+  // Also repair logos on stored stories not in current candidate set
+  for (const art of existing) {
+    if (imageCalls >= maxImages) break;
+    if (!isBadCover(art.image, art.image_credit)) continue;
+    if (articles.some((a) => a.original_url === art.original_url)) continue;
+    try {
+      const repair = await resolveSafeCover({
+        title: art.ai_hook_title || art.original_title,
+        category: art.category || "World",
+        preferredQuery: art.subject || art.ai_hook_title || art.original_title,
+        rssImage: "",
+        preferStock: true,
+        preferCrest: true,
+      });
+      if (repair.image && !isBadCover(repair.image, repair.image_credit)) {
+        art.image = repair.image;
+        art.image_credit = repair.image_credit;
+        art.image_license = repair.image_license;
+        art.image_source_url = repair.image_source_url;
+        imageCalls++;
+        repairedExisting.push(art);
+        articles.push(art);
+      }
+    } catch {
+      /* skip */
+    }
   }
 
   const map = new Map<string, NewsArticle>();
