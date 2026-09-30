@@ -1,6 +1,6 @@
 /**
  * RockBrief AI brief — short, readable, no filler.
- * Goal: user understands the story in 1–2 minutes, then can open the source.
+ * Also emits a precise image_query for stock/Wikimedia search.
  */
 import { GoogleGenAI, Type } from "@google/genai";
 import { mergeAfricaLensIntoBody } from "./rockbrief-intelligence.mjs";
@@ -45,6 +45,26 @@ function splitIntoSentences(text) {
     .filter((s) => s.length > 25 && !isMeta(s));
 }
 
+/** Fallback visual query from title alone — never abstract junk */
+function fallbackImageQuery(title) {
+  const t = clean(title).replace(/\s*-\s*Full Story podcast.*/i, "");
+  if (/\btrump\b/i.test(t)) return "Donald Trump portrait";
+  if (/\btinubu\b/i.test(t)) return "Bola Tinubu";
+  if (/\bman\s*city|manchester\s*city\b/i.test(t)) return "Manchester City football";
+  if (/\bfifa\b/i.test(t)) return "FIFA football";
+  if (/\boil|crude|refiner|petroleum|petrol\b/i.test(t)) return "oil refinery industry";
+  if (/\bhelicopter|military|army\b/i.test(t)) return "military helicopter";
+  if (/\bmigrant|deport|asylum|immigration\b/i.test(t)) return "immigration border checkpoint";
+  if (/\bfootball|soccer|premier|match|goal\b/i.test(t)) return "football match stadium";
+  if (/\bnigeria|lagos|abuja\b/i.test(t)) return "Lagos Nigeria city";
+  const words = t
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((w) => w.length > 3)
+    .slice(0, 4);
+  return words.join(" ") || "world news skyline";
+}
+
 function normalizeBullets(raw, title, desc) {
   const fromModel = (Array.isArray(raw) ? raw : [])
     .map((x) => stripJunk(x))
@@ -63,7 +83,6 @@ function normalizeBullets(raw, title, desc) {
     bullets.push(s.slice(0, 220));
   }
 
-  // Last resort: short factual lines from title + desc chunks (never meta)
   const seed = stripJunk(desc) || clean(title);
   if (bullets.length < BULLET_COUNT && seed) {
     const chunks = seed.match(/.{1,160}(?:\s|$)/g) || [seed];
@@ -85,7 +104,6 @@ function normalizeBullets(raw, title, desc) {
   });
 }
 
-/** Compact source-bound brief — no padding loops. */
 function synthesizeFallbackBody(title, desc) {
   const t = clean(title).replace(/\s*-\s*Full Story podcast.*/i, "").trim();
   const d = stripJunk(desc) || t;
@@ -113,7 +131,7 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
     body: fallbackBody,
     ai_summary: fallbackBullets,
     tags: ["#World"],
-    image_query: cleanTitle,
+    image_query: fallbackImageQuery(cleanTitle),
     africa_lens: "",
   };
 
@@ -126,23 +144,26 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "You are RockBrief. Write a SHORT news briefing a mobile reader can finish in under 2 minutes. JSON only. " +
-          "Rules: " +
-          "(1) ai_hook_title: clean factual headline. Strip podcast/show labels. No clickbait. " +
-          "(2) body: 150-280 words MAX. Plain English. Structure: " +
-          "paragraph 1 = what happened; paragraph 2 = who/where/numbers; paragraph 3 = why it matters. " +
-          "ONLY facts from the source. No invented quotes. No filler. Never write phrases like " +
-          "'RockBrief summary is based on', 'attributed source material', 'open the original publisher', or 'continue reading'. " +
-          "(3) ai_summary: exactly 4 bullets. Each bullet is a DIFFERENT fact (25-40 words). Never repeat the same sentence. Never meta text. " +
-          "(4) tags: 2-4 hashtags. " +
-          "(5) image_query: the main PERSON or SUBJECT for a photo (e.g. 'Donald Trump', 'Lagos Nigeria'). Never insects, stock abstract, or random animals. " +
-          "(6) africa_lens: 40-90 words only if Africa is genuinely relevant; else one honest sentence. " +
-          "TITLE: " +
+          "You are an advanced News Automation Engine. Analyze the headline and body. JSON only.\n" +
+          "TASKS:\n" +
+          "1) ai_hook_title: clean factual headline. Strip podcast labels.\n" +
+          "2) body: 150-280 words. What happened; who/where; why it matters. Facts only. No meta filler.\n" +
+          "3) ai_summary: exactly 4 different factual bullets (25-40 words each).\n" +
+          "4) tags: 2-4 hashtags.\n" +
+          "5) image_query: CRITICAL — a highly specific realistic visual search query, MAXIMUM 4-5 words, " +
+          "for Pexels/Unsplash/Wikimedia. Rules:\n" +
+          "- Named person or celebrity → use full public name only e.g. Donald Trump, Bola Tinubu\n" +
+          "- Sports team → team + football e.g. Manchester City football\n" +
+          "- Plane crash / fire / disaster → concrete objects e.g. plane crash wreckage\n" +
+          "- Oil/petrol → oil refinery industry\n" +
+          "- Never abstract art, insects, animals, metaphors, punctuation, or filler words\n" +
+          "6) africa_lens: 40-90 words only if Africa-relevant; else one short sentence.\n" +
+          "HEADLINE: " +
           cleanTitle +
-          " DESCRIPTION: " +
-          desc +
-          " RELATED: " +
-          JSON.stringify((related || []).slice(0, 4)),
+          "\nBODY: " +
+          String(desc).slice(0, 2500) +
+          "\nRELATED: " +
+          JSON.stringify((related || []).slice(0, 3)),
         config: {
           ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
           responseMimeType: "application/json",
@@ -188,7 +209,6 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
       body = synthesizeFallbackBody(cleanTitle, desc);
       bodyWords = wordCount(body);
     }
-    // Cap runaway long bodies — readers want a brief
     if (bodyWords > MAX_BODY_WORDS) {
       const sentences = splitIntoSentences(body);
       let trimmed = "";
@@ -200,7 +220,13 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
     }
 
     const bullets = normalizeBullets(parsed.ai_summary, cleanTitle, desc);
-    const imageQuery = clean(parsed.image_query) || cleanTitle;
+    let imageQuery = clean(parsed.image_query)
+      .replace(/[^a-zA-Z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    // Cap to ~5 words for stock APIs
+    const iqWords = imageQuery.split(/\s+/).filter(Boolean).slice(0, 5);
+    imageQuery = iqWords.join(" ") || fallbackImageQuery(cleanTitle);
 
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
@@ -220,4 +246,4 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
   }
 }
 
-export { MIN_BODY_WORDS, MIN_BULLET_WORDS, BULLET_COUNT, wordCount, normalizeBullets };
+export { MIN_BODY_WORDS, MIN_BULLET_WORDS, BULLET_COUNT, wordCount, normalizeBullets, fallbackImageQuery };
