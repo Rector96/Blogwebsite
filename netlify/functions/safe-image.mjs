@@ -1,107 +1,203 @@
 /**
- * Cover images for RockBrief.
+ * Cover images for RockBrief — must match the headline.
  *
  * Order:
- * 1) RSS publisher image (matches the story)
- * 2) Known person / club crest map
- * 3) Wikimedia Commons (person/place only, relevance scored)
- * 4) Pexels / Unsplash category-safe stock
- * 5) Logo placeholder
+ * 1) RSS publisher image
+ * 2) Club crest (sports)
+ * 3) Curated person / org portrait (direct Wikimedia URLs)
+ * 4) Wikipedia pageimage for known people
+ * 5) Topic keyword → relevant stock query (Pexels)
+ * 6) Category stock fallback
+ * 7) Logo only if nothing else
  */
 
 const PLACEHOLDER = "https://rwdnews.netlify.app/rwdnews-logo.svg";
 
 const CATEGORY_QUERY = {
-  Sports: "football match stadium",
-  Tech: "technology smartphone laptop",
-  Business: "business finance skyline",
-  Crypto: "cryptocurrency bitcoin",
-  Entertainment: "concert stage",
-  Nigeria: "lagos nigeria city",
+  Sports: "football stadium crowd",
+  Tech: "technology laptop smartphone",
+  Business: "oil refinery industry",
+  Crypto: "bitcoin cryptocurrency",
+  Entertainment: "concert stage lights",
+  Nigeria: "lagos nigeria city skyline",
   Ghana: "accra ghana city",
-  Africa: "africa city",
-  World: "world news skyline",
-  Europe: "europe city",
+  Africa: "africa city skyline",
+  World: "world news city skyline",
+  Europe: "europe city architecture",
   Asia: "asia city skyline",
   "Middle East": "middle east city",
 };
 
-/** High-confidence people/places → Commons-friendly search (avoids random insects). */
-const KNOWN_SUBJECTS = [
-  ["donald trump", "Donald Trump"],
-  ["trump", "Donald Trump"],
-  ["joe biden", "Joe Biden"],
-  ["biden", "Joe Biden"],
-  ["kamala harris", "Kamala Harris"],
-  ["vladimir putin", "Vladimir Putin"],
-  ["putin", "Vladimir Putin"],
-  ["volodymyr zelensky", "Volodymyr Zelenskyy"],
-  ["zelensky", "Volodymyr Zelenskyy"],
-  ["xi jinping", "Xi Jinping"],
-  ["emmanuel macron", "Emmanuel Macron"],
-  ["keir starmer", "Keir Starmer"],
-  ["bola tinubu", "Bola Tinubu"],
-  ["tinubu", "Bola Tinubu"],
-  ["peter obi", "Peter Obi"],
-  ["nana akufo-addo", "Nana Akufo-Addo"],
-  ["cyril ramaphosa", "Cyril Ramaphosa"],
-  ["elon musk", "Elon Musk"],
-  ["messi", "Lionel Messi"],
-  ["ronaldo", "Cristiano Ronaldo"],
-  ["mbappe", "Kylian Mbappe"],
-  ["united nations", "United Nations headquarters"],
-  ["white house", "White House"],
-  ["capitol", "United States Capitol"],
-  ["lagos", "Lagos Nigeria skyline"],
-  ["abuja", "Abuja Nigeria"],
-  ["accra", "Accra Ghana"],
+/** Direct free portraits — no search, no random insects */
+const PERSON_IMAGES = {
+  "donald trump": {
+    image: "https://upload.wikimedia.org/wikipedia/commons/5/56/Donald_Trump_official_portrait.jpg",
+    credit: "Official White House photo / Wikimedia",
+    license: "Public domain",
+  },
+  trump: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/5/56/Donald_Trump_official_portrait.jpg",
+    credit: "Official White House photo / Wikimedia",
+    license: "Public domain",
+  },
+  "joe biden": {
+    image: "https://upload.wikimedia.org/wikipedia/commons/6/68/Joe_Biden_presidential_portrait.jpg",
+    credit: "Official White House photo / Wikimedia",
+    license: "Public domain",
+  },
+  biden: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/6/68/Joe_Biden_presidential_portrait.jpg",
+    credit: "Official White House photo / Wikimedia",
+    license: "Public domain",
+  },
+  "bola tinubu": {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Bola_Tinubu_portrait.jpg/800px-Bola_Tinubu_portrait.jpg",
+    credit: "Wikimedia Commons",
+    license: "Wikimedia",
+  },
+  tinubu: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/7/77/Bola_Tinubu_portrait.jpg/800px-Bola_Tinubu_portrait.jpg",
+    credit: "Wikimedia Commons",
+    license: "Wikimedia",
+  },
+  "elon musk": {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/99/Elon_Musk_Royal_Society_%28crop2%29.jpg/800px-Elon_Musk_Royal_Society_%28crop2%29.jpg",
+    credit: "Wikimedia Commons",
+    license: "CC BY",
+  },
+  "lionel messi": {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Lionel-Messi-Argentina-2022-FIFA-World-Cup_%28cropped%29.jpg/800px-Lionel-Messi-Argentina-2022-FIFA-World-Cup_%28cropped%29.jpg",
+    credit: "Wikimedia Commons",
+    license: "CC BY",
+  },
+  messi: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Lionel-Messi-Argentina-2022-FIFA-World-Cup_%28cropped%29.jpg/800px-Lionel-Messi-Argentina-2022-FIFA-World-Cup_%28cropped%29.jpg",
+    credit: "Wikimedia Commons",
+    license: "CC BY",
+  },
+  "cristiano ronaldo": {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Cristiano_Ronaldo_2018.jpg/800px-Cristiano_Ronaldo_2018.jpg",
+    credit: "Wikimedia Commons",
+    license: "CC BY",
+  },
+  ronaldo: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8c/Cristiano_Ronaldo_2018.jpg/800px-Cristiano_Ronaldo_2018.jpg",
+    credit: "Wikimedia Commons",
+    license: "CC BY",
+  },
+  fifa: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/aa/FIFA_logo_without_slogan.svg/800px-FIFA_logo_without_slogan.svg.png",
+    credit: "FIFA logo / Wikimedia",
+    license: "Trademark display",
+  },
+  uefa: {
+    image: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d2/UEFA_logo.svg/800px-UEFA_logo.svg.png",
+    credit: "UEFA logo / Wikimedia",
+    license: "Trademark display",
+  },
+};
+
+/** Wikipedia titles for pageimage lookup */
+const WIKI_TITLES = {
+  trump: "Donald Trump",
+  "donald trump": "Donald Trump",
+  biden: "Joe Biden",
+  "joe biden": "Joe Biden",
+  tinubu: "Bola Tinubu",
+  "bola tinubu": "Bola Tinubu",
+  "peter obi": "Peter Obi",
+  putin: "Vladimir Putin",
+  zelensky: "Volodymyr Zelenskyy",
+  "elon musk": "Elon Musk",
+  messi: "Lionel Messi",
+  ronaldo: "Cristiano Ronaldo",
+  mbappe: "Kylian Mbappé",
+  "man city": "Manchester City F.C.",
+  "manchester city": "Manchester City F.C.",
+  arsenal: "Arsenal F.C.",
+  chelsea: "Chelsea F.C.",
+  liverpool: "Liverpool F.C.",
+  nigeria: "Nigeria",
+  lagos: "Lagos",
+  abuja: "Abuja",
+  ghana: "Ghana",
+  accra: "Accra",
+};
+
+/** Headline topic → stock photo query (never random) */
+const TOPIC_QUERIES = [
+  [/migrant|deport|asylum|immigration/i, "immigration border checkpoint"],
+  [/oil|crude|refiner|petroleum|petrol|fuel/i, "oil refinery industry"],
+  [/helicopter|military|army|navy|defence|defense/i, "military helicopter aircraft"],
+  [/abduct|kidnap|rescue|bandit/i, "security police nigeria"],
+  [/senate|national assembly|parliament|lawmaker/i, "nigeria national assembly"],
+  [/tax|ombud|revenue|customs/i, "tax finance office"],
+  [/vandal|power|electricity|grid/i, "electricity power lines africa"],
+  [/school|student|education/i, "school students africa"],
+  [/football|soccer|premier|champions|match|goal/i, "football match stadium"],
+  [/crypto|bitcoin|ethereum/i, "bitcoin cryptocurrency"],
+  [/ai |artificial intelligence|chip|software/i, "technology artificial intelligence"],
+  [/market|stock|bank|economy|inflation/i, "finance stock market"],
+  [/dance|dancer|music|concert/i, "dancer performance stage"],
+  [/nigeria|lagos|abuja/i, "lagos nigeria city"],
+  [/ghana|accra/i, "accra ghana city"],
 ];
 
 const CLUB_CRESTS = {
   arsenal: {
     image: "https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg",
     credit: "Arsenal F.C. crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   chelsea: {
     image: "https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg",
     credit: "Chelsea F.C. crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   liverpool: {
     image: "https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg",
     credit: "Liverpool F.C. crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   "man city": {
     image: "https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg",
     credit: "Manchester City crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   "manchester city": {
     image: "https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg",
     credit: "Manchester City crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
+  },
+  city: {
+    image: "https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg",
+    credit: "Manchester City crest / Wikimedia",
+    license: "Trademark display",
   },
   "man united": {
     image: "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg",
     credit: "Manchester United crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   "manchester united": {
     image: "https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg",
     credit: "Manchester United crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   barcelona: {
     image: "https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg",
     credit: "FC Barcelona crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
   },
   "real madrid": {
     image: "https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg",
     credit: "Real Madrid crest / Wikimedia",
-    license: "Trademark display for news identification",
+    license: "Trademark display",
+  },
+  italy: {
+    image: "https://upload.wikimedia.org/wikipedia/en/0/04/Italy_national_football_team_logo.svg",
+    credit: "Italy national team / Wikimedia",
+    license: "Trademark display",
   },
 };
 
@@ -112,10 +208,11 @@ const STOP = new Set([
   "while", "which", "who", "how", "why", "new", "latest", "news", "report", "reports",
   "according", "amid", "more", "most", "just", "only", "also", "being", "very",
   "secret", "deals", "sending", "across", "world", "full", "story", "podcast",
-  "continue", "reading", "migrants", "migrant",
+  "continue", "reading", "migrants", "migrant", "sources", "should", "face",
 ]);
 
-const BAD_IMAGE = /butterfly|moth|insect|flower|garden|cat |dog |stock photo|abstract|wallpaper|phocides|pigmalion/i;
+const BAD_IMAGE =
+  /butterfly|moth|insect|flower|garden|cat |dog |phocides|pigmalion|stock photo|abstract|wallpaper|rwdnews-logo|secret.?woods/i;
 
 function normalize(value) {
   return String(value || "")
@@ -126,30 +223,28 @@ function normalize(value) {
     .trim();
 }
 
-function cleanMeta(value) {
-  return String(value || "")
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&[^;]+;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+function pack(image, credit, license, source) {
+  return {
+    image: String(image),
+    image_credit: String(credit || "RockBrief"),
+    image_license: String(license || ""),
+    image_source_url: String(source || image || ""),
+  };
 }
 
-function metaValue(meta, keys) {
-  for (const key of keys) {
-    const value = meta && meta[key] && meta[key].value;
-    if (value) return cleanMeta(value);
-  }
-  return "";
-}
-
-function detectKnownSubject(text) {
+function detectPersonImage(text) {
   const n = normalize(text);
-  for (let i = 0; i < KNOWN_SUBJECTS.length; i++) {
-    const key = KNOWN_SUBJECTS[i][0];
-    const label = KNOWN_SUBJECTS[i][1];
-    if (n.indexOf(key) !== -1) return label;
+  const keys = Object.keys(PERSON_IMAGES).sort(function (a, b) {
+    return b.length - a.length;
+  });
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (n.indexOf(key) !== -1) {
+      const p = PERSON_IMAGES[key];
+      return pack(p.image, p.credit, p.license, p.image);
+    }
   }
-  return "";
+  return null;
 }
 
 export function detectClubCrest(text) {
@@ -159,138 +254,64 @@ export function detectClubCrest(text) {
   });
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
+    // Avoid matching short "city" inside unrelated words when not sports context
+    if (key === "city" && !/man\s*city|manchester\s*city|city\s*(knew|face|guilty|sanctions)/i.test(text)) {
+      continue;
+    }
     if (n.indexOf(" " + key + " ") !== -1) {
       const crest = CLUB_CRESTS[key];
-      return {
-        image: crest.image,
-        image_credit: crest.credit,
-        image_license: crest.license,
-        image_source_url: crest.image,
-        subject: key,
-      };
+      return pack(crest.image, crest.credit, crest.license, crest.image);
     }
   }
   return null;
 }
 
-export function extractImageSubject(title, preferredQuery, category) {
-  if (category == null) category = "World";
-  const preferred = String(preferredQuery || "").trim();
-  if (preferred && preferred.length >= 3 && preferred.length <= 80 && !BAD_IMAGE.test(preferred)) {
-    const known = detectKnownSubject(preferred);
-    if (known) return known;
-    return preferred;
+function topicStockQuery(title, category) {
+  const t = String(title || "");
+  for (let i = 0; i < TOPIC_QUERIES.length; i++) {
+    if (TOPIC_QUERIES[i][0].test(t)) return TOPIC_QUERIES[i][1];
   }
-
-  const known = detectKnownSubject(title + " " + preferred);
-  if (known) return known;
-
-  const raw = String(title || "").replace(/\s*-\s*Full Story podcast.*/i, "");
-  const proper = raw.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g) || [];
-  const filtered = proper
-    .map(function (p) {
-      return p.trim();
-    })
-    .filter(function (p) {
-      const low = p.toLowerCase();
-      return !STOP.has(low) && p.length >= 4 && !BAD_IMAGE.test(p);
-    });
-  if (filtered.length) return filtered.slice(0, 2).join(" ");
-
-  const words = normalize(title)
-    .split(/\s+/)
-    .filter(function (w) {
-      return w.length >= 4 && !STOP.has(w);
-    })
-    .slice(0, 4);
-  if (words.length >= 2) return words.join(" ");
-  if (words.length === 1) return words[0];
   return CATEGORY_QUERY[category] || CATEGORY_QUERY.World;
 }
 
-export function headlineImageQuery(title, category) {
-  return extractImageSubject(title, "", category);
+function wikiTitleFromText(text) {
+  const n = normalize(text);
+  const keys = Object.keys(WIKI_TITLES).sort(function (a, b) {
+    return b.length - a.length;
+  });
+  for (let i = 0; i < keys.length; i++) {
+    if (n.indexOf(keys[i]) !== -1) return WIKI_TITLES[keys[i]];
+  }
+  return "";
 }
 
-async function commonsSearch(query) {
-  const q = String(query || "").trim();
-  if (!q || q.length < 3) return null;
-
+async function wikipediaPageImage(wikiTitle) {
+  if (!wikiTitle) return null;
   try {
-    const u = new URL("https://commons.wikimedia.org/w/api.php");
+    const u = new URL("https://en.wikipedia.org/w/api.php");
     u.searchParams.set("action", "query");
     u.searchParams.set("format", "json");
-    u.searchParams.set("generator", "search");
-    u.searchParams.set("gsrsearch", q);
-    u.searchParams.set("gsrnamespace", "6");
-    u.searchParams.set("gsrlimit", "12");
-    u.searchParams.set("prop", "imageinfo");
-    u.searchParams.set("iiprop", "url|size|mime|extmetadata");
-    u.searchParams.set("iiurlwidth", "1200");
-    u.searchParams.set(
-      "iiextmetadatafilter",
-      "Artist|Credit|ImageDescription|LicenseShortName|UsageTerms|Categories|LicenseUrl",
-    );
-
+    u.searchParams.set("titles", wikiTitle);
+    u.searchParams.set("prop", "pageimages");
+    u.searchParams.set("pithumbsize", "1000");
+    u.searchParams.set("origin", "*");
     const r = await fetch(u.toString(), {
       headers: {
         Accept: "application/json",
         "Api-User-Agent": "RockBrief/1.0 (https://rwdnews.netlify.app/; news covers)",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(4500),
     });
     if (!r.ok) return null;
-
     const data = await r.json();
     const pages = Object.values((data && data.query && data.query.pages) || {});
-    const allowed =
-      /^(CC0(?:\s|$)|CC BY-SA(?:\s|$)|CC BY(?:\s|$)|Public domain(?:\s|$)|PD(?:\s|$)|PDM(?:\s|$)|GFDL)/i;
-
-    const terms = normalize(q)
-      .split(/\s+/)
-      .filter(function (t) {
-        return t.length >= 3 && !STOP.has(t);
-      });
-
-    const scored = [];
     for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
-      const info = page && page.imageinfo && page.imageinfo[0];
-      if (!info) continue;
-      const meta = info.extmetadata || {};
-      const license = metaValue(meta, ["LicenseShortName", "UsageTerms"]);
-      const artist = metaValue(meta, ["Artist", "Credit"]) || "Wikimedia Commons";
-      const description = metaValue(meta, ["ImageDescription"]);
-      const categories = metaValue(meta, ["Categories"]);
-      const image = info.thumburl || info.url || "";
-      const source = info.descriptionurl || "";
-      const hay = normalize([page.title, description, categories].join(" "));
-
-      if (!image || !/^https?:\/\//i.test(image)) continue;
-      if (!/^image\//i.test(String(info.mime || ""))) continue;
-      if (Number(info.width || 0) < 400) continue;
-      if (license && !allowed.test(license)) continue;
-      if (BAD_IMAGE.test(hay) || BAD_IMAGE.test(page.title || "")) continue;
-
-      const hits = terms.filter(function (t) {
-        return hay.indexOf(t) !== -1;
-      }).length;
-      // Require at least half the query terms to match (stops butterfly on Trump)
-      if (terms.length && hits < Math.max(1, Math.ceil(terms.length * 0.5))) continue;
-
-      scored.push({
-        image: String(image),
-        image_credit: "Photo: " + artist + " / Wikimedia Commons",
-        image_license: license || "Wikimedia Commons",
-        image_source_url: String(source),
-        hits: hits,
-      });
+      const thumb = pages[i] && pages[i].thumbnail && pages[i].thumbnail.source;
+      if (thumb && /^https?:\/\//i.test(thumb) && !BAD_IMAGE.test(thumb)) {
+        return pack(thumb, wikiTitle + " / Wikipedia", "Wikipedia page image", thumb);
+      }
     }
-
-    scored.sort(function (a, b) {
-      return b.hits - a.hits;
-    });
-    return scored[0] || null;
+    return null;
   } catch (e) {
     return null;
   }
@@ -302,7 +323,7 @@ async function pexelsSearch(query) {
   try {
     const u = new URL("https://api.pexels.com/v1/search");
     u.searchParams.set("query", String(query).slice(0, 80));
-    u.searchParams.set("per_page", "4");
+    u.searchParams.set("per_page", "6");
     u.searchParams.set("orientation", "landscape");
     const r = await fetch(u.toString(), {
       headers: { Authorization: key, Accept: "application/json" },
@@ -316,13 +337,13 @@ async function pexelsSearch(query) {
       const image = (photo.src && (photo.src.large || photo.src.medium)) || "";
       const alt = String(photo.alt || "");
       if (!image) continue;
-      if (BAD_IMAGE.test(alt)) continue;
-      return {
-        image: String(image),
-        image_credit: photo.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Pexels",
-        image_license: "Pexels License",
-        image_source_url: String(photo.url || "https://www.pexels.com/"),
-      };
+      if (BAD_IMAGE.test(alt) || BAD_IMAGE.test(image)) continue;
+      return pack(
+        image,
+        photo.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Pexels",
+        "Pexels License",
+        photo.url || "https://www.pexels.com/",
+      );
     }
     return null;
   } catch (e) {
@@ -330,32 +351,25 @@ async function pexelsSearch(query) {
   }
 }
 
-async function unsplashSearch(query) {
-  const key = process.env.UNSPLASH_ACCESS_KEY || "";
-  if (!key || !query) return null;
-  try {
-    const u =
-      "https://api.unsplash.com/search/photos?query=" +
-      encodeURIComponent(String(query).slice(0, 80)) +
-      "&orientation=landscape&per_page=3&content_filter=high";
-    const r = await fetch(u, {
-      headers: { Authorization: "Client-ID " + key, "Accept-Version": "v1" },
-      signal: AbortSignal.timeout(4500),
-    });
-    if (!r.ok) return null;
-    const data = await r.json();
-    const photo = Array.isArray(data.results) ? data.results[0] : null;
-    const image = photo && photo.urls && (photo.urls.regular || photo.urls.small);
-    if (!image) return null;
-    return {
-      image: String(image),
-      image_credit: photo.user && photo.user.name ? "Photo: " + photo.user.name + " / Unsplash" : "Unsplash",
-      image_license: "Unsplash License",
-      image_source_url: String((photo.links && photo.links.html) || "https://unsplash.com/"),
-    };
-  } catch (e) {
-    return null;
+export function extractImageSubject(title, preferredQuery, category) {
+  if (category == null) category = "World";
+  const preferred = String(preferredQuery || "").trim();
+  if (preferred && preferred.length >= 3 && preferred.length <= 80 && !BAD_IMAGE.test(preferred)) {
+    return preferred;
   }
+  return topicStockQuery(title, category);
+}
+
+export function headlineImageQuery(title, category) {
+  return extractImageSubject(title, "", category);
+}
+
+/** True if stored image should be replaced */
+export function isBadCover(image, credit) {
+  const s = String(image || "") + " " + String(credit || "");
+  if (!image || /rwdnews-logo/i.test(image)) return true;
+  if (BAD_IMAGE.test(s)) return true;
+  return false;
 }
 
 export async function resolveSafeCover({
@@ -368,55 +382,48 @@ export async function resolveSafeCover({
 } = {}) {
   const haystack = [title, preferredQuery].filter(Boolean).join(" ");
 
-  // 1) RSS image first — matches the publisher story
-  if (rssImage && /^https?:\/\//i.test(rssImage) && !/rwdnews-logo/i.test(rssImage)) {
-    return {
-      image: String(rssImage),
-      image_credit: "Publisher feed",
-      image_license: "Feed preview",
-      image_source_url: String(rssImage),
-    };
+  // 1) RSS publisher image — real story photo
+  if (rssImage && /^https?:\/\//i.test(rssImage) && !isBadCover(rssImage, "")) {
+    return pack(rssImage, "Publisher feed", "Feed preview", rssImage);
   }
 
-  // 2) Club crest for sports
-  if (preferCrest && (category === "Sports" || /football|soccer|premier|ucl|afcon|club|match/i.test(haystack))) {
+  // 2) Curated person / org portrait (Trump, Tinubu, FIFA…)
+  const person = detectPersonImage(haystack);
+  if (person) return person;
+
+  // 3) Club crest for sports headlines
+  if (preferCrest && (category === "Sports" || /football|soccer|premier|ucl|afcon|club|match|fifa|uefa|italy|city knew|guilty/i.test(haystack))) {
     const crest = detectClubCrest(haystack);
     if (crest) return crest;
   }
 
-  const subject = extractImageSubject(title, preferredQuery, category);
-
-  // 3) Wikimedia for real people / places
-  const commons = await commonsSearch(subject);
-  if (commons) return commons;
-
-  const short = subject.split(/\s+/).slice(0, 2).join(" ");
-  if (short && short !== subject) {
-    const commons2 = await commonsSearch(short);
-    if (commons2) return commons2;
+  // 4) Wikipedia page portrait for known names
+  const wikiTitle = wikiTitleFromText(haystack);
+  if (wikiTitle) {
+    const wiki = await wikipediaPageImage(wikiTitle);
+    if (wiki) return wiki;
   }
 
-  // 4) Stock — subject first, then category
+  // 5) Topic-matched stock (oil → refinery, migrants → border, etc.)
   if (preferStock) {
-    const pexels = await pexelsSearch(subject);
+    const topicQ = topicStockQuery(title, category);
+    const pexels = await pexelsSearch(topicQ);
     if (pexels) return pexels;
 
-    const catQ = CATEGORY_QUERY[category] || CATEGORY_QUERY.World;
-    if (catQ !== subject) {
-      const p2 = await pexelsSearch(catQ);
+    const preferred = String(preferredQuery || "").trim();
+    if (preferred && preferred !== topicQ) {
+      const p2 = await pexelsSearch(preferred);
       if (p2) return p2;
     }
 
-    const unsplash = await unsplashSearch(subject);
-    if (unsplash) return unsplash;
+    const catQ = CATEGORY_QUERY[category] || CATEGORY_QUERY.World;
+    if (catQ !== topicQ) {
+      const p3 = await pexelsSearch(catQ);
+      if (p3) return p3;
+    }
   }
 
-  return {
-    image: PLACEHOLDER,
-    image_credit: "RockBrief",
-    image_license: "Site asset",
-    image_source_url: "",
-  };
+  return pack(PLACEHOLDER, "RockBrief", "Site asset", "");
 }
 
-export { PLACEHOLDER, CLUB_CRESTS, CATEGORY_QUERY };
+export { PLACEHOLDER, CLUB_CRESTS, CATEGORY_QUERY, PERSON_IMAGES };
