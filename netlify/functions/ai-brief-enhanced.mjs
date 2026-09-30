@@ -1,14 +1,17 @@
 /**
- * RockBrief AI brief — useful length, not filler.
- * Target: body ~300–600 words of real context, 4 clear bullets.
+ * RockBrief AI brief — short, readable, no filler.
+ * Goal: user understands the story in 1–2 minutes, then can open the source.
  */
 import { GoogleGenAI, Type } from "@google/genai";
 import { mergeAfricaLensIntoBody } from "./rockbrief-intelligence.mjs";
 
-const MIN_BODY_WORDS = 300;
-const TARGET_BODY_WORDS = 450;
-const MIN_BULLET_WORDS = 25;
+const MIN_BODY_WORDS = 120;
+const MAX_BODY_WORDS = 320;
+const MIN_BULLET_WORDS = 12;
 const BULLET_COUNT = 4;
+
+const META_RE =
+  /rockbrief summary|attributed source material|reported under the headline|open the original publisher|full quotes and any updates|readers who need the full|continue reading|without leaving the desk|meant to be read on rockbrief|source-bound|this rockbrief report is an original synthesis/i;
 
 function clean(value) {
   return String(value || "")
@@ -20,6 +23,7 @@ function clean(value) {
 function stripJunk(value) {
   let x = clean(value);
   x = x.replace(/\s*Read\s*More\s*:?\s*https?:\/\/\S+/gi, "");
+  x = x.replace(/\s*Continue reading\.?/gi, "");
   return x.replace(/\s+/g, " ").trim();
 }
 
@@ -29,76 +33,87 @@ function wordCount(text) {
     .filter(Boolean).length;
 }
 
-function normalizeBullets(raw, title, desc) {
-  let bullets = (Array.isArray(raw) ? raw : [])
-    .map((x) => stripJunk(x))
-    .filter((x) => x.length > 20)
-    .slice(0, BULLET_COUNT);
-
-  const seed = stripJunk(desc) || stripJunk(title);
-  while (bullets.length < BULLET_COUNT && seed) {
-    const piece = seed.slice(0, 220);
-    if (!piece || bullets.includes(piece)) break;
-    bullets.push(piece);
-  }
-
-  bullets = bullets.map((b) => {
-    if (wordCount(b) >= MIN_BULLET_WORDS) return b;
-    const extra = seed && !b.includes(seed.slice(0, 40)) ? " " + seed.slice(0, 100) : "";
-    return stripJunk(b + extra) || b;
-  });
-
-  return bullets.slice(0, BULLET_COUNT);
+function isMeta(text) {
+  return META_RE.test(String(text || ""));
 }
 
-/** Short source-bound briefing when Gemini is unavailable — no fluff loops. */
-function synthesizeFallbackBody(title, desc, related = []) {
-  const t = clean(title);
-  const d = stripJunk(desc) || t;
-  const relatedLines = (Array.isArray(related) ? related : [])
-    .slice(0, 3)
-    .map((r) => clean(r && (r.title || r.desc || r)))
-    .filter(Boolean);
+function splitIntoSentences(text) {
+  return String(text || "")
+    .replace(/\s+/g, " ")
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 25 && !isMeta(s));
+}
 
-  const parts = [
-    t + ". " + d,
-    "What is reported: the details above come from the attributed source material. RockBrief restates the core facts so you can follow the story without leaving the desk.",
-    relatedLines.length
-      ? "Related coverage includes: " + relatedLines.join("; ") + "."
-      : "For quotes, figures, and any later corrections, use the original publisher linked on this page.",
-    "Context: this development may matter for policy, markets, sport, or households depending on the sector. Treat contested claims as reported, not proven, until primary sources confirm them.",
-  ];
-  let body = parts.join("\n\n");
-  // Only pad once if still short — still from the same source text, not empty padding
-  if (wordCount(body) < MIN_BODY_WORDS && d.length > 40) {
-    body +=
-      "\n\n" +
-      "In plain terms: " +
-      d +
-      " Readers who need the full original report should open the source link below.";
+function normalizeBullets(raw, title, desc) {
+  const fromModel = (Array.isArray(raw) ? raw : [])
+    .map((x) => stripJunk(x))
+    .filter((x) => x.length > 20 && !isMeta(x));
+
+  const fromDesc = splitIntoSentences(desc);
+  let bullets = [];
+  for (const b of fromModel) {
+    if (bullets.length >= BULLET_COUNT) break;
+    if (bullets.some((x) => x.slice(0, 40) === b.slice(0, 40))) continue;
+    bullets.push(b);
   }
-  return body;
+  for (const s of fromDesc) {
+    if (bullets.length >= BULLET_COUNT) break;
+    if (bullets.some((x) => x.slice(0, 40) === s.slice(0, 40))) continue;
+    bullets.push(s.slice(0, 220));
+  }
+
+  // Last resort: short factual lines from title + desc chunks (never meta)
+  const seed = stripJunk(desc) || clean(title);
+  if (bullets.length < BULLET_COUNT && seed) {
+    const chunks = seed.match(/.{1,160}(?:\s|$)/g) || [seed];
+    for (const c of chunks) {
+      if (bullets.length >= BULLET_COUNT) break;
+      const t = c.trim();
+      if (t.length > 30) bullets.push(t);
+    }
+  }
+
+  while (bullets.length < BULLET_COUNT) {
+    bullets.push(clean(title).slice(0, 120) || "See the full report from the original publisher.");
+  }
+
+  return bullets.slice(0, BULLET_COUNT).map((b) => {
+    const w = wordCount(b);
+    if (w >= MIN_BULLET_WORDS) return b;
+    return (b + " " + (seed || "")).trim().slice(0, 220);
+  });
+}
+
+/** Compact source-bound brief — no padding loops. */
+function synthesizeFallbackBody(title, desc) {
+  const t = clean(title).replace(/\s*-\s*Full Story podcast.*/i, "").trim();
+  const d = stripJunk(desc) || t;
+  const sentences = splitIntoSentences(d);
+  const lead = sentences.slice(0, 4).join(" ") || d.slice(0, 500);
+
+  const body =
+    t +
+    ". " +
+    lead +
+    (sentences.length > 4 ? " " + sentences.slice(4, 7).join(" ") : "") +
+    "\n\n" +
+    "Why it matters: this is the core of what the original outlet reported. Open the source link for the full investigation, quotes, and any updates.";
+
+  return stripJunk(body);
 }
 
 export async function enhancedAiBrief(title, desc, related = [], useGrounding = false) {
-  const fallbackBody = synthesizeFallbackBody(title, desc, related);
-  const fallbackBullets = normalizeBullets(
-    [
-      stripJunk(desc).slice(0, 280),
-      "Reported under the headline: " + clean(title) + ".",
-      "RockBrief summary is based only on the attributed source material.",
-      "Open the original publisher for full quotes and any updates after this briefing.",
-    ],
-    title,
-    desc,
-  );
+  const cleanTitle = clean(title).replace(/\s*-\s*Full Story podcast.*/i, "").trim() || clean(title);
+  const fallbackBody = synthesizeFallbackBody(cleanTitle, desc);
+  const fallbackBullets = normalizeBullets([], cleanTitle, desc);
 
   const fallback = {
-    ai_hook_title: String(title).replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || title,
+    ai_hook_title: cleanTitle.replace(/^(\[.*?\]|BREAKING:?)/i, "").trim() || cleanTitle,
     body: fallbackBody,
     ai_summary: fallbackBullets,
     tags: ["#World"],
-    image_query: title,
+    image_query: cleanTitle,
     africa_lens: "",
   };
 
@@ -111,21 +126,23 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
       ai.models.generateContent({
         model: "gemini-2.0-flash",
         contents:
-          "You are RockBrief, a news desk. JSON only. Write what the reader needs — not filler. " +
-          "(1) ai_hook_title: factual headline, no clickbait. " +
-          "(2) body: 300-550 words of clear English using ONLY supported facts from the source. " +
-          "Structure: what happened; who is involved; why it matters; what to watch. " +
-          "Do not invent quotes, scores, or numbers. Do not pad with generic advice. " +
-          "(3) ai_summary: exactly 4 bullets; each 25-40 words with real detail. " +
+          "You are RockBrief. Write a SHORT news briefing a mobile reader can finish in under 2 minutes. JSON only. " +
+          "Rules: " +
+          "(1) ai_hook_title: clean factual headline. Strip podcast/show labels. No clickbait. " +
+          "(2) body: 150-280 words MAX. Plain English. Structure: " +
+          "paragraph 1 = what happened; paragraph 2 = who/where/numbers; paragraph 3 = why it matters. " +
+          "ONLY facts from the source. No invented quotes. No filler. Never write phrases like " +
+          "'RockBrief summary is based on', 'attributed source material', 'open the original publisher', or 'continue reading'. " +
+          "(3) ai_summary: exactly 4 bullets. Each bullet is a DIFFERENT fact (25-40 words). Never repeat the same sentence. Never meta text. " +
           "(4) tags: 2-4 hashtags. " +
-          "(5) image_query: 3-8 words naming the real subject. " +
-          "(6) africa_lens: 60-120 words on Africa relevance only if honest; else 2 short sentences saying limited direct impact. " +
+          "(5) image_query: the main PERSON or SUBJECT for a photo (e.g. 'Donald Trump', 'Lagos Nigeria'). Never insects, stock abstract, or random animals. " +
+          "(6) africa_lens: 40-90 words only if Africa is genuinely relevant; else one honest sentence. " +
           "TITLE: " +
-          title +
+          cleanTitle +
           " DESCRIPTION: " +
           desc +
           " RELATED: " +
-          JSON.stringify((related || []).slice(0, 5)),
+          JSON.stringify((related || []).slice(0, 4)),
         config: {
           ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
           responseMimeType: "application/json",
@@ -146,38 +163,55 @@ export async function enhancedAiBrief(title, desc, related = [], useGrounding = 
       new Promise(function (_, reject) {
         setTimeout(function () {
           reject(new Error("timeout"));
-        }, 25000);
+        }, 22000);
       }),
     ]);
 
     const textOut = response && response.text;
     if (!textOut) return fallback;
     const parsed = JSON.parse(textOut);
-    let body = stripJunk(String(parsed.body || ""));
-    const africa = stripJunk(String(parsed.africa_lens || ""));
-    body = mergeAfricaLensIntoBody(body, africa);
-    let bodyWords = wordCount(body);
 
-    if (bodyWords < MIN_BODY_WORDS) {
-      body = mergeAfricaLensIntoBody(
-        stripJunk(body + "\n\n" + synthesizeFallbackBody(title, desc, related)),
-        africa,
-      );
-      bodyWords = wordCount(body);
+    let body = stripJunk(String(parsed.body || ""));
+    body = body
+      .split(/\n+/)
+      .map((p) => p.trim())
+      .filter((p) => p && !isMeta(p))
+      .join("\n\n");
+
+    const africa = stripJunk(String(parsed.africa_lens || ""));
+    if (africa && !isMeta(africa) && africa.length > 40) {
+      body = mergeAfricaLensIntoBody(body, africa);
     }
 
-    const bullets = normalizeBullets(parsed.ai_summary, title, desc);
+    let bodyWords = wordCount(body);
+    if (bodyWords < MIN_BODY_WORDS) {
+      body = synthesizeFallbackBody(cleanTitle, desc);
+      bodyWords = wordCount(body);
+    }
+    // Cap runaway long bodies — readers want a brief
+    if (bodyWords > MAX_BODY_WORDS) {
+      const sentences = splitIntoSentences(body);
+      let trimmed = "";
+      for (const s of sentences) {
+        if (wordCount(trimmed + " " + s) > MAX_BODY_WORDS) break;
+        trimmed = (trimmed ? trimmed + " " : "") + s;
+      }
+      body = trimmed || body;
+    }
+
+    const bullets = normalizeBullets(parsed.ai_summary, cleanTitle, desc);
+    const imageQuery = clean(parsed.image_query) || cleanTitle;
 
     return {
       ai_hook_title: clean(parsed.ai_hook_title) || fallback.ai_hook_title,
-      body: bodyWords >= MIN_BODY_WORDS ? body.slice(0, 12000) : fallback.body,
-      ai_summary: bullets.length === BULLET_COUNT ? bullets : fallback.ai_summary,
+      body: body.slice(0, 8000),
+      ai_summary: bullets,
       tags: (Array.isArray(parsed.tags) ? parsed.tags : ["#World"])
         .map(function (x) {
           return String(x).startsWith("#") ? String(x) : "#" + x;
         })
         .slice(0, 4),
-      image_query: clean(parsed.image_query) || fallback.image_query,
+      image_query: imageQuery,
       africa_lens: africa,
     };
   } catch (err) {
