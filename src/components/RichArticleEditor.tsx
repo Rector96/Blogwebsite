@@ -8,12 +8,10 @@ type Props = {
   minWords?: number;
 };
 
-/** Clean Microsoft Word / Google Docs HTML while keeping structure */
 function cleanWordHtml(html: string) {
   const doc = new DOMParser().parseFromString(html, "text/html");
-  doc.querySelectorAll("script,style,meta,link,xml,o\\:p,w\\:sdt").forEach((n) => n.remove());
+  doc.querySelectorAll("script,style,meta,link,xml").forEach((n) => n.remove());
 
-  // Convert Word-ish headings and bold paragraphs
   doc.querySelectorAll("p, span, div").forEach((el) => {
     const style = (el.getAttribute("style") || "").toLowerCase();
     const cls = (el.getAttribute("class") || "").toLowerCase();
@@ -22,18 +20,13 @@ function cleanWordHtml(html: string) {
       /mso-outline-level\s*:\s*[123]/i.test(style);
     const fontSize = style.match(/font-size\s*:\s*([\d.]+)pt/i);
     const sizePt = fontSize ? parseFloat(fontSize[1]) : 0;
-    const bold = /font-weight\s*:\s*(bold|[6-9]00)/i.test(style);
 
     if (el.tagName === "P" || el.tagName === "DIV") {
       if (isHeading || sizePt >= 16) {
         const h = doc.createElement(sizePt >= 18 || /heading\s*1/i.test(cls) ? "h2" : "h3");
         h.innerHTML = el.innerHTML;
         el.replaceWith(h);
-        return;
       }
-    }
-    if (bold && el.tagName === "SPAN" && sizePt >= 14) {
-      // leave; parent may become heading
     }
   });
 
@@ -41,16 +34,18 @@ function cleanWordHtml(html: string) {
     const style = el.getAttribute("style") || "";
     const align = style.match(/text-align\s*:\s*(left|center|right|justify)/i)?.[1];
     if (align) el.setAttribute("data-align", align.toLowerCase());
-
-    // Keep semantic tags; strip junk attrs
     Array.from(el.attributes).forEach((a) => {
       const n = a.name.toLowerCase();
       if (["href", "src", "alt", "title", "data-align"].includes(n)) return;
+      // keep highlight color on spans
+      if (n === "style" && /background/i.test(a.value)) {
+        el.setAttribute("style", "background-color: #fef08a");
+        return;
+      }
       el.removeAttribute(a.name);
     });
   });
 
-  // Normalize b/i to strong/em later on save; keep lists
   return doc.body.innerHTML;
 }
 
@@ -88,7 +83,7 @@ export default function RichArticleEditor({
   onChange,
   placeholder,
   onImageUpload,
-  minWords = 400,
+  minWords = 120,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -115,6 +110,15 @@ export default function RichArticleEditor({
     emit();
   };
 
+  const highlight = () => {
+    ref.current?.focus();
+    // Yellow highlight like Word marker
+    document.execCommand("hiliteColor", false, "#fef08a");
+    // fallback for some browsers
+    document.execCommand("backColor", false, "#fef08a");
+    emit();
+  };
+
   const onPaste = async (e: ClipboardEvent<HTMLDivElement>) => {
     const html = e.clipboardData.getData("text/html");
     const plain = e.clipboardData.getData("text/plain");
@@ -122,16 +126,14 @@ export default function RichArticleEditor({
 
     if (!html && !imageFiles.length && !plain) return;
 
-    // Prefer structured HTML from Word/Docs
     if (html) {
       e.preventDefault();
       document.execCommand("insertHTML", false, cleanWordHtml(html));
     } else if (imageFiles.length === 0 && plain) {
-      // plain text: keep paragraphs
       e.preventDefault();
       const safe = plain
         .split(/\n{2,}/)
-        .map((p) => "<p>" + p.replace(/</g, "<").replace(/\n/g, "<br>") + "</p>")
+        .map((p) => "<p>" + p.replace(/&/g, "&").replace(/</g, "<").replace(/\n/g, "<br>") + "</p>")
         .join("");
       document.execCommand("insertHTML", false, safe);
     }
@@ -148,12 +150,13 @@ export default function RichArticleEditor({
 
   return (
     <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
-      {/* Sticky toolbar — Word-like, wraps on mobile */}
       <div className="sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b border-neutral-200 bg-neutral-50 p-2">
-        <ToolbarButton label="B" title="Bold" onClick={() => run("bold")} />
+        <ToolbarButton label="B" title="Bold (select text first)" onClick={() => run("bold")} />
         <ToolbarButton label="I" title="Italic" onClick={() => run("italic")} />
         <ToolbarButton label="U" title="Underline" onClick={() => run("underline")} />
+        <ToolbarButton label="HL" title="Highlight yellow" onClick={highlight} />
         <span className="mx-0.5 hidden h-5 w-px bg-neutral-300 sm:block" />
+        <ToolbarButton label="H1" title="Heading 1" onClick={() => block("h1")} />
         <ToolbarButton label="H2" title="Heading 2" onClick={() => block("h2")} />
         <ToolbarButton label="H3" title="Heading 3" onClick={() => block("h3")} />
         <ToolbarButton label="¶" title="Normal paragraph" onClick={() => block("p")} />
@@ -165,7 +168,6 @@ export default function RichArticleEditor({
         <ToolbarButton label="⬅" title="Align left" onClick={() => run("justifyLeft")} />
         <ToolbarButton label="☰" title="Center" onClick={() => run("justifyCenter")} />
         <ToolbarButton label="➡" title="Align right" onClick={() => run("justifyRight")} />
-        <ToolbarButton label="≡" title="Justify" onClick={() => run("justifyFull")} />
         <span className="mx-0.5 hidden h-5 w-px bg-neutral-300 sm:block" />
         <ToolbarButton
           label="Link"
@@ -176,7 +178,7 @@ export default function RichArticleEditor({
           }}
         />
         <ToolbarButton
-          label="Img URL"
+          label="Img"
           title="Insert image by URL"
           onClick={() => {
             const url = window.prompt("Image URL (https://…)");
@@ -210,26 +212,30 @@ export default function RichArticleEditor({
         suppressContentEditableWarning
         onInput={emit}
         onPaste={onPaste}
-        data-placeholder={placeholder || "Write or paste from Microsoft Word…"}
+        data-placeholder={placeholder || "Write like Word — select text, then Bold / Highlight / Heading…"}
         className={
           "min-h-[min(55vh,420px)] max-h-[70vh] overflow-y-auto p-3 text-[16px] leading-7 outline-none sm:p-5 " +
           "empty:before:pointer-events-none empty:before:text-neutral-400 empty:before:content-[attr(data-placeholder)] " +
+          "[&_h1]:mb-3 [&_h1]:mt-4 [&_h1]:text-2xl [&_h1]:font-bold " +
           "[&_h2]:mb-2 [&_h2]:mt-5 [&_h2]:text-xl [&_h2]:font-semibold " +
           "[&_h3]:mb-2 [&_h3]:mt-4 [&_h3]:text-lg [&_h3]:font-semibold " +
           "[&_p]:my-2 [&_ul]:my-2 [&_ul]:list-disc [&_ul]:pl-6 " +
           "[&_ol]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 " +
           "[&_blockquote]:my-3 [&_blockquote]:border-l-4 [&_blockquote]:border-amber-400 [&_blockquote]:pl-3 [&_blockquote]:italic " +
           "[&_img]:my-3 [&_img]:h-auto [&_img]:max-w-full [&_img]:rounded-lg " +
-          "[&_a]:text-teal-800 [&_a]:underline"
+          "[&_a]:text-teal-800 [&_a]:underline " +
+          "[&_mark]:bg-yellow-200 [&_span[style*='background']]:rounded-sm"
         }
       />
 
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-neutral-200 bg-neutral-50 px-3 py-2 text-[11px]">
         <span className={wordCount >= minWords ? "font-semibold text-teal-700" : "font-semibold text-amber-700"}>
           {wordCount.toLocaleString()} words · {Math.max(1, Math.ceil(Math.max(wordCount, 1) / 180))} min read
-          {wordCount >= minWords ? " · Ready to publish" : ` · Need ${Math.max(0, minWords - wordCount)} more for publish`}
+          {wordCount >= minWords
+            ? " · Ready"
+            : ` · ${Math.max(0, minWords - wordCount)} more words recommended`}
         </span>
-        <span className="text-neutral-500">Paste from Word keeps headings, lists and emphasis</span>
+        <span className="text-neutral-500">Select text → Bold / HL / H2 · Paste from Word keeps structure</span>
       </div>
     </div>
   );
