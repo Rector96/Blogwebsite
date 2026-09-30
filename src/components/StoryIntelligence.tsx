@@ -1,10 +1,23 @@
 import { useState } from "react";
+import { ArticleComments } from "./ArticleComments";
 
 function cleanText(value: string) {
   return String(value || "")
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function storyIdFromPath() {
+  if (typeof window === "undefined") return "";
+  const path = window.location.pathname.replace(/^\/news\//, "");
+  const marker = path.lastIndexOf("--");
+  if (marker < 0) return "";
+  try {
+    return decodeURIComponent(path.slice(marker + 2)).trim();
+  } catch {
+    return "";
+  }
 }
 
 export function extractAfricaLens(body: string) {
@@ -18,16 +31,19 @@ export function StoryIntelligencePanel({
   title,
   body,
   bullets,
+  articleId,
 }: {
   title: string;
   body: string;
   bullets: string[];
+  articleId?: string;
 }) {
   const africaLens = extractAfricaLens(body);
   const [listening, setListening] = useState(false);
   const [askQ, setAskQ] = useState("");
   const [askA, setAskA] = useState("");
   const [askBusy, setAskBusy] = useState(false);
+  const id = articleId || storyIdFromPath();
 
   const toggleListen = () => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
@@ -120,6 +136,8 @@ export function StoryIntelligencePanel({
         </div>
         {askA ? <p className="mt-3 text-sm leading-6 text-neutral-800">{askA}</p> : null}
       </div>
+
+      {id ? <ArticleComments articleId={id} /> : null}
     </div>
   );
 }
