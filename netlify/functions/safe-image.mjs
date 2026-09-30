@@ -3,12 +3,13 @@
  *
  * Order:
  * 1) RSS publisher image
- * 2) Club crest (sports)
- * 3) Curated person / org portrait (direct Wikimedia URLs)
+ * 2) Curated person / org portrait
+ * 3) Club crest (sports)
  * 4) Wikipedia pageimage for known people
- * 5) Topic keyword → relevant stock query (Pexels)
- * 6) Category stock fallback
- * 7) Logo only if nothing else
+ * 5) AI image_query → Pexels (laser 4-5 word query from Gemini)
+ * 6) Topic keyword stock
+ * 7) Category stock
+ * 8) Logo only if nothing else
  */
 
 const PLACEHOLDER = "https://rwdnews.netlify.app/rwdnews-logo.svg";
@@ -28,7 +29,6 @@ const CATEGORY_QUERY = {
   "Middle East": "middle east city",
 };
 
-/** Direct free portraits — no search, no random insects */
 const PERSON_IMAGES = {
   "donald trump": {
     image: "https://upload.wikimedia.org/wikipedia/commons/5/56/Donald_Trump_official_portrait.jpg",
@@ -97,7 +97,6 @@ const PERSON_IMAGES = {
   },
 };
 
-/** Wikipedia titles for pageimage lookup */
 const WIKI_TITLES = {
   trump: "Donald Trump",
   "donald trump": "Donald Trump",
@@ -124,7 +123,6 @@ const WIKI_TITLES = {
   accra: "Accra",
 };
 
-/** Headline topic → stock photo query (never random) */
 const TOPIC_QUERIES = [
   [/migrant|deport|asylum|immigration/i, "immigration border checkpoint"],
   [/oil|crude|refiner|petroleum|petrol|fuel/i, "oil refinery industry"],
@@ -201,16 +199,6 @@ const CLUB_CRESTS = {
   },
 };
 
-const STOP = new Set([
-  "the", "and", "for", "with", "from", "that", "this", "after", "before", "into", "over",
-  "about", "will", "would", "could", "should", "says", "said", "have", "has", "been",
-  "are", "was", "were", "their", "they", "them", "than", "then", "what", "when", "where",
-  "while", "which", "who", "how", "why", "new", "latest", "news", "report", "reports",
-  "according", "amid", "more", "most", "just", "only", "also", "being", "very",
-  "secret", "deals", "sending", "across", "world", "full", "story", "podcast",
-  "continue", "reading", "migrants", "migrant", "sources", "should", "face",
-]);
-
 const BAD_IMAGE =
   /butterfly|moth|insect|flower|garden|cat |dog |phocides|pigmalion|stock photo|abstract|wallpaper|rwdnews-logo|secret.?woods/i;
 
@@ -254,7 +242,6 @@ export function detectClubCrest(text) {
   });
   for (let i = 0; i < keys.length; i++) {
     const key = keys[i];
-    // Avoid matching short "city" inside unrelated words when not sports context
     if (key === "city" && !/man\s*city|manchester\s*city|city\s*(knew|face|guilty|sanctions)/i.test(text)) {
       continue;
     }
@@ -364,7 +351,6 @@ export function headlineImageQuery(title, category) {
   return extractImageSubject(title, "", category);
 }
 
-/** True if stored image should be replaced */
 export function isBadCover(image, credit) {
   const s = String(image || "") + " " + String(credit || "");
   if (!image || /rwdnews-logo/i.test(image)) return true;
@@ -381,43 +367,53 @@ export async function resolveSafeCover({
   preferCrest = true,
 } = {}) {
   const haystack = [title, preferredQuery].filter(Boolean).join(" ");
+  const preferred = String(preferredQuery || "")
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 5)
+    .join(" ");
 
-  // 1) RSS publisher image — real story photo
+  // 1) RSS
   if (rssImage && /^https?:\/\//i.test(rssImage) && !isBadCover(rssImage, "")) {
     return pack(rssImage, "Publisher feed", "Feed preview", rssImage);
   }
 
-  // 2) Curated person / org portrait (Trump, Tinubu, FIFA…)
+  // 2) Curated person (also check AI query)
   const person = detectPersonImage(haystack);
   if (person) return person;
 
-  // 3) Club crest for sports headlines
+  // 3) Club crest
   if (preferCrest && (category === "Sports" || /football|soccer|premier|ucl|afcon|club|match|fifa|uefa|italy|city knew|guilty/i.test(haystack))) {
     const crest = detectClubCrest(haystack);
     if (crest) return crest;
   }
 
-  // 4) Wikipedia page portrait for known names
+  // 4) Wikipedia portrait
   const wikiTitle = wikiTitleFromText(haystack);
   if (wikiTitle) {
     const wiki = await wikipediaPageImage(wikiTitle);
     if (wiki) return wiki;
   }
 
-  // 5) Topic-matched stock (oil → refinery, migrants → border, etc.)
   if (preferStock) {
-    const topicQ = topicStockQuery(title, category);
-    const pexels = await pexelsSearch(topicQ);
-    if (pexels) return pexels;
-
-    const preferred = String(preferredQuery || "").trim();
-    if (preferred && preferred !== topicQ) {
-      const p2 = await pexelsSearch(preferred);
-      if (p2) return p2;
+    // 5) AI laser query FIRST (from Gemini image_query)
+    if (preferred && preferred.length >= 3 && !BAD_IMAGE.test(preferred)) {
+      const aiHit = await pexelsSearch(preferred);
+      if (aiHit) return aiHit;
     }
 
+    // 6) Topic rules
+    const topicQ = topicStockQuery(title, category);
+    if (topicQ && topicQ !== preferred) {
+      const pexels = await pexelsSearch(topicQ);
+      if (pexels) return pexels;
+    }
+
+    // 7) Category
     const catQ = CATEGORY_QUERY[category] || CATEGORY_QUERY.World;
-    if (catQ !== topicQ) {
+    if (catQ !== topicQ && catQ !== preferred) {
       const p3 = await pexelsSearch(catQ);
       if (p3) return p3;
     }
