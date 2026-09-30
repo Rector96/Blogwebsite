@@ -1,33 +1,62 @@
 /**
- * Subject-aware cover images for RockBrief.
+ * Cover images for RockBrief.
  *
- * Order (legal / free only — no publisher scrape):
- * 1) Known football club crest (curated Wikimedia)
- * 2) Wikimedia Commons search for person / place / subject
- * 3) Pexels (headline, then category)
- * 4) Unsplash if key present
- * 5) RSS feed thumbnail (hotlink credit only)
- * 6) Site logo placeholder
+ * Order:
+ * 1) RSS publisher image (matches the story)
+ * 2) Known person / club crest map
+ * 3) Wikimedia Commons (person/place only, relevance scored)
+ * 4) Pexels / Unsplash category-safe stock
+ * 5) Logo placeholder
  */
 
 const PLACEHOLDER = "https://rwdnews.netlify.app/rwdnews-logo.svg";
 
 const CATEGORY_QUERY = {
-  Sports: "football stadium match crowd",
-  Tech: "technology laptop circuit board",
-  Business: "business finance office skyline",
-  Crypto: "cryptocurrency bitcoin digital",
-  Entertainment: "concert stage lights",
-  Nigeria: "lagos nigeria city africa",
-  Ghana: "accra ghana africa city",
-  Africa: "africa city landscape",
-  World: "world city skyline news",
-  Europe: "europe city architecture",
+  Sports: "football match stadium",
+  Tech: "technology smartphone laptop",
+  Business: "business finance skyline",
+  Crypto: "cryptocurrency bitcoin",
+  Entertainment: "concert stage",
+  Nigeria: "lagos nigeria city",
+  Ghana: "accra ghana city",
+  Africa: "africa city",
+  World: "world news skyline",
+  Europe: "europe city",
   Asia: "asia city skyline",
   "Middle East": "middle east city",
 };
 
-/** Curated club crests — Wikimedia Commons URLs only. */
+/** High-confidence people/places → Commons-friendly search (avoids random insects). */
+const KNOWN_SUBJECTS = [
+  ["donald trump", "Donald Trump"],
+  ["trump", "Donald Trump"],
+  ["joe biden", "Joe Biden"],
+  ["biden", "Joe Biden"],
+  ["kamala harris", "Kamala Harris"],
+  ["vladimir putin", "Vladimir Putin"],
+  ["putin", "Vladimir Putin"],
+  ["volodymyr zelensky", "Volodymyr Zelenskyy"],
+  ["zelensky", "Volodymyr Zelenskyy"],
+  ["xi jinping", "Xi Jinping"],
+  ["emmanuel macron", "Emmanuel Macron"],
+  ["keir starmer", "Keir Starmer"],
+  ["bola tinubu", "Bola Tinubu"],
+  ["tinubu", "Bola Tinubu"],
+  ["peter obi", "Peter Obi"],
+  ["nana akufo-addo", "Nana Akufo-Addo"],
+  ["cyril ramaphosa", "Cyril Ramaphosa"],
+  ["elon musk", "Elon Musk"],
+  ["messi", "Lionel Messi"],
+  ["ronaldo", "Cristiano Ronaldo"],
+  ["mbappe", "Kylian Mbappe"],
+  ["united nations", "United Nations headquarters"],
+  ["white house", "White House"],
+  ["capitol", "United States Capitol"],
+  ["lagos", "Lagos Nigeria skyline"],
+  ["abuja", "Abuja Nigeria"],
+  ["accra", "Accra Ghana"],
+];
+
 const CLUB_CRESTS = {
   arsenal: {
     image: "https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg",
@@ -64,11 +93,6 @@ const CLUB_CRESTS = {
     credit: "Manchester United crest / Wikimedia",
     license: "Trademark display for news identification",
   },
-  tottenham: {
-    image: "https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg",
-    credit: "Tottenham Hotspur crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
   barcelona: {
     image: "https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg",
     credit: "FC Barcelona crest / Wikimedia",
@@ -79,56 +103,6 @@ const CLUB_CRESTS = {
     credit: "Real Madrid crest / Wikimedia",
     license: "Trademark display for news identification",
   },
-  psg: {
-    image: "https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg",
-    credit: "Paris Saint-Germain crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  "paris saint-germain": {
-    image: "https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg",
-    credit: "Paris Saint-Germain crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  bayern: {
-    image: "https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg",
-    credit: "FC Bayern Munich crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  "bayern munich": {
-    image: "https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg",
-    credit: "FC Bayern Munich crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  dortmund: {
-    image: "https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg",
-    credit: "Borussia Dortmund crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  juventus: {
-    image: "https://upload.wikimedia.org/wikipedia/commons/1/15/Juventus_FC_2017_logo.svg",
-    credit: "Juventus crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  inter: {
-    image: "https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg",
-    credit: "Inter Milan crest / Wikimedia",
-    license: "Trademark display for news identification",
-  },
-  nigeria: {
-    image: "https://upload.wikimedia.org/wikipedia/commons/7/79/Flag_of_Nigeria.svg",
-    credit: "Flag of Nigeria / Wikimedia",
-    license: "Public domain",
-  },
-  "super eagles": {
-    image: "https://upload.wikimedia.org/wikipedia/commons/7/79/Flag_of_Nigeria.svg",
-    credit: "Flag of Nigeria / Wikimedia",
-    license: "Public domain",
-  },
-  ghana: {
-    image: "https://upload.wikimedia.org/wikipedia/commons/1/19/Flag_of_Ghana.svg",
-    credit: "Flag of Ghana / Wikimedia",
-    license: "Public domain",
-  },
 };
 
 const STOP = new Set([
@@ -136,9 +110,12 @@ const STOP = new Set([
   "about", "will", "would", "could", "should", "says", "said", "have", "has", "been",
   "are", "was", "were", "their", "they", "them", "than", "then", "what", "when", "where",
   "while", "which", "who", "how", "why", "new", "latest", "news", "report", "reports",
-  "according", "amid", "more", "most", "just", "only", "also", "being", "very", "hints",
-  "calls", "extends", "record", "unbeaten",
+  "according", "amid", "more", "most", "just", "only", "also", "being", "very",
+  "secret", "deals", "sending", "across", "world", "full", "story", "podcast",
+  "continue", "reading", "migrants", "migrant",
 ]);
+
+const BAD_IMAGE = /butterfly|moth|insect|flower|garden|cat |dog |stock photo|abstract|wallpaper|phocides|pigmalion/i;
 
 function normalize(value) {
   return String(value || "")
@@ -159,19 +136,30 @@ function cleanMeta(value) {
 
 function metaValue(meta, keys) {
   for (const key of keys) {
-    const value = meta?.[key]?.value;
+    const value = meta && meta[key] && meta[key].value;
     if (value) return cleanMeta(value);
+  }
+  return "";
+}
+
+function detectKnownSubject(text) {
+  const n = normalize(text);
+  for (let i = 0; i < KNOWN_SUBJECTS.length; i++) {
+    const key = KNOWN_SUBJECTS[i][0];
+    const label = KNOWN_SUBJECTS[i][1];
+    if (n.indexOf(key) !== -1) return label;
   }
   return "";
 }
 
 export function detectClubCrest(text) {
   const n = " " + normalize(text) + " ";
-  const keys = Object.keys(CLUB_CRESTS).sort((a, b) => b.length - a.length);
-  for (const key of keys) {
-    // Word-boundary style match so "interest" does not hit "inter"
-    const needle = " " + key + " ";
-    if (n.includes(needle)) {
+  const keys = Object.keys(CLUB_CRESTS).sort(function (a, b) {
+    return b.length - a.length;
+  });
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
+    if (n.indexOf(" " + key + " ") !== -1) {
       const crest = CLUB_CRESTS[key];
       return {
         image: crest.image,
@@ -185,28 +173,36 @@ export function detectClubCrest(text) {
   return null;
 }
 
-export function extractImageSubject(title, preferredQuery = "", category = "World") {
+export function extractImageSubject(title, preferredQuery, category) {
+  if (category == null) category = "World";
   const preferred = String(preferredQuery || "").trim();
-  if (preferred && preferred.length >= 3 && preferred.length <= 80) {
+  if (preferred && preferred.length >= 3 && preferred.length <= 80 && !BAD_IMAGE.test(preferred)) {
+    const known = detectKnownSubject(preferred);
+    if (known) return known;
     return preferred;
   }
 
-  const raw = String(title || "");
+  const known = detectKnownSubject(title + " " + preferred);
+  if (known) return known;
+
+  const raw = String(title || "").replace(/\s*-\s*Full Story podcast.*/i, "");
   const proper = raw.match(/\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3})\b/g) || [];
   const filtered = proper
-    .map((p) => p.trim())
-    .filter((p) => {
+    .map(function (p) {
+      return p.trim();
+    })
+    .filter(function (p) {
       const low = p.toLowerCase();
-      return !STOP.has(low) && p.length >= 4;
+      return !STOP.has(low) && p.length >= 4 && !BAD_IMAGE.test(p);
     });
-  if (filtered.length) {
-    return filtered.slice(0, 2).join(" ");
-  }
+  if (filtered.length) return filtered.slice(0, 2).join(" ");
 
   const words = normalize(title)
     .split(/\s+/)
-    .filter((w) => w.length >= 4 && !STOP.has(w))
-    .slice(0, 5);
+    .filter(function (w) {
+      return w.length >= 4 && !STOP.has(w);
+    })
+    .slice(0, 4);
   if (words.length >= 2) return words.join(" ");
   if (words.length === 1) return words[0];
   return CATEGORY_QUERY[category] || CATEGORY_QUERY.World;
@@ -227,7 +223,7 @@ async function commonsSearch(query) {
     u.searchParams.set("generator", "search");
     u.searchParams.set("gsrsearch", q);
     u.searchParams.set("gsrnamespace", "6");
-    u.searchParams.set("gsrlimit", "8");
+    u.searchParams.set("gsrlimit", "12");
     u.searchParams.set("prop", "imageinfo");
     u.searchParams.set("iiprop", "url|size|mime|extmetadata");
     u.searchParams.set("iiurlwidth", "1200");
@@ -246,17 +242,20 @@ async function commonsSearch(query) {
     if (!r.ok) return null;
 
     const data = await r.json();
-    const pages = Object.values(data?.query?.pages || {});
+    const pages = Object.values((data && data.query && data.query.pages) || {});
     const allowed =
       /^(CC0(?:\s|$)|CC BY-SA(?:\s|$)|CC BY(?:\s|$)|Public domain(?:\s|$)|PD(?:\s|$)|PDM(?:\s|$)|GFDL)/i;
 
     const terms = normalize(q)
       .split(/\s+/)
-      .filter((t) => t.length >= 3 && !STOP.has(t));
+      .filter(function (t) {
+        return t.length >= 3 && !STOP.has(t);
+      });
 
     const scored = [];
-    for (const page of pages) {
-      const info = page?.imageinfo?.[0];
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
+      const info = page && page.imageinfo && page.imageinfo[0];
       if (!info) continue;
       const meta = info.extmetadata || {};
       const license = metaValue(meta, ["LicenseShortName", "UsageTerms"]);
@@ -265,28 +264,34 @@ async function commonsSearch(query) {
       const categories = metaValue(meta, ["Categories"]);
       const image = info.thumburl || info.url || "";
       const source = info.descriptionurl || "";
+      const hay = normalize([page.title, description, categories].join(" "));
 
       if (!image || !/^https?:\/\//i.test(image)) continue;
       if (!/^image\//i.test(String(info.mime || ""))) continue;
       if (Number(info.width || 0) < 400) continue;
       if (license && !allowed.test(license)) continue;
+      if (BAD_IMAGE.test(hay) || BAD_IMAGE.test(page.title || "")) continue;
 
-      const hay = normalize([page.title, description, categories].join(" "));
-      const hits = terms.filter((t) => hay.includes(t)).length;
-      if (terms.length && hits < 1) continue;
+      const hits = terms.filter(function (t) {
+        return hay.indexOf(t) !== -1;
+      }).length;
+      // Require at least half the query terms to match (stops butterfly on Trump)
+      if (terms.length && hits < Math.max(1, Math.ceil(terms.length * 0.5))) continue;
 
       scored.push({
         image: String(image),
         image_credit: "Photo: " + artist + " / Wikimedia Commons",
         image_license: license || "Wikimedia Commons",
         image_source_url: String(source),
-        hits,
+        hits: hits,
       });
     }
 
-    scored.sort((a, b) => b.hits - a.hits);
+    scored.sort(function (a, b) {
+      return b.hits - a.hits;
+    });
     return scored[0] || null;
-  } catch {
+  } catch (e) {
     return null;
   }
 }
@@ -297,7 +302,7 @@ async function pexelsSearch(query) {
   try {
     const u = new URL("https://api.pexels.com/v1/search");
     u.searchParams.set("query", String(query).slice(0, 80));
-    u.searchParams.set("per_page", "3");
+    u.searchParams.set("per_page", "4");
     u.searchParams.set("orientation", "landscape");
     const r = await fetch(u.toString(), {
       headers: { Authorization: key, Accept: "application/json" },
@@ -305,18 +310,22 @@ async function pexelsSearch(query) {
     });
     if (!r.ok) return null;
     const data = await r.json();
-    const photo = Array.isArray(data?.photos) ? data.photos[0] : null;
-    const image = photo?.src?.large || photo?.src?.medium || "";
-    if (!image) return null;
-    return {
-      image: String(image),
-      image_credit: photo?.photographer
-        ? "Photo: " + photo.photographer + " / Pexels"
-        : "Pexels",
-      image_license: "Pexels License",
-      image_source_url: String(photo?.url || "https://www.pexels.com/"),
-    };
-  } catch {
+    const photos = Array.isArray(data.photos) ? data.photos : [];
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      const image = (photo.src && (photo.src.large || photo.src.medium)) || "";
+      const alt = String(photo.alt || "");
+      if (!image) continue;
+      if (BAD_IMAGE.test(alt)) continue;
+      return {
+        image: String(image),
+        image_credit: photo.photographer ? "Photo: " + photo.photographer + " / Pexels" : "Pexels",
+        image_license: "Pexels License",
+        image_source_url: String(photo.url || "https://www.pexels.com/"),
+      };
+    }
+    return null;
+  } catch (e) {
     return null;
   }
 }
@@ -335,32 +344,20 @@ async function unsplashSearch(query) {
     });
     if (!r.ok) return null;
     const data = await r.json();
-    const photo = Array.isArray(data?.results) ? data.results[0] : null;
-    const image = photo?.urls?.regular || photo?.urls?.small || "";
+    const photo = Array.isArray(data.results) ? data.results[0] : null;
+    const image = photo && photo.urls && (photo.urls.regular || photo.urls.small);
     if (!image) return null;
     return {
       image: String(image),
-      image_credit: photo?.user?.name
-        ? "Photo: " + photo.user.name + " / Unsplash"
-        : "Unsplash",
+      image_credit: photo.user && photo.user.name ? "Photo: " + photo.user.name + " / Unsplash" : "Unsplash",
       image_license: "Unsplash License",
-      image_source_url: String(photo?.links?.html || "https://unsplash.com/"),
+      image_source_url: String((photo.links && photo.links.html) || "https://unsplash.com/"),
     };
-  } catch {
+  } catch (e) {
     return null;
   }
 }
 
-/**
- * @param {{
- *   title?: string,
- *   category?: string,
- *   preferredQuery?: string,
- *   rssImage?: string,
- *   preferStock?: boolean,
- *   preferCrest?: boolean,
- * }} options
- */
 export async function resolveSafeCover({
   title = "",
   category = "World",
@@ -371,7 +368,17 @@ export async function resolveSafeCover({
 } = {}) {
   const haystack = [title, preferredQuery].filter(Boolean).join(" ");
 
-  // 1) Club / national crest for sports identification
+  // 1) RSS image first — matches the publisher story
+  if (rssImage && /^https?:\/\//i.test(rssImage) && !/rwdnews-logo/i.test(rssImage)) {
+    return {
+      image: String(rssImage),
+      image_credit: "Publisher feed",
+      image_license: "Feed preview",
+      image_source_url: String(rssImage),
+    };
+  }
+
+  // 2) Club crest for sports
   if (preferCrest && (category === "Sports" || /football|soccer|premier|ucl|afcon|club|match/i.test(haystack))) {
     const crest = detectClubCrest(haystack);
     if (crest) return crest;
@@ -379,7 +386,7 @@ export async function resolveSafeCover({
 
   const subject = extractImageSubject(title, preferredQuery, category);
 
-  // 2) Wikimedia Commons — real people / places when free photos exist
+  // 3) Wikimedia for real people / places
   const commons = await commonsSearch(subject);
   if (commons) return commons;
 
@@ -389,7 +396,7 @@ export async function resolveSafeCover({
     if (commons2) return commons2;
   }
 
-  // 3) Licensed stock
+  // 4) Stock — subject first, then category
   if (preferStock) {
     const pexels = await pexelsSearch(subject);
     if (pexels) return pexels;
@@ -402,19 +409,6 @@ export async function resolveSafeCover({
 
     const unsplash = await unsplashSearch(subject);
     if (unsplash) return unsplash;
-
-    const u2 = await unsplashSearch(catQ);
-    if (u2) return u2;
-  }
-
-  // 4) RSS preview hotlink
-  if (rssImage && /^https?:\/\//i.test(rssImage) && !/rwdnews-logo/i.test(rssImage)) {
-    return {
-      image: String(rssImage),
-      image_credit: "Publisher feed",
-      image_license: "Feed preview",
-      image_source_url: String(rssImage),
-    };
   }
 
   return {
